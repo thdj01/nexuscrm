@@ -1,0 +1,105 @@
+Method,Path,Tag,Summary,Authentication
+PUT,/api/auth/change-password,Authentication,Change current user password,Bearer JWT
+POST,/api/auth/login,Authentication,Login,Public
+GET,/api/auth/me,Authentication,Get current user,Bearer JWT
+PUT,/api/auth/profile,Authentication,Update current user profile,Bearer JWT
+POST,/api/auth/profile/avatar,Authentication,Upload current user avatar,Bearer JWT
+GET,/api/customers,Customers,List customers,Bearer JWT
+POST,/api/customers,Customers,Create customer,Bearer JWT
+GET,/api/customers/cities,Customers,List distinct customer cities,Bearer JWT
+GET,/api/customers/{id},Customers,Get customer,Bearer JWT
+PUT,/api/customers/{id},Customers,Update customer,Bearer JWT
+GET,/api/dashboard/recent,Dashboard,Get recent dashboard activity,Bearer JWT
+GET,/api/dashboard/stats,Dashboard,Get dashboard statistics,Bearer JWT
+GET,/api/departments,Departments,List departments,Bearer JWT
+POST,/api/departments,Departments,Create department (admin),Bearer JWT
+GET,/api/departments/{id},Departments,Get department,Bearer JWT
+PUT,/api/departments/{id},Departments,Update department (admin),Bearer JWT
+GET,/api/health,Health,Check API health,Public
+GET,/api/inquiries,Inquiries,List inquiries,Bearer JWT
+POST,/api/inquiries,Inquiries,Create inquiry,Bearer JWT
+GET,/api/inquiries/follow-ups,Inquiries,Get due inquiry follow-ups,Bearer JWT
+GET,/api/inquiries/{id},Inquiries,Get inquiry,Bearer JWT
+PUT,/api/inquiries/{id},Inquiries,Update inquiry,Bearer JWT
+PATCH,/api/inquiries/{id}/follow-up,Inquiries,Set or clear follow-up reminder,Bearer JWT
+GET,/api/inquiries/{id}/pdf,Inquiries,Download inquiry PDF,Bearer JWT
+PATCH,/api/inquiries/{id}/status,Inquiries,Update inquiry status and optional BOM,Bearer JWT
+GET,/api/integrations/email,Integrations,Get email integration settings (admin),Bearer JWT
+PUT,/api/integrations/email,Integrations,Update email integration settings (admin),Bearer JWT
+POST,/api/integrations/email/verify,Integrations,Verify email login/configuration (admin),Bearer JWT
+GET,/api/integrations/status,Integrations,Get all integration status (admin),Bearer JWT
+POST,/api/integrations/whatsapp/logout,Integrations,Log out and clear WhatsApp session (admin),Bearer JWT
+POST,/api/integrations/whatsapp/restart,Integrations,Restart WhatsApp client (admin),Bearer JWT
+GET,/api/integrations/whatsapp/status,Integrations,Get WhatsApp integration status (admin),Bearer JWT
+POST,/api/kickoff-workflows/process/due,Kickoff Workflows,Process due kick-off workflows (admin),Bearer JWT
+GET,/api/kickoff-workflows/{inquiryId},Kickoff Workflows,Get inquiry kick-off workflow,Bearer JWT
+POST,/api/kickoff-workflows/{inquiryId}/complete,Kickoff Workflows,Mark kick-off complete and create project,Bearer JWT
+POST,/api/kickoff-workflows/{inquiryId}/schedule,Kickoff Workflows,Schedule kick-off meeting,Bearer JWT
+GET,/api/notifications,Notifications,List notifications,Bearer JWT
+PUT,/api/notifications/read-all,Notifications,Mark all notifications as read,Bearer JWT
+PUT,/api/notifications/{id}/read,Notifications,Mark notification as read,Bearer JWT
+GET,/api/projects,Projects,List projects,Bearer JWT
+POST,/api/projects,Projects,Create project,Bearer JWT
+POST,/api/projects/convert/{inquiryId},Projects,Schedule kick-off for inquiry conversion,Bearer JWT
+GET,/api/projects/planning-import/validate,Projects,Validate imported planning catalog,Bearer JWT
+POST,/api/projects/planning-preview/recalculate,Projects,Recalculate normalized planning preview,Bearer JWT
+GET,/api/projects/planning-templates,Projects,Get planning catalog/templates,Bearer JWT
+GET,/api/projects/planning-users,Projects,Get planning users by department,Bearer JWT
+POST,/api/projects/recalc-delays,Projects,Recalculate delays for all projects,Bearer JWT
+GET,/api/projects/{id},Projects,Get project,Bearer JWT
+PUT,/api/projects/{id},Projects,Update project,Bearer JWT
+GET,/api/projects/{id}/activity,Projects,Get project activity log,Bearer JWT
+POST,/api/projects/{id}/copy,Projects,Copy project,Bearer JWT
+POST,/api/projects/{id}/documents,Projects,Upload project documents,Bearer JWT
+POST,/api/projects/{id}/planning-grids,Projects,Create separate planning grid,Bearer JWT
+POST,/api/projects/{id}/planning-grids/{gridId}/tasks,Projects,Add planning task,Bearer JWT
+PATCH,/api/projects/{id}/planning-grids/{gridId}/tasks/reorder,Projects,Reorder every task in a planning grid,Bearer JWT
+DELETE,/api/projects/{id}/planning-grids/{gridId}/tasks/{taskId},Projects,Remove planning task,Bearer JWT
+PATCH,/api/projects/{id}/planning-grids/{gridId}/tasks/{taskId},Projects,Update planning task,Bearer JWT
+PATCH,/api/projects/{id}/planning-grids/{gridId}/tasks/{taskId}/status,Projects,Update assigned planning task status,Bearer JWT
+GET,/api/projects/{id}/task-completion-history,Projects,Get task completion history,Bearer JWT
+GET,/api/teams,Teams,List teams in caller scope,Bearer JWT
+POST,/api/teams,Teams,Create team (admin),Bearer JWT
+GET,/api/teams/{id},Teams,Get team,Bearer JWT
+PUT,/api/teams/{id},Teams,Update team metadata (admin),Bearer JWT
+PATCH,/api/teams/{id}/hod,Teams,Assign or replace team HOD (admin),Bearer JWT
+GET,/api/teams/{id}/members,Teams,Get team roster,Bearer JWT
+POST,/api/teams/{id}/members,Teams,Add team member,Bearer JWT
+PATCH,/api/teams/{id}/team-lead,Teams,Assign or replace team lead,Bearer JWT
+GET,/api/test-whatsapp,Health,Send diagnostic WhatsApp test message,Public
+GET,/api/tickets,Tickets,List tickets,Bearer JWT
+POST,/api/tickets,Tickets,Create ticket,Bearer JWT
+PUT,/api/tickets/comments/{commentId},Tickets,Edit ticket comment,Bearer JWT
+GET,/api/tickets/{id},Tickets,Get ticket,Bearer JWT
+PUT,/api/tickets/{id},Tickets,Update ticket,Bearer JWT
+GET,/api/tickets/{id}/activity,Tickets,Get ticket activity timeline,Bearer JWT
+PATCH,/api/tickets/{id}/assign,Tickets,Assign ticket,Bearer JWT
+POST,/api/tickets/{id}/attachments,Tickets,Upload ticket attachments,Bearer JWT
+PATCH,/api/tickets/{id}/close,Tickets,Close ticket,Bearer JWT
+GET,/api/tickets/{id}/comments,Tickets,List ticket comments,Bearer JWT
+POST,/api/tickets/{id}/comments,Tickets,Add ticket comment,Bearer JWT
+PATCH,/api/tickets/{id}/customer-pending,Tickets,Set customer-side pending,Bearer JWT
+PATCH,/api/tickets/{id}/reopen,Tickets,Reopen ticket,Bearer JWT
+PATCH,/api/tickets/{id}/start-work,Tickets,Start work on ticket,Bearer JWT
+PATCH,/api/tickets/{id}/void,Tickets,Void ticket,Bearer JWT
+GET,/api/timesheet/admin/all,Timesheet,Get all scoped tasks (team lead and above),Bearer JWT
+GET,/api/timesheet/admin/daily-breakdown,Timesheet,Get scoped daily breakdown,Bearer JWT
+GET,/api/timesheet/admin/summary,Timesheet,Get scoped timesheet summary,Bearer JWT
+GET,/api/timesheet/admin/workload,Timesheet,Get scoped employee workload,Bearer JWT
+GET,/api/timesheet/calendar,Timesheet,Get calendar tasks,Bearer JWT
+GET,/api/timesheet/kanban,Timesheet,Get kanban tasks,Bearer JWT
+GET,/api/timesheet/list,Timesheet,Get paginated task list,Bearer JWT
+GET,/api/timesheet/tasks,Timesheet,List tasks,Bearer JWT
+POST,/api/timesheet/tasks,Timesheet,Create task,Bearer JWT
+GET,/api/timesheet/tasks/{id},Timesheet,Get task,Bearer JWT
+PUT,/api/timesheet/tasks/{id},Timesheet,Update task,Bearer JWT
+PATCH,/api/timesheet/tasks/{id}/archive,Timesheet,Archive task,Bearer JWT
+PATCH,/api/timesheet/tasks/{id}/kanban,Timesheet,Move task in kanban,Bearer JWT
+PATCH,/api/timesheet/tasks/{id}/restore,Timesheet,Restore archived task,Bearer JWT
+PATCH,/api/timesheet/tasks/{id}/status,Timesheet,Update task status,Bearer JWT
+GET,/api/users,Users,List users (admin),Bearer JWT
+POST,/api/users,Users,Create user (admin),Bearer JWT
+GET,/api/users/assignable,Users,List assignable users in caller hierarchy,Bearer JWT
+GET,/api/users/{id},Users,Get user (admin),Bearer JWT
+PUT,/api/users/{id},Users,Update user (admin),Bearer JWT
+POST,/api/users/{id}/avatar,Users,Upload user avatar (admin),Bearer JWT

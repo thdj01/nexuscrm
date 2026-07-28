@@ -1,0 +1,5739 @@
+openapi: 3.0.3
+info:
+  title: Nexus Dashboard API
+  version: 1.0.0
+  description: 'OpenAPI definition generated from the mounted Express routes in the uploaded `nexus-dashboard-full-pdf-layout-fixed`
+    backend.
+
+
+    **Authentication:** Call `POST /api/auth/login`, copy the returned JWT token, then use the Swagger **Authorize** button.
+    Enter only the token; Swagger adds `Bearer` automatically.
+
+
+    **Uploads:** Inquiry create/update/status APIs accept either JSON or multipart form data. For multipart requests, put
+    the JSON payload in `_json` and upload files using the documented fields.
+
+
+    **Local server:** Start the backend on port 5000 before using Try it out.'
+servers:
+- url: http://localhost:5000
+  description: Local development server
+- url: http://127.0.0.1:5000
+  description: Local development server (IP)
+tags:
+- name: Health
+  description: Server health and diagnostics
+- name: Authentication
+  description: Login and current-user profile
+- name: Inquiries
+  description: Inquiry CRUD, status, follow-up and PDF
+- name: Kickoff Workflows
+  description: Kick-off scheduling and inquiry conversion workflow
+- name: Projects
+  description: Project CRUD, planning grids, activity and documents
+- name: Customers
+  description: Customer master
+- name: Tickets
+  description: Ticket CRUD, workflow, comments, attachments and activity
+- name: Timesheet
+  description: Timesheet tasks and reporting
+- name: Teams
+  description: Team hierarchy and membership
+- name: Departments
+  description: Department master
+- name: Users
+  description: User administration and assignable users
+- name: Dashboard
+  description: Dashboard statistics and recent activity
+- name: Notifications
+  description: User notifications
+- name: Integrations
+  description: Admin email and WhatsApp integration settings
+security:
+- bearerAuth: []
+paths:
+  /api/health:
+    get:
+      tags:
+      - Health
+      summary: Check API health
+      operationId: GET_api_health
+      responses:
+        '200':
+          description: Successful response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MessageResponse'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '500':
+          $ref: '#/components/responses/ServerError'
+      security: []
+  /api/test-whatsapp:
+    get:
+      tags:
+      - Health
+      summary: Send diagnostic WhatsApp test message
+      operationId: GET_api_test_whatsapp
+      description: Temporary unauthenticated diagnostic endpoint. Remove or protect it before production deployment.
+      responses:
+        '200':
+          description: Successful response
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: true
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '500':
+          $ref: '#/components/responses/ServerError'
+      security: []
+  /api/auth/login:
+    post:
+      tags:
+      - Authentication
+      summary: Login
+      operationId: POST_api_auth_login
+      requestBody:
+        required: true
+        description: Request payload
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/LoginRequest'
+      responses:
+        '200':
+          description: Successful response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/LoginResponse'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '500':
+          $ref: '#/components/responses/ServerError'
+      security: []
+  /api/auth/me:
+    get:
+      tags:
+      - Authentication
+      summary: Get current user
+      operationId: GET_api_auth_me
+      responses:
+        '200':
+          description: Successful response
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: true
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '500':
+          $ref: '#/components/responses/ServerError'
+  /api/auth/profile:
+    put:
+      tags:
+      - Authentication
+      summary: Update current user profile
+      operationId: PUT_api_auth_profile
+      requestBody:
+        required: true
+        description: Request payload
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ProfileUpdate'
+      responses:
+        '200':
+          description: Successful response
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: true
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '500':
+          $ref: '#/components/responses/ServerError'
+  /api/auth/profile/avatar:
+    post:
+      tags:
+      - Authentication
+      summary: Upload current user avatar
+      operationId: POST_api_auth_profile_avatar
+      requestBody:
+        required: true
+        description: Multipart form data
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              required:
+              - avatar
+              properties:
+                avatar:
+                  type: string
+                  format: binary
+      responses:
+        '200':
+          description: Successful response
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: true
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '500':
+          $ref: '#/components/responses/ServerError'
+  /api/auth/change-password:
+    put:
+      tags:
+      - Authentication
+      summary: Change current user password
+      operationId: PUT_api_auth_change_password
+      requestBody:
+        required: true
+        description: Request payload
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ChangePasswordRequest'
+      responses:
+        '200':
+          description: Successful response
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: true
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '500':
+          $ref: '#/components/responses/ServerError'
+  /api/customers:
+    get:
+      tags:
+      - Customers
+      summary: List customers
+      operationId: GET_api_customers
+      parameters:
+      - name: page
+        in: query
+        required: false
+        description: Page number
+        schema:
+          type: integer
+          example: 1
+      - name: limit
+        in: query
+        required: false
+        description: Page size
+        schema:
+          type: integer
+          example: 20
+      - name: search
+        in: query
+        required: false
+        description: Search customer/company/contact/city
+        schema:
+          type: string
+      responses:
+        '200':
+          description: Successful response
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: true
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '500':
+          $ref: '#/components/responses/ServerError'
+    post:
+      tags:
+      - Customers
+      summary: Create customer
+      operationId: POST_api_customers
+      requestBody:
+        required: true
+        description: Request payload
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CustomerWrite'
+      responses:
+        '201':
+          description: Successful response
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: true
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '500':
+          $ref: '#/components/responses/ServerError'
+  /api/customers/cities:
+    get:
+      tags:
+      - Customers
+      summary: List distinct customer cities
+      operationId: GET_api_customers_cities
+      responses:
+        '200':
+          description: Successful response
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: true
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '500':
+          $ref: '#/components/responses/ServerError'
+  /api/customers/{id}:
+    get:
+      tags:
+      - Customers
+      summary: Get customer
+      operationId: GET_api_customers_id
+      parameters:
+      - name: id
+        in: path
+        required: true
+        description: MongoDB document ID unless otherwise noted
+        schema:
+          type: string
+      responses:
+        '200':
+          description: Successful response
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: true
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '500':
+          $ref: '#/components/responses/ServerError'
+    put:
+      tags:
+      - Customers
+      summary: Update customer
+      operationId: PUT_api_customers_id
+      parameters:
+      - name: id
+        in: path
+        required: true
+        description: MongoDB document ID unless otherwise noted
+        schema:
+          type: string
+      requestBody:
+        required: true
+        description: Request payload
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CustomerWrite'
+      responses:
+        '200':
+          description: Successful response
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: true
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '500':
+          $ref: '#/components/responses/ServerError'
+  /api/dashboard/stats:
+    get:
+      tags:
+      - Dashboard
+      summary: Get dashboard statistics
+      operationId: GET_api_dashboard_stats
+      parameters:
+      - name: financialYear
+        in: query
+        required: false
+        description: Financial year such as 2026-27, or all
+        schema:
+          type: string
+          example: 2026-27
+      responses:
+        '200':
+          description: Successful response
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: true
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '500':
+          $ref: '#/components/responses/ServerError'
+  /api/dashboard/recent:
+    get:
+      tags:
+      - Dashboard
+      summary: Get recent dashboard activity
+      operationId: GET_api_dashboard_recent
+      parameters:
+      - name: financialYear
+        in: query
+        required: false
+        description: Financial year such as 2026-27, or all
+        schema:
+          type: string
+          example: 2026-27
+      responses:
+        '200':
+          description: Successful response
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: true
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '500':
+          $ref: '#/components/responses/ServerError'
+  /api/departments:
+    get:
+      tags:
+      - Departments
+      summary: List departments
+      operationId: GET_api_departments
+      parameters:
+      - name: includeInactive
+        in: query
+        required: false
+        description: 'Admin only: include inactive departments'
+        schema:
+          type: boolean
+      - name: search
+        in: query
+        required: false
+        description: Search by name or code
+        schema:
+          type: string
+      responses:
+        '200':
+          description: Successful response
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: true
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '500':
+          $ref: '#/components/responses/ServerError'
+    post:
+      tags:
+      - Departments
+      summary: Create department (admin)
+      operationId: POST_api_departments
+      requestBody:
+        required: true
+        description: Request payload
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/DepartmentWrite'
+      responses:
+        '201':
+          description: Successful response
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: true
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '500':
+          $ref: '#/components/responses/ServerError'
+  /api/departments/{id}:
+    get:
+      tags:
+      - Departments
+      summary: Get department
+      operationId: GET_api_departments_id
+      parameters:
+      - name: id
+        in: path
+        required: true
+        description: MongoDB document ID unless otherwise noted
+        schema:
+          type: string
+      responses:
+        '200':
+          description: Successful response
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: true
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '500':
+          $ref: '#/components/responses/ServerError'
+    put:
+      tags:
+      - Departments
+      summary: Update department (admin)
+      operationId: PUT_api_departments_id
+      parameters:
+      - name: id
+        in: path
+        required: true
+        description: MongoDB document ID unless otherwise noted
+        schema:
+          type: string
+      requestBody:
+        required: true
+        description: Request payload
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/DepartmentWrite'
+      responses:
+        '200':
+          description: Successful response
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: true
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '500':
+          $ref: '#/components/responses/ServerError'
+  /api/users/assignable:
+    get:
+      tags:
+      - Users
+      summary: List assignable users in caller hierarchy
+      operationId: GET_api_users_assignable
+      parameters:
+      - name: department
+        in: query
+        required: false
+        description: Optional department name/code/ID filter
+        schema:
+          type: string
+      responses:
+        '200':
+          description: Successful response
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: true
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '500':
+          $ref: '#/components/responses/ServerError'
+  /api/users:
+    get:
+      tags:
+      - Users
+      summary: List users (admin)
+      operationId: GET_api_users
+      responses:
+        '200':
+          description: Successful response
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: true
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '500':
+          $ref: '#/components/responses/ServerError'
+    post:
+      tags:
+      - Users
+      summary: Create user (admin)
+      operationId: POST_api_users
+      requestBody:
+        required: true
+        description: Request payload
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UserWrite'
+      responses:
+        '201':
+          description: Successful response
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: true
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '500':
+          $ref: '#/components/responses/ServerError'
+  /api/users/{id}:
+    get:
+      tags:
+      - Users
+      summary: Get user (admin)
+      operationId: GET_api_users_id
+      parameters:
+      - name: id
+        in: path
+        required: true
+        description: MongoDB document ID unless otherwise noted
+        schema:
+          type: string
+      responses:
+        '200':
+          description: Successful response
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: true
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '500':
+          $ref: '#/components/responses/ServerError'
+    put:
+      tags:
+      - Users
+      summary: Update user (admin)
+      operationId: PUT_api_users_id
+      parameters:
+      - name: id
+        in: path
+        required: true
+        description: MongoDB document ID unless otherwise noted
+        schema:
+          type: string
+      requestBody:
+        required: true
+        description: Request payload
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UserWrite'
+      responses:
+        '200':
+          description: Successful response
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: true
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '500':
+          $ref: '#/components/responses/ServerError'
+  /api/users/{id}/avatar:
+    post:
+      tags:
+      - Users
+      summary: Upload user avatar (admin)
+      operationId: POST_api_users_id_avatar
+      parameters:
+      - name: id
+        in: path
+        required: true
+        description: MongoDB document ID unless otherwise noted
+        schema:
+          type: string
+      requestBody:
+        required: true
+        description: Multipart form data
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              required:
+              - avatar
+              properties:
+                avatar:
+                  type: string
+                  format: binary
+      responses:
+        '200':
+          description: Successful response
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: true
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '500':
+          $ref: '#/components/responses/ServerError'
+  /api/inquiries/follow-ups:
+    get:
+      tags:
+      - Inquiries
+      summary: Get due inquiry follow-ups
+      operationId: GET_api_inquiries_follow_ups
+      responses:
+        '200':
+          description: Successful response
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: true
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '500':
+          $ref: '#/components/responses/ServerError'
+  /api/inquiries:
+    get:
+      tags:
+      - Inquiries
+      summary: List inquiries
+      operationId: GET_api_inquiries
+      parameters:
+      - name: page
+        in: query
+        required: false
+        description: Page number
+        schema:
+          type: integer
+          example: 1
+      - name: limit
+        in: query
+        required: false
+        description: Page size
+        schema:
+          type: integer
+          example: 20
+      - name: search
+        in: query
+        required: false
+        description: search
+        schema:
+          type: string
+      - name: status
+        in: query
+        required: false
+        description: status
+        schema:
+          type: string
+      - name: priority
+        in: query
+        required: false
+        description: priority
+        schema:
+          type: string
+          enum:
+          - High
+          - Medium
+          - Low
+      - name: productType
+        in: query
+        required: false
+        description: productType
+        schema:
+          type: string
+          enum:
+          - PLC
+          - MCC
+          - VFD
+          - PLC_MCC
+      - name: inquiryType
+        in: query
+        required: false
+        description: inquiryType
+        schema:
+          type: string
+          enum:
+          - PLC_AUTOMATION
+          - VFD_PANEL
+          - MCC_PANEL
+          - MCC_CUM_PLC
+          - LEGACY
+      - name: customerRef
+        in: query
+        required: false
+        description: customerRef
+        schema:
+          type: string
+      - name: financialYear
+        in: query
+        required: false
+        description: Financial year such as 2026-27, or all
+        schema:
+          type: string
+          example: 2026-27
+      responses:
+        '200':
+          description: Successful response
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: true
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '500':
+          $ref: '#/components/responses/ServerError'
+    post:
+      tags:
+      - Inquiries
+      summary: Create inquiry
+      operationId: POST_api_inquiries
+      description: Use application/json when no files are needed. For file uploads, send multipart/form-data with the complete
+        JSON payload in `_json`.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/InquiryWrite'
+          multipart/form-data:
+            schema:
+              type: object
+              required:
+              - _json
+              properties:
+                _json:
+                  type: string
+                  description: JSON-encoded InquiryWrite payload
+                  example: "{\n  \"customerName\": \"ABC Industries\",\n  \"companyName\": \"ABC Industries Pvt Ltd\",\n \
+                    \ \"productType\": \"PLC\",\n  \"inquiryType\": \"PLC_AUTOMATION\",\n  \"projectName\": \"Automation Panel\"\
+                    ,\n  \"priority\": \"Medium\",\n  \"contacts\": [\n    {\n      \"name\": \"Customer Contact\",\n    \
+                    \  \"phone\": \"9876543210\",\n      \"email\": \"contact@example.com\",\n      \"designation\": \"Engineer\"\
+                    \n    }\n  ],\n  \"panelTypes\": [\n    \"PLC\"\n  ],\n  \"supplyVoltage\": \"415 V\",\n  \"frequency\"\
+                    : \"50 Hz\",\n  \"status\": \"New\",\n  \"plcDetails\": {\n    \"mainIncomerFeeder\": {\n      \"mainIncomerType\"\
+                    : \"MCCB\",\n      \"supplyVoltage\": \"415 V\"\n    }\n  }\n}"
+                attachments:
+                  type: array
+                  items:
+                    type: string
+                    format: binary
+                  description: Up to 10 inquiry files, 15 MB each
+                bomAttachments:
+                  type: array
+                  items:
+                    type: string
+                    format: binary
+                  description: Up to 10 BOM files, 15 MB each
+      responses:
+        '201':
+          description: Successful response
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: true
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '500':
+          $ref: '#/components/responses/ServerError'
+  /api/inquiries/{id}:
+    get:
+      tags:
+      - Inquiries
+      summary: Get inquiry
+      operationId: GET_api_inquiries_id
+      parameters:
+      - name: id
+        in: path
+        required: true
+        description: MongoDB document ID unless otherwise noted
+        schema:
+          type: string
+      responses:
+        '200':
+          description: Successful response
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: true
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '500':
+          $ref: '#/components/responses/ServerError'
+    put:
+      tags:
+      - Inquiries
+      summary: Update inquiry
+      operationId: PUT_api_inquiries_id
+      parameters:
+      - name: id
+        in: path
+        required: true
+        description: MongoDB document ID unless otherwise noted
+        schema:
+          type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/InquiryWrite'
+          multipart/form-data:
+            schema:
+              type: object
+              required:
+              - _json
+              properties:
+                _json:
+                  type: string
+                  description: JSON-encoded InquiryWrite payload
+                  example: "{\n  \"customerName\": \"ABC Industries\",\n  \"companyName\": \"ABC Industries Pvt Ltd\",\n \
+                    \ \"productType\": \"PLC\",\n  \"inquiryType\": \"PLC_AUTOMATION\",\n  \"projectName\": \"Automation Panel\"\
+                    ,\n  \"priority\": \"Medium\",\n  \"contacts\": [\n    {\n      \"name\": \"Customer Contact\",\n    \
+                    \  \"phone\": \"9876543210\",\n      \"email\": \"contact@example.com\",\n      \"designation\": \"Engineer\"\
+                    \n    }\n  ],\n  \"panelTypes\": [\n    \"PLC\"\n  ],\n  \"supplyVoltage\": \"415 V\",\n  \"frequency\"\
+                    : \"50 Hz\",\n  \"status\": \"New\",\n  \"plcDetails\": {\n    \"mainIncomerFeeder\": {\n      \"mainIncomerType\"\
+                    : \"MCCB\",\n      \"supplyVoltage\": \"415 V\"\n    }\n  }\n}"
+                attachments:
+                  type: array
+                  items:
+                    type: string
+                    format: binary
+                  description: Up to 10 inquiry files, 15 MB each
+                bomAttachments:
+                  type: array
+                  items:
+                    type: string
+                    format: binary
+                  description: Up to 10 BOM files, 15 MB each
+      responses:
+        '200':
+          description: Successful response
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: true
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '500':
+          $ref: '#/components/responses/ServerError'
+  /api/inquiries/{id}/status:
+    patch:
+      tags:
+      - Inquiries
+      summary: Update inquiry status and optional BOM
+      operationId: PATCH_api_inquiries_id_status
+      parameters:
+      - name: id
+        in: path
+        required: true
+        description: MongoDB document ID unless otherwise noted
+        schema:
+          type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/InquiryStatusUpdate'
+          multipart/form-data:
+            schema:
+              type: object
+              required:
+              - _json
+              properties:
+                _json:
+                  type: string
+                  description: JSON-encoded InquiryStatusUpdate payload
+                  example: "{\n  \"status\": \"Technical Evaluation\"\n}"
+                attachments:
+                  type: array
+                  items:
+                    type: string
+                    format: binary
+                  description: Up to 10 inquiry files, 15 MB each
+                bomAttachments:
+                  type: array
+                  items:
+                    type: string
+                    format: binary
+                  description: Up to 10 BOM files, 15 MB each
+      responses:
+        '200':
+          description: Successful response
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: true
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '500':
+          $ref: '#/components/responses/ServerError'
+  /api/inquiries/{id}/follow-up:
+    patch:
+      tags:
+      - Inquiries
+      summary: Set or clear follow-up reminder
+      operationId: PATCH_api_inquiries_id_follow_up
+      parameters:
+      - name: id
+        in: path
+        required: true
+        description: MongoDB document ID unless otherwise noted
+        schema:
+          type: string
+      requestBody:
+        required: true
+        description: Request payload
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                nextFollowUpDate:
+                  type: string
+                  format: date
+                  nullable: true
+                remarks:
+                  type: string
+      responses:
+        '200':
+          description: Successful response
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: true
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '500':
+          $ref: '#/components/responses/ServerError'
+  /api/inquiries/{id}/pdf:
+    get:
+      tags:
+      - Inquiries
+      summary: Download inquiry PDF
+      operationId: GET_api_inquiries_id_pdf
+      parameters:
+      - name: id
+        in: path
+        required: true
+        description: MongoDB ID or inquiry number
+        schema:
+          type: string
+      responses:
+        '200':
+          description: Generated inquiry PDF
+          content:
+            application/pdf:
+              schema:
+                type: string
+                format: binary
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '500':
+          $ref: '#/components/responses/ServerError'
+  /api/kickoff-workflows/{inquiryId}/schedule:
+    post:
+      tags:
+      - Kickoff Workflows
+      summary: Schedule kick-off meeting
+      operationId: POST_api_kickoff_workflows_inquiryId_schedule
+      parameters:
+      - name: inquiryId
+        in: path
+        required: true
+        description: inquiryId identifier
+        schema:
+          type: string
+      requestBody:
+        required: true
+        description: Multipart form data
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              required:
+              - date
+              - time
+              properties:
+                date:
+                  type: string
+                  format: date
+                time:
+                  type: string
+                  example: '14:30'
+                scheduledAt:
+                  type: string
+                  format: date-time
+                agenda:
+                  type: string
+                meetingLink:
+                  type: string
+                attendees:
+                  type: string
+                  description: JSON array or comma-separated user IDs
+                finalTechnicalBomDocument:
+                  type: string
+                  format: binary
+      responses:
+        '201':
+          description: Successful response
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: true
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '500':
+          $ref: '#/components/responses/ServerError'
+  /api/kickoff-workflows/{inquiryId}/complete:
+    post:
+      tags:
+      - Kickoff Workflows
+      summary: Mark kick-off complete and create project
+      operationId: POST_api_kickoff_workflows_inquiryId_complete
+      parameters:
+      - name: inquiryId
+        in: path
+        required: true
+        description: inquiryId identifier
+        schema:
+          type: string
+      responses:
+        '200':
+          description: Successful response
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: true
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '500':
+          $ref: '#/components/responses/ServerError'
+  /api/kickoff-workflows/{inquiryId}:
+    get:
+      tags:
+      - Kickoff Workflows
+      summary: Get inquiry kick-off workflow
+      operationId: GET_api_kickoff_workflows_inquiryId
+      parameters:
+      - name: inquiryId
+        in: path
+        required: true
+        description: inquiryId identifier
+        schema:
+          type: string
+      responses:
+        '200':
+          description: Successful response
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: true
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '500':
+          $ref: '#/components/responses/ServerError'
+  /api/kickoff-workflows/process/due:
+    post:
+      tags:
+      - Kickoff Workflows
+      summary: Process due kick-off workflows (admin)
+      operationId: POST_api_kickoff_workflows_process_due
+      responses:
+        '200':
+          description: Successful response
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: true
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '500':
+          $ref: '#/components/responses/ServerError'
+  /api/projects/convert/{inquiryId}:
+    post:
+      tags:
+      - Projects
+      summary: Schedule kick-off for inquiry conversion
+      operationId: POST_api_projects_convert_inquiryId
+      parameters:
+      - name: inquiryId
+        in: path
+        required: true
+        description: inquiryId identifier
+        schema:
+          type: string
+      requestBody:
+        required: true
+        description: Request payload
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/KickoffSchedule'
+      responses:
+        '202':
+          description: Successful response
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: true
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '500':
+          $ref: '#/components/responses/ServerError'
+  /api/projects/recalc-delays:
+    post:
+      tags:
+      - Projects
+      summary: Recalculate delays for all projects
+      operationId: POST_api_projects_recalc_delays
+      responses:
+        '200':
+          description: Successful response
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: true
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '500':
+          $ref: '#/components/responses/ServerError'
+  /api/projects/planning-templates:
+    get:
+      tags:
+      - Projects
+      summary: Get planning catalog/templates
+      operationId: GET_api_projects_planning_templates
+      responses:
+        '200':
+          description: Successful response
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: true
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '500':
+          $ref: '#/components/responses/ServerError'
+  /api/projects/planning-users:
+    get:
+      tags:
+      - Projects
+      summary: Get planning users by department
+      operationId: GET_api_projects_planning_users
+      parameters:
+      - name: department
+        in: query
+        required: true
+        description: Supported department
+        schema:
+          type: string
+      responses:
+        '200':
+          description: Successful response
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: true
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '500':
+          $ref: '#/components/responses/ServerError'
+  /api/projects/planning-import/validate:
+    get:
+      tags:
+      - Projects
+      summary: Validate imported planning catalog
+      operationId: GET_api_projects_planning_import_validate
+      responses:
+        '200':
+          description: Successful response
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: true
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '500':
+          $ref: '#/components/responses/ServerError'
+  /api/projects/planning-preview/recalculate:
+    post:
+      tags:
+      - Projects
+      summary: Recalculate normalized planning preview
+      operationId: POST_api_projects_planning_preview_recalculate
+      requestBody:
+        required: true
+        description: Request payload
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PlanningGrid'
+      responses:
+        '200':
+          description: Successful response
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: true
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '500':
+          $ref: '#/components/responses/ServerError'
+  /api/projects:
+    get:
+      tags:
+      - Projects
+      summary: List projects
+      operationId: GET_api_projects
+      parameters:
+      - name: page
+        in: query
+        required: false
+        description: Page number
+        schema:
+          type: integer
+          example: 1
+      - name: limit
+        in: query
+        required: false
+        description: Page size
+        schema:
+          type: integer
+          example: 20
+      - name: search
+        in: query
+        required: false
+        description: search
+        schema:
+          type: string
+      - name: projectStatus
+        in: query
+        required: false
+        description: projectStatus
+        schema:
+          type: string
+      - name: paymentStatus
+        in: query
+        required: false
+        description: paymentStatus
+        schema:
+          type: string
+      - name: orderDate
+        in: query
+        required: false
+        description: Exact order date YYYY-MM-DD
+        schema:
+          type: string
+      - name: financialYear
+        in: query
+        required: false
+        description: Financial year such as 2026-27, or all
+        schema:
+          type: string
+          example: 2026-27
+      - name: riskFilter
+        in: query
+        required: false
+        description: riskFilter
+        schema:
+          type: string
+          enum:
+          - delayedTasks
+          - dueToday
+          - dueThisWeek
+          - overdue
+          - delayed
+      responses:
+        '200':
+          description: Successful response
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: true
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '500':
+          $ref: '#/components/responses/ServerError'
+    post:
+      tags:
+      - Projects
+      summary: Create project
+      operationId: POST_api_projects
+      requestBody:
+        required: true
+        description: Request payload
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ProjectWrite'
+      responses:
+        '201':
+          description: Successful response
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: true
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '500':
+          $ref: '#/components/responses/ServerError'
+  /api/projects/{id}:
+    get:
+      tags:
+      - Projects
+      summary: Get project
+      operationId: GET_api_projects_id
+      parameters:
+      - name: id
+        in: path
+        required: true
+        description: MongoDB document ID unless otherwise noted
+        schema:
+          type: string
+      responses:
+        '200':
+          description: Successful response
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: true
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '500':
+          $ref: '#/components/responses/ServerError'
+    put:
+      tags:
+      - Projects
+      summary: Update project
+      operationId: PUT_api_projects_id
+      parameters:
+      - name: id
+        in: path
+        required: true
+        description: MongoDB document ID unless otherwise noted
+        schema:
+          type: string
+      requestBody:
+        required: true
+        description: Request payload
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ProjectWrite'
+      responses:
+        '200':
+          description: Successful response
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: true
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '500':
+          $ref: '#/components/responses/ServerError'
+  /api/projects/{id}/copy:
+    post:
+      tags:
+      - Projects
+      summary: Copy project
+      operationId: POST_api_projects_id_copy
+      parameters:
+      - name: id
+        in: path
+        required: true
+        description: MongoDB document ID unless otherwise noted
+        schema:
+          type: string
+      requestBody:
+        required: false
+        description: Request payload
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: true
+              properties:
+                projectName:
+                  type: string
+                orderDate:
+                  type: string
+                  format: date
+                projectEndDate:
+                  type: string
+                  format: date
+      responses:
+        '200':
+          description: Successful response
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: true
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '500':
+          $ref: '#/components/responses/ServerError'
+  /api/projects/{id}/documents:
+    post:
+      tags:
+      - Projects
+      summary: Upload project documents
+      operationId: POST_api_projects_id_documents
+      parameters:
+      - name: id
+        in: path
+        required: true
+        description: MongoDB document ID unless otherwise noted
+        schema:
+          type: string
+      requestBody:
+        required: true
+        description: Multipart form data
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              required:
+              - documents
+              properties:
+                documents:
+                  type: array
+                  items:
+                    type: string
+                    format: binary
+      responses:
+        '200':
+          description: Successful response
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: true
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '500':
+          $ref: '#/components/responses/ServerError'
+  /api/projects/{id}/planning-grids:
+    post:
+      tags:
+      - Projects
+      summary: Create separate planning grid
+      operationId: POST_api_projects_id_planning_grids
+      parameters:
+      - name: id
+        in: path
+        required: true
+        description: MongoDB document ID unless otherwise noted
+        schema:
+          type: string
+      requestBody:
+        required: true
+        description: Request payload
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+              - department
+              - panelType
+              properties:
+                department:
+                  type: string
+                panelType:
+                  type: string
+                unitNumber:
+                  type: integer
+                  minimum: 1
+      responses:
+        '200':
+          description: Successful response
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: true
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '500':
+          $ref: '#/components/responses/ServerError'
+  /api/projects/{id}/planning-grids/{gridId}/tasks:
+    post:
+      tags:
+      - Projects
+      summary: Add planning task
+      operationId: POST_api_projects_id_planning_grids_gridId_tasks
+      parameters:
+      - name: id
+        in: path
+        required: true
+        description: MongoDB document ID unless otherwise noted
+        schema:
+          type: string
+      - name: gridId
+        in: path
+        required: true
+        description: gridId identifier
+        schema:
+          type: string
+      requestBody:
+        required: true
+        description: Request payload
+        content:
+          application/json:
+            schema:
+              oneOf:
+              - $ref: '#/components/schemas/PlanningTask'
+              - type: object
+                properties:
+                  task:
+                    $ref: '#/components/schemas/PlanningTask'
+      responses:
+        '200':
+          description: Successful response
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: true
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '500':
+          $ref: '#/components/responses/ServerError'
+  /api/projects/{id}/planning-grids/{gridId}/tasks/reorder:
+    patch:
+      tags:
+      - Projects
+      summary: Reorder every task in a planning grid
+      operationId: PATCH_api_projects_id_planning_grids_gridId_tasks_reorder
+      parameters:
+      - name: id
+        in: path
+        required: true
+        description: MongoDB document ID unless otherwise noted
+        schema:
+          type: string
+      - name: gridId
+        in: path
+        required: true
+        description: gridId identifier
+        schema:
+          type: string
+      requestBody:
+        required: true
+        description: Request payload
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+              - taskIds
+              properties:
+                taskIds:
+                  type: array
+                  items:
+                    type: string
+      responses:
+        '200':
+          description: Successful response
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: true
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '500':
+          $ref: '#/components/responses/ServerError'
+  /api/projects/{id}/planning-grids/{gridId}/tasks/{taskId}/status:
+    patch:
+      tags:
+      - Projects
+      summary: Update assigned planning task status
+      operationId: PATCH_api_projects_id_planning_grids_gridId_tasks_taskId_status
+      parameters:
+      - name: id
+        in: path
+        required: true
+        description: MongoDB document ID unless otherwise noted
+        schema:
+          type: string
+      - name: gridId
+        in: path
+        required: true
+        description: gridId identifier
+        schema:
+          type: string
+      - name: taskId
+        in: path
+        required: true
+        description: taskId identifier
+        schema:
+          type: string
+      requestBody:
+        required: true
+        description: Request payload
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+              - status
+              properties:
+                status:
+                  type: string
+      responses:
+        '200':
+          description: Successful response
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: true
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '500':
+          $ref: '#/components/responses/ServerError'
+  /api/projects/{id}/planning-grids/{gridId}/tasks/{taskId}:
+    patch:
+      tags:
+      - Projects
+      summary: Update planning task
+      operationId: PATCH_api_projects_id_planning_grids_gridId_tasks_taskId
+      parameters:
+      - name: id
+        in: path
+        required: true
+        description: MongoDB document ID unless otherwise noted
+        schema:
+          type: string
+      - name: gridId
+        in: path
+        required: true
+        description: gridId identifier
+        schema:
+          type: string
+      - name: taskId
+        in: path
+        required: true
+        description: taskId identifier
+        schema:
+          type: string
+      requestBody:
+        required: true
+        description: Request payload
+        content:
+          application/json:
+            schema:
+              oneOf:
+              - $ref: '#/components/schemas/PlanningTask'
+              - type: object
+                properties:
+                  task:
+                    $ref: '#/components/schemas/PlanningTask'
+      responses:
+        '200':
+          description: Successful response
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: true
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '500':
+          $ref: '#/components/responses/ServerError'
+    delete:
+      tags:
+      - Projects
+      summary: Remove planning task
+      operationId: DELETE_api_projects_id_planning_grids_gridId_tasks_taskId
+      parameters:
+      - name: id
+        in: path
+        required: true
+        description: MongoDB document ID unless otherwise noted
+        schema:
+          type: string
+      - name: gridId
+        in: path
+        required: true
+        description: gridId identifier
+        schema:
+          type: string
+      - name: taskId
+        in: path
+        required: true
+        description: taskId identifier
+        schema:
+          type: string
+      responses:
+        '200':
+          description: Successful response
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: true
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '500':
+          $ref: '#/components/responses/ServerError'
+  /api/projects/{id}/activity:
+    get:
+      tags:
+      - Projects
+      summary: Get project activity log
+      operationId: GET_api_projects_id_activity
+      parameters:
+      - name: id
+        in: path
+        required: true
+        description: MongoDB document ID unless otherwise noted
+        schema:
+          type: string
+      - name: page
+        in: query
+        required: false
+        description: Page number
+        schema:
+          type: integer
+          example: 1
+      - name: limit
+        in: query
+        required: false
+        description: Page size
+        schema:
+          type: integer
+          example: 20
+      responses:
+        '200':
+          description: Successful response
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: true
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '500':
+          $ref: '#/components/responses/ServerError'
+  /api/projects/{id}/task-completion-history:
+    get:
+      tags:
+      - Projects
+      summary: Get task completion history
+      operationId: GET_api_projects_id_task_completion_history
+      parameters:
+      - name: id
+        in: path
+        required: true
+        description: MongoDB document ID unless otherwise noted
+        schema:
+          type: string
+      responses:
+        '200':
+          description: Successful response
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: true
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '500':
+          $ref: '#/components/responses/ServerError'
+  /api/notifications:
+    get:
+      tags:
+      - Notifications
+      summary: List notifications
+      operationId: GET_api_notifications
+      parameters:
+      - name: page
+        in: query
+        required: false
+        description: Page number
+        schema:
+          type: integer
+          example: 1
+      - name: limit
+        in: query
+        required: false
+        description: Page size
+        schema:
+          type: integer
+          example: 20
+      - name: isRead
+        in: query
+        required: false
+        description: Filter read/unread
+        schema:
+          type: boolean
+      responses:
+        '200':
+          description: Successful response
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: true
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '500':
+          $ref: '#/components/responses/ServerError'
+  /api/notifications/read-all:
+    put:
+      tags:
+      - Notifications
+      summary: Mark all notifications as read
+      operationId: PUT_api_notifications_read_all
+      responses:
+        '200':
+          description: Successful response
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: true
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '500':
+          $ref: '#/components/responses/ServerError'
+  /api/notifications/{id}/read:
+    put:
+      tags:
+      - Notifications
+      summary: Mark notification as read
+      operationId: PUT_api_notifications_id_read
+      parameters:
+      - name: id
+        in: path
+        required: true
+        description: MongoDB document ID unless otherwise noted
+        schema:
+          type: string
+      responses:
+        '200':
+          description: Successful response
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: true
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '500':
+          $ref: '#/components/responses/ServerError'
+  /api/integrations/status:
+    get:
+      tags:
+      - Integrations
+      summary: Get all integration status (admin)
+      operationId: GET_api_integrations_status
+      responses:
+        '200':
+          description: Successful response
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: true
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '500':
+          $ref: '#/components/responses/ServerError'
+  /api/integrations/email:
+    get:
+      tags:
+      - Integrations
+      summary: Get email integration settings (admin)
+      operationId: GET_api_integrations_email
+      responses:
+        '200':
+          description: Successful response
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: true
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '500':
+          $ref: '#/components/responses/ServerError'
+    put:
+      tags:
+      - Integrations
+      summary: Update email integration settings (admin)
+      operationId: PUT_api_integrations_email
+      requestBody:
+        required: true
+        description: Request payload
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/EmailIntegration'
+      responses:
+        '200':
+          description: Successful response
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: true
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '500':
+          $ref: '#/components/responses/ServerError'
+  /api/integrations/email/verify:
+    post:
+      tags:
+      - Integrations
+      summary: Verify email login/configuration (admin)
+      operationId: POST_api_integrations_email_verify
+      requestBody:
+        required: false
+        description: Request payload
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/EmailIntegration'
+      responses:
+        '200':
+          description: Successful response
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: true
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '500':
+          $ref: '#/components/responses/ServerError'
+  /api/integrations/whatsapp/status:
+    get:
+      tags:
+      - Integrations
+      summary: Get WhatsApp integration status (admin)
+      operationId: GET_api_integrations_whatsapp_status
+      responses:
+        '200':
+          description: Successful response
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: true
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '500':
+          $ref: '#/components/responses/ServerError'
+  /api/integrations/whatsapp/restart:
+    post:
+      tags:
+      - Integrations
+      summary: Restart WhatsApp client (admin)
+      operationId: POST_api_integrations_whatsapp_restart
+      responses:
+        '200':
+          description: Successful response
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: true
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '500':
+          $ref: '#/components/responses/ServerError'
+  /api/integrations/whatsapp/logout:
+    post:
+      tags:
+      - Integrations
+      summary: Log out and clear WhatsApp session (admin)
+      operationId: POST_api_integrations_whatsapp_logout
+      responses:
+        '200':
+          description: Successful response
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: true
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '500':
+          $ref: '#/components/responses/ServerError'
+  /api/teams:
+    get:
+      tags:
+      - Teams
+      summary: List teams in caller scope
+      operationId: GET_api_teams
+      parameters:
+      - name: includeInactive
+        in: query
+        required: false
+        description: Admin only
+        schema:
+          type: boolean
+      responses:
+        '200':
+          description: Successful response
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: true
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '500':
+          $ref: '#/components/responses/ServerError'
+    post:
+      tags:
+      - Teams
+      summary: Create team (admin)
+      operationId: POST_api_teams
+      requestBody:
+        required: true
+        description: Request payload
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/TeamWrite'
+      responses:
+        '201':
+          description: Successful response
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: true
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '500':
+          $ref: '#/components/responses/ServerError'
+  /api/teams/{id}:
+    get:
+      tags:
+      - Teams
+      summary: Get team
+      operationId: GET_api_teams_id
+      parameters:
+      - name: id
+        in: path
+        required: true
+        description: MongoDB document ID unless otherwise noted
+        schema:
+          type: string
+      responses:
+        '200':
+          description: Successful response
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: true
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '500':
+          $ref: '#/components/responses/ServerError'
+    put:
+      tags:
+      - Teams
+      summary: Update team metadata (admin)
+      operationId: PUT_api_teams_id
+      parameters:
+      - name: id
+        in: path
+        required: true
+        description: MongoDB document ID unless otherwise noted
+        schema:
+          type: string
+      requestBody:
+        required: true
+        description: Request payload
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/TeamWrite'
+      responses:
+        '200':
+          description: Successful response
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: true
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '500':
+          $ref: '#/components/responses/ServerError'
+  /api/teams/{id}/hod:
+    patch:
+      tags:
+      - Teams
+      summary: Assign or replace team HOD (admin)
+      operationId: PATCH_api_teams_id_hod
+      parameters:
+      - name: id
+        in: path
+        required: true
+        description: MongoDB document ID unless otherwise noted
+        schema:
+          type: string
+      requestBody:
+        required: true
+        description: Request payload
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+              - hodId
+              properties:
+                hodId:
+                  type: string
+                  nullable: true
+      responses:
+        '200':
+          description: Successful response
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: true
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '500':
+          $ref: '#/components/responses/ServerError'
+  /api/teams/{id}/team-lead:
+    patch:
+      tags:
+      - Teams
+      summary: Assign or replace team lead
+      operationId: PATCH_api_teams_id_team_lead
+      parameters:
+      - name: id
+        in: path
+        required: true
+        description: MongoDB document ID unless otherwise noted
+        schema:
+          type: string
+      requestBody:
+        required: true
+        description: Request payload
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+              - teamLeadId
+              properties:
+                teamLeadId:
+                  type: string
+                  nullable: true
+      responses:
+        '200':
+          description: Successful response
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: true
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '500':
+          $ref: '#/components/responses/ServerError'
+  /api/teams/{id}/members:
+    get:
+      tags:
+      - Teams
+      summary: Get team roster
+      operationId: GET_api_teams_id_members
+      parameters:
+      - name: id
+        in: path
+        required: true
+        description: MongoDB document ID unless otherwise noted
+        schema:
+          type: string
+      responses:
+        '200':
+          description: Successful response
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: true
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '500':
+          $ref: '#/components/responses/ServerError'
+    post:
+      tags:
+      - Teams
+      summary: Add team member
+      operationId: POST_api_teams_id_members
+      parameters:
+      - name: id
+        in: path
+        required: true
+        description: MongoDB document ID unless otherwise noted
+        schema:
+          type: string
+      requestBody:
+        required: true
+        description: Request payload
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+              - userId
+              properties:
+                userId:
+                  type: string
+      responses:
+        '200':
+          description: Successful response
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: true
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '500':
+          $ref: '#/components/responses/ServerError'
+  /api/tickets:
+    get:
+      tags:
+      - Tickets
+      summary: List tickets
+      operationId: GET_api_tickets
+      parameters:
+      - name: page
+        in: query
+        required: false
+        description: Page number
+        schema:
+          type: integer
+          example: 1
+      - name: limit
+        in: query
+        required: false
+        description: Page size
+        schema:
+          type: integer
+          example: 20
+      - name: status
+        in: query
+        required: false
+        description: Single value or comma-separated list
+        schema:
+          type: string
+      - name: priority
+        in: query
+        required: false
+        description: Single value or comma-separated list
+        schema:
+          type: string
+      - name: ticketType
+        in: query
+        required: false
+        description: Single value or comma-separated list
+        schema:
+          type: string
+      - name: source
+        in: query
+        required: false
+        description: Single value or comma-separated list
+        schema:
+          type: string
+      - name: supportType
+        in: query
+        required: false
+        description: supportType
+        schema:
+          type: string
+      - name: department
+        in: query
+        required: false
+        description: department
+        schema:
+          type: string
+      - name: customer
+        in: query
+        required: false
+        description: customer
+        schema:
+          type: string
+      - name: project
+        in: query
+        required: false
+        description: project
+        schema:
+          type: string
+      - name: inquiry
+        in: query
+        required: false
+        description: inquiry
+        schema:
+          type: string
+      - name: assignedTo
+        in: query
+        required: false
+        description: Single ID or comma-separated IDs
+        schema:
+          type: string
+      - name: from
+        in: query
+        required: false
+        description: Created from date YYYY-MM-DD
+        schema:
+          type: string
+      - name: to
+        in: query
+        required: false
+        description: Created to date YYYY-MM-DD
+        schema:
+          type: string
+      - name: search
+        in: query
+        required: false
+        description: search
+        schema:
+          type: string
+      - name: isActive
+        in: query
+        required: false
+        description: isActive
+        schema:
+          type: boolean
+      - name: financialYear
+        in: query
+        required: false
+        description: Financial year such as 2026-27, or all
+        schema:
+          type: string
+          example: 2026-27
+      responses:
+        '200':
+          description: Successful response
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: true
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '500':
+          $ref: '#/components/responses/ServerError'
+    post:
+      tags:
+      - Tickets
+      summary: Create ticket
+      operationId: POST_api_tickets
+      requestBody:
+        required: true
+        description: Request payload
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/TicketWrite'
+      responses:
+        '201':
+          description: Successful response
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: true
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '500':
+          $ref: '#/components/responses/ServerError'
+  /api/tickets/{id}:
+    get:
+      tags:
+      - Tickets
+      summary: Get ticket
+      operationId: GET_api_tickets_id
+      parameters:
+      - name: id
+        in: path
+        required: true
+        description: MongoDB document ID unless otherwise noted
+        schema:
+          type: string
+      responses:
+        '200':
+          description: Successful response
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: true
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '500':
+          $ref: '#/components/responses/ServerError'
+    put:
+      tags:
+      - Tickets
+      summary: Update ticket
+      operationId: PUT_api_tickets_id
+      parameters:
+      - name: id
+        in: path
+        required: true
+        description: MongoDB document ID unless otherwise noted
+        schema:
+          type: string
+      requestBody:
+        required: true
+        description: Request payload
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/TicketWrite'
+      responses:
+        '200':
+          description: Successful response
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: true
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '500':
+          $ref: '#/components/responses/ServerError'
+  /api/tickets/{id}/assign:
+    patch:
+      tags:
+      - Tickets
+      summary: Assign ticket
+      operationId: PATCH_api_tickets_id_assign
+      parameters:
+      - name: id
+        in: path
+        required: true
+        description: MongoDB document ID unless otherwise noted
+        schema:
+          type: string
+      requestBody:
+        required: true
+        description: Request payload
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+              - assignedTo
+              properties:
+                assignedTo:
+                  type: string
+      responses:
+        '200':
+          description: Successful response
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: true
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '500':
+          $ref: '#/components/responses/ServerError'
+  /api/tickets/{id}/start-work:
+    patch:
+      tags:
+      - Tickets
+      summary: Start work on ticket
+      operationId: PATCH_api_tickets_id_start_work
+      parameters:
+      - name: id
+        in: path
+        required: true
+        description: MongoDB document ID unless otherwise noted
+        schema:
+          type: string
+      responses:
+        '200':
+          description: Successful response
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: true
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '500':
+          $ref: '#/components/responses/ServerError'
+  /api/tickets/{id}/customer-pending:
+    patch:
+      tags:
+      - Tickets
+      summary: Set customer-side pending
+      operationId: PATCH_api_tickets_id_customer_pending
+      parameters:
+      - name: id
+        in: path
+        required: true
+        description: MongoDB document ID unless otherwise noted
+        schema:
+          type: string
+      requestBody:
+        required: true
+        description: Request payload
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                note:
+                  type: string
+      responses:
+        '200':
+          description: Successful response
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: true
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '500':
+          $ref: '#/components/responses/ServerError'
+  /api/tickets/{id}/close:
+    patch:
+      tags:
+      - Tickets
+      summary: Close ticket
+      operationId: PATCH_api_tickets_id_close
+      parameters:
+      - name: id
+        in: path
+        required: true
+        description: MongoDB document ID unless otherwise noted
+        schema:
+          type: string
+      requestBody:
+        required: true
+        description: Request payload
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+              - resolution
+              properties:
+                resolution:
+                  type: string
+      responses:
+        '200':
+          description: Successful response
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: true
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '500':
+          $ref: '#/components/responses/ServerError'
+  /api/tickets/{id}/reopen:
+    patch:
+      tags:
+      - Tickets
+      summary: Reopen ticket
+      operationId: PATCH_api_tickets_id_reopen
+      parameters:
+      - name: id
+        in: path
+        required: true
+        description: MongoDB document ID unless otherwise noted
+        schema:
+          type: string
+      requestBody:
+        required: true
+        description: Request payload
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                reason:
+                  type: string
+      responses:
+        '200':
+          description: Successful response
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: true
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '500':
+          $ref: '#/components/responses/ServerError'
+  /api/tickets/{id}/void:
+    patch:
+      tags:
+      - Tickets
+      summary: Void ticket
+      operationId: PATCH_api_tickets_id_void
+      parameters:
+      - name: id
+        in: path
+        required: true
+        description: MongoDB document ID unless otherwise noted
+        schema:
+          type: string
+      requestBody:
+        required: true
+        description: Request payload
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+              - voidReason
+              properties:
+                voidReason:
+                  type: string
+      responses:
+        '200':
+          description: Successful response
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: true
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '500':
+          $ref: '#/components/responses/ServerError'
+  /api/tickets/{id}/comments:
+    get:
+      tags:
+      - Tickets
+      summary: List ticket comments
+      operationId: GET_api_tickets_id_comments
+      parameters:
+      - name: id
+        in: path
+        required: true
+        description: MongoDB document ID unless otherwise noted
+        schema:
+          type: string
+      - name: page
+        in: query
+        required: false
+        description: Page number
+        schema:
+          type: integer
+          example: 1
+      - name: limit
+        in: query
+        required: false
+        description: Page size
+        schema:
+          type: integer
+          example: 20
+      responses:
+        '200':
+          description: Successful response
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: true
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '500':
+          $ref: '#/components/responses/ServerError'
+    post:
+      tags:
+      - Tickets
+      summary: Add ticket comment
+      operationId: POST_api_tickets_id_comments
+      parameters:
+      - name: id
+        in: path
+        required: true
+        description: MongoDB document ID unless otherwise noted
+        schema:
+          type: string
+      requestBody:
+        required: true
+        description: Request payload
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CommentWrite'
+      responses:
+        '201':
+          description: Successful response
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: true
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '500':
+          $ref: '#/components/responses/ServerError'
+  /api/tickets/comments/{commentId}:
+    put:
+      tags:
+      - Tickets
+      summary: Edit ticket comment
+      operationId: PUT_api_tickets_comments_commentId
+      parameters:
+      - name: commentId
+        in: path
+        required: true
+        description: commentId identifier
+        schema:
+          type: string
+      requestBody:
+        required: true
+        description: Request payload
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CommentWrite'
+      responses:
+        '200':
+          description: Successful response
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: true
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '500':
+          $ref: '#/components/responses/ServerError'
+  /api/tickets/{id}/attachments:
+    post:
+      tags:
+      - Tickets
+      summary: Upload ticket attachments
+      operationId: POST_api_tickets_id_attachments
+      parameters:
+      - name: id
+        in: path
+        required: true
+        description: MongoDB document ID unless otherwise noted
+        schema:
+          type: string
+      requestBody:
+        required: true
+        description: Multipart form data
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              required:
+              - attachments
+              properties:
+                attachments:
+                  type: array
+                  items:
+                    type: string
+                    format: binary
+      responses:
+        '200':
+          description: Successful response
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: true
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '500':
+          $ref: '#/components/responses/ServerError'
+  /api/tickets/{id}/activity:
+    get:
+      tags:
+      - Tickets
+      summary: Get ticket activity timeline
+      operationId: GET_api_tickets_id_activity
+      parameters:
+      - name: id
+        in: path
+        required: true
+        description: MongoDB document ID unless otherwise noted
+        schema:
+          type: string
+      - name: page
+        in: query
+        required: false
+        description: Page number
+        schema:
+          type: integer
+          example: 1
+      - name: limit
+        in: query
+        required: false
+        description: Page size
+        schema:
+          type: integer
+          example: 20
+      responses:
+        '200':
+          description: Successful response
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: true
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '500':
+          $ref: '#/components/responses/ServerError'
+  /api/timesheet/list:
+    get:
+      tags:
+      - Timesheet
+      summary: Get paginated task list
+      operationId: GET_api_timesheet_list
+      parameters:
+      - name: page
+        in: query
+        required: false
+        description: Page number
+        schema:
+          type: integer
+          example: 1
+      - name: limit
+        in: query
+        required: false
+        description: Page size
+        schema:
+          type: integer
+          example: 20
+      - name: teamId
+        in: query
+        required: false
+        description: teamId
+        schema:
+          type: string
+      - name: project
+        in: query
+        required: false
+        description: project
+        schema:
+          type: string
+      - name: status
+        in: query
+        required: false
+        description: status
+        schema:
+          type: string
+          enum:
+          - Backlog
+          - Planned
+          - In Progress
+          - Review
+          - Completed
+      - name: taskType
+        in: query
+        required: false
+        description: taskType
+        schema:
+          type: string
+      - name: from
+        in: query
+        required: false
+        description: YYYY-MM-DD
+        schema:
+          type: string
+      - name: to
+        in: query
+        required: false
+        description: YYYY-MM-DD
+        schema:
+          type: string
+      - name: taskSource
+        in: query
+        required: false
+        description: taskSource
+        schema:
+          type: string
+          enum:
+          - USER
+          - PROJECT
+      - name: includeArchived
+        in: query
+        required: false
+        description: includeArchived
+        schema:
+          type: boolean
+      - name: isArchived
+        in: query
+        required: false
+        description: isArchived
+        schema:
+          type: boolean
+      responses:
+        '200':
+          description: Successful response
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: true
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '500':
+          $ref: '#/components/responses/ServerError'
+  /api/timesheet/kanban:
+    get:
+      tags:
+      - Timesheet
+      summary: Get kanban tasks
+      operationId: GET_api_timesheet_kanban
+      parameters:
+      - name: teamId
+        in: query
+        required: false
+        description: teamId
+        schema:
+          type: string
+      - name: project
+        in: query
+        required: false
+        description: project
+        schema:
+          type: string
+      - name: status
+        in: query
+        required: false
+        description: status
+        schema:
+          type: string
+          enum:
+          - Backlog
+          - Planned
+          - In Progress
+          - Review
+          - Completed
+      - name: taskType
+        in: query
+        required: false
+        description: taskType
+        schema:
+          type: string
+      - name: from
+        in: query
+        required: false
+        description: YYYY-MM-DD
+        schema:
+          type: string
+      - name: to
+        in: query
+        required: false
+        description: YYYY-MM-DD
+        schema:
+          type: string
+      - name: taskSource
+        in: query
+        required: false
+        description: taskSource
+        schema:
+          type: string
+          enum:
+          - USER
+          - PROJECT
+      - name: includeArchived
+        in: query
+        required: false
+        description: includeArchived
+        schema:
+          type: boolean
+      - name: isArchived
+        in: query
+        required: false
+        description: isArchived
+        schema:
+          type: boolean
+      responses:
+        '200':
+          description: Successful response
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: true
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '500':
+          $ref: '#/components/responses/ServerError'
+  /api/timesheet/calendar:
+    get:
+      tags:
+      - Timesheet
+      summary: Get calendar tasks
+      operationId: GET_api_timesheet_calendar
+      parameters:
+      - name: from
+        in: query
+        required: true
+        description: YYYY-MM-DD
+        schema:
+          type: string
+      - name: to
+        in: query
+        required: true
+        description: YYYY-MM-DD
+        schema:
+          type: string
+      - name: teamId
+        in: query
+        required: false
+        description: teamId
+        schema:
+          type: string
+      - name: project
+        in: query
+        required: false
+        description: project
+        schema:
+          type: string
+      - name: status
+        in: query
+        required: false
+        description: status
+        schema:
+          type: string
+          enum:
+          - Backlog
+          - Planned
+          - In Progress
+          - Review
+          - Completed
+      - name: taskType
+        in: query
+        required: false
+        description: taskType
+        schema:
+          type: string
+      - name: taskSource
+        in: query
+        required: false
+        description: taskSource
+        schema:
+          type: string
+          enum:
+          - USER
+          - PROJECT
+      - name: includeArchived
+        in: query
+        required: false
+        description: includeArchived
+        schema:
+          type: boolean
+      - name: isArchived
+        in: query
+        required: false
+        description: isArchived
+        schema:
+          type: boolean
+      responses:
+        '200':
+          description: Successful response
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: true
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '500':
+          $ref: '#/components/responses/ServerError'
+  /api/timesheet/tasks:
+    get:
+      tags:
+      - Timesheet
+      summary: List tasks
+      operationId: GET_api_timesheet_tasks
+      parameters:
+      - name: page
+        in: query
+        required: false
+        description: Page number
+        schema:
+          type: integer
+          example: 1
+      - name: limit
+        in: query
+        required: false
+        description: Page size
+        schema:
+          type: integer
+          example: 20
+      - name: teamId
+        in: query
+        required: false
+        description: teamId
+        schema:
+          type: string
+      - name: project
+        in: query
+        required: false
+        description: project
+        schema:
+          type: string
+      - name: status
+        in: query
+        required: false
+        description: status
+        schema:
+          type: string
+          enum:
+          - Backlog
+          - Planned
+          - In Progress
+          - Review
+          - Completed
+      - name: taskType
+        in: query
+        required: false
+        description: taskType
+        schema:
+          type: string
+      - name: from
+        in: query
+        required: false
+        description: YYYY-MM-DD
+        schema:
+          type: string
+      - name: to
+        in: query
+        required: false
+        description: YYYY-MM-DD
+        schema:
+          type: string
+      - name: taskSource
+        in: query
+        required: false
+        description: taskSource
+        schema:
+          type: string
+          enum:
+          - USER
+          - PROJECT
+      - name: includeArchived
+        in: query
+        required: false
+        description: includeArchived
+        schema:
+          type: boolean
+      - name: isArchived
+        in: query
+        required: false
+        description: isArchived
+        schema:
+          type: boolean
+      responses:
+        '200':
+          description: Successful response
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: true
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '500':
+          $ref: '#/components/responses/ServerError'
+    post:
+      tags:
+      - Timesheet
+      summary: Create task
+      operationId: POST_api_timesheet_tasks
+      requestBody:
+        required: true
+        description: Request payload
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/TimesheetTaskWrite'
+      responses:
+        '201':
+          description: Successful response
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: true
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '500':
+          $ref: '#/components/responses/ServerError'
+  /api/timesheet/tasks/{id}:
+    get:
+      tags:
+      - Timesheet
+      summary: Get task
+      operationId: GET_api_timesheet_tasks_id
+      parameters:
+      - name: id
+        in: path
+        required: true
+        description: MongoDB document ID unless otherwise noted
+        schema:
+          type: string
+      responses:
+        '200':
+          description: Successful response
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: true
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '500':
+          $ref: '#/components/responses/ServerError'
+    put:
+      tags:
+      - Timesheet
+      summary: Update task
+      operationId: PUT_api_timesheet_tasks_id
+      parameters:
+      - name: id
+        in: path
+        required: true
+        description: MongoDB document ID unless otherwise noted
+        schema:
+          type: string
+      requestBody:
+        required: true
+        description: Request payload
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/TimesheetTaskWrite'
+      responses:
+        '200':
+          description: Successful response
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: true
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '500':
+          $ref: '#/components/responses/ServerError'
+  /api/timesheet/tasks/{id}/status:
+    patch:
+      tags:
+      - Timesheet
+      summary: Update task status
+      operationId: PATCH_api_timesheet_tasks_id_status
+      parameters:
+      - name: id
+        in: path
+        required: true
+        description: MongoDB document ID unless otherwise noted
+        schema:
+          type: string
+      requestBody:
+        required: true
+        description: Request payload
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+              - status
+              properties:
+                status:
+                  type: string
+                  enum:
+                  - Backlog
+                  - Planned
+                  - In Progress
+                  - Review
+                  - Completed
+      responses:
+        '200':
+          description: Successful response
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: true
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '500':
+          $ref: '#/components/responses/ServerError'
+  /api/timesheet/tasks/{id}/kanban:
+    patch:
+      tags:
+      - Timesheet
+      summary: Move task in kanban
+      operationId: PATCH_api_timesheet_tasks_id_kanban
+      parameters:
+      - name: id
+        in: path
+        required: true
+        description: MongoDB document ID unless otherwise noted
+        schema:
+          type: string
+      requestBody:
+        required: true
+        description: Request payload
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+              - status
+              - kanbanOrder
+              properties:
+                status:
+                  type: string
+                kanbanOrder:
+                  type: number
+      responses:
+        '200':
+          description: Successful response
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: true
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '500':
+          $ref: '#/components/responses/ServerError'
+  /api/timesheet/tasks/{id}/archive:
+    patch:
+      tags:
+      - Timesheet
+      summary: Archive task
+      operationId: PATCH_api_timesheet_tasks_id_archive
+      parameters:
+      - name: id
+        in: path
+        required: true
+        description: MongoDB document ID unless otherwise noted
+        schema:
+          type: string
+      requestBody:
+        required: false
+        description: Request payload
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                archiveReason:
+                  type: string
+                  enum:
+                  - PROJECT_TASK_REMOVED
+                  - PROJECT_TASK_UNASSIGNED
+                  - PROJECT_DELETED
+                  - MANUAL_ARCHIVE
+      responses:
+        '200':
+          description: Successful response
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: true
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '500':
+          $ref: '#/components/responses/ServerError'
+  /api/timesheet/tasks/{id}/restore:
+    patch:
+      tags:
+      - Timesheet
+      summary: Restore archived task
+      operationId: PATCH_api_timesheet_tasks_id_restore
+      parameters:
+      - name: id
+        in: path
+        required: true
+        description: MongoDB document ID unless otherwise noted
+        schema:
+          type: string
+      responses:
+        '200':
+          description: Successful response
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: true
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '500':
+          $ref: '#/components/responses/ServerError'
+  /api/timesheet/admin/all:
+    get:
+      tags:
+      - Timesheet
+      summary: Get all scoped tasks (team lead and above)
+      operationId: GET_api_timesheet_admin_all
+      parameters:
+      - name: page
+        in: query
+        required: false
+        description: Page number
+        schema:
+          type: integer
+          example: 1
+      - name: limit
+        in: query
+        required: false
+        description: Page size
+        schema:
+          type: integer
+          example: 20
+      - name: teamId
+        in: query
+        required: false
+        description: teamId
+        schema:
+          type: string
+      - name: project
+        in: query
+        required: false
+        description: project
+        schema:
+          type: string
+      - name: status
+        in: query
+        required: false
+        description: status
+        schema:
+          type: string
+          enum:
+          - Backlog
+          - Planned
+          - In Progress
+          - Review
+          - Completed
+      - name: taskType
+        in: query
+        required: false
+        description: taskType
+        schema:
+          type: string
+      - name: from
+        in: query
+        required: false
+        description: YYYY-MM-DD
+        schema:
+          type: string
+      - name: to
+        in: query
+        required: false
+        description: YYYY-MM-DD
+        schema:
+          type: string
+      - name: taskSource
+        in: query
+        required: false
+        description: taskSource
+        schema:
+          type: string
+          enum:
+          - USER
+          - PROJECT
+      - name: includeArchived
+        in: query
+        required: false
+        description: includeArchived
+        schema:
+          type: boolean
+      - name: isArchived
+        in: query
+        required: false
+        description: isArchived
+        schema:
+          type: boolean
+      responses:
+        '200':
+          description: Successful response
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: true
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '500':
+          $ref: '#/components/responses/ServerError'
+  /api/timesheet/admin/summary:
+    get:
+      tags:
+      - Timesheet
+      summary: Get scoped timesheet summary
+      operationId: GET_api_timesheet_admin_summary
+      parameters:
+      - name: teamId
+        in: query
+        required: false
+        description: teamId
+        schema:
+          type: string
+      - name: project
+        in: query
+        required: false
+        description: project
+        schema:
+          type: string
+      - name: status
+        in: query
+        required: false
+        description: status
+        schema:
+          type: string
+          enum:
+          - Backlog
+          - Planned
+          - In Progress
+          - Review
+          - Completed
+      - name: taskType
+        in: query
+        required: false
+        description: taskType
+        schema:
+          type: string
+      - name: from
+        in: query
+        required: false
+        description: YYYY-MM-DD
+        schema:
+          type: string
+      - name: to
+        in: query
+        required: false
+        description: YYYY-MM-DD
+        schema:
+          type: string
+      - name: taskSource
+        in: query
+        required: false
+        description: taskSource
+        schema:
+          type: string
+          enum:
+          - USER
+          - PROJECT
+      - name: includeArchived
+        in: query
+        required: false
+        description: includeArchived
+        schema:
+          type: boolean
+      - name: isArchived
+        in: query
+        required: false
+        description: isArchived
+        schema:
+          type: boolean
+      responses:
+        '200':
+          description: Successful response
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: true
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '500':
+          $ref: '#/components/responses/ServerError'
+  /api/timesheet/admin/workload:
+    get:
+      tags:
+      - Timesheet
+      summary: Get scoped employee workload
+      operationId: GET_api_timesheet_admin_workload
+      parameters:
+      - name: teamId
+        in: query
+        required: false
+        description: teamId
+        schema:
+          type: string
+      - name: project
+        in: query
+        required: false
+        description: project
+        schema:
+          type: string
+      - name: status
+        in: query
+        required: false
+        description: status
+        schema:
+          type: string
+          enum:
+          - Backlog
+          - Planned
+          - In Progress
+          - Review
+          - Completed
+      - name: taskType
+        in: query
+        required: false
+        description: taskType
+        schema:
+          type: string
+      - name: from
+        in: query
+        required: false
+        description: YYYY-MM-DD
+        schema:
+          type: string
+      - name: to
+        in: query
+        required: false
+        description: YYYY-MM-DD
+        schema:
+          type: string
+      - name: taskSource
+        in: query
+        required: false
+        description: taskSource
+        schema:
+          type: string
+          enum:
+          - USER
+          - PROJECT
+      - name: includeArchived
+        in: query
+        required: false
+        description: includeArchived
+        schema:
+          type: boolean
+      - name: isArchived
+        in: query
+        required: false
+        description: isArchived
+        schema:
+          type: boolean
+      responses:
+        '200':
+          description: Successful response
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: true
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '500':
+          $ref: '#/components/responses/ServerError'
+  /api/timesheet/admin/daily-breakdown:
+    get:
+      tags:
+      - Timesheet
+      summary: Get scoped daily breakdown
+      operationId: GET_api_timesheet_admin_daily_breakdown
+      parameters:
+      - name: from
+        in: query
+        required: true
+        description: YYYY-MM-DD
+        schema:
+          type: string
+      - name: to
+        in: query
+        required: true
+        description: YYYY-MM-DD
+        schema:
+          type: string
+      - name: teamId
+        in: query
+        required: false
+        description: teamId
+        schema:
+          type: string
+      - name: taskSource
+        in: query
+        required: false
+        description: taskSource
+        schema:
+          type: string
+      - name: includeArchived
+        in: query
+        required: false
+        description: includeArchived
+        schema:
+          type: boolean
+      - name: isArchived
+        in: query
+        required: false
+        description: isArchived
+        schema:
+          type: boolean
+      responses:
+        '200':
+          description: Successful response
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: true
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '500':
+          $ref: '#/components/responses/ServerError'
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+      description: JWT returned by POST /api/auth/login
+  schemas:
+    ObjectId:
+      type: string
+      pattern: ^[a-fA-F0-9]{24}$
+      example: 64b7f1c2a1b2c3d4e5f67890
+    ErrorResponse:
+      type: object
+      properties:
+        success:
+          type: boolean
+          example: false
+        message:
+          type: string
+        errors:
+          type: array
+          items:
+            type: string
+    MessageResponse:
+      type: object
+      properties:
+        success:
+          type: boolean
+          example: true
+        message:
+          type: string
+    Pagination:
+      type: object
+      properties:
+        total:
+          type: integer
+        page:
+          type: integer
+        limit:
+          type: integer
+        pages:
+          type: integer
+        totalPages:
+          type: integer
+    Contact:
+      type: object
+      properties:
+        name:
+          type: string
+        phone:
+          type: string
+        email:
+          type: string
+          format: email
+        designation:
+          type: string
+    Attachment:
+      type: object
+      properties:
+        name:
+          type: string
+        storedName:
+          type: string
+        storagePath:
+          type: string
+        mimeType:
+          type: string
+        sizeBytes:
+          type: integer
+        uploadedBy:
+          $ref: '#/components/schemas/ObjectId'
+        uploadedAt:
+          type: string
+          format: date-time
+    User:
+      type: object
+      properties:
+        _id:
+          $ref: '#/components/schemas/ObjectId'
+        name:
+          type: string
+        email:
+          type: string
+          format: email
+        phone:
+          type: string
+        avatar:
+          type: string
+        role:
+          type: string
+          enum:
+          - admin
+          - hod
+          - manager
+          - team_lead
+          - employee
+        department:
+          oneOf:
+          - type: string
+          - $ref: '#/components/schemas/ObjectId'
+        hodDepartments:
+          type: array
+          items:
+            oneOf:
+            - type: string
+            - $ref: '#/components/schemas/ObjectId'
+        teamId:
+          nullable: true
+          allOf:
+          - $ref: '#/components/schemas/ObjectId'
+        reportsTo:
+          nullable: true
+          allOf:
+          - $ref: '#/components/schemas/ObjectId'
+        employeeAccess:
+          type: array
+          items:
+            type: string
+        isActive:
+          type: boolean
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
+    LoginRequest:
+      type: object
+      required:
+      - email
+      - password
+      properties:
+        email:
+          type: string
+          format: email
+          example: admin@example.com
+        password:
+          type: string
+          format: password
+          example: password123
+    LoginResponse:
+      type: object
+      properties:
+        success:
+          type: boolean
+        token:
+          type: string
+        user:
+          $ref: '#/components/schemas/User'
+    ProfileUpdate:
+      type: object
+      required:
+      - name
+      - email
+      properties:
+        name:
+          type: string
+        email:
+          type: string
+          format: email
+        phone:
+          type: string
+    ChangePasswordRequest:
+      type: object
+      required:
+      - currentPassword
+      - newPassword
+      properties:
+        currentPassword:
+          type: string
+          format: password
+        newPassword:
+          type: string
+          format: password
+          minLength: 8
+    UserWrite:
+      type: object
+      required:
+      - name
+      - email
+      properties:
+        name:
+          type: string
+          maxLength: 100
+        email:
+          type: string
+          format: email
+        password:
+          type: string
+          format: password
+          minLength: 8
+        phone:
+          type: string
+        role:
+          type: string
+          enum:
+          - admin
+          - hod
+          - manager
+          - team_lead
+          - employee
+        department:
+          type: string
+        hodDepartments:
+          type: array
+          items:
+            type: string
+        teamId:
+          type: string
+          nullable: true
+        reportsTo:
+          type: string
+          nullable: true
+        employeeAccess:
+          type: array
+          items:
+            type: string
+        isActive:
+          type: boolean
+    CustomerWrite:
+      type: object
+      required:
+      - customerName
+      properties:
+        customerName:
+          type: string
+        companyName:
+          type: string
+        companyType:
+          type: string
+        contactPerson:
+          type: string
+        email:
+          type: string
+          format: email
+        mobileNumber:
+          type: string
+        contacts:
+          type: array
+          items:
+            $ref: '#/components/schemas/Contact'
+        city:
+          type: string
+        address:
+          type: string
+        gstNumber:
+          type: string
+        notes:
+          type: string
+        isActive:
+          type: boolean
+        createdBy:
+          type: string
+    Customer:
+      allOf:
+      - $ref: '#/components/schemas/CustomerWrite'
+      - type: object
+        properties:
+          _id:
+            $ref: '#/components/schemas/ObjectId'
+          customerId:
+            type: string
+          totalProjects:
+            type: integer
+          createdAt:
+            type: string
+            format: date-time
+          updatedAt:
+            type: string
+            format: date-time
+    DepartmentWrite:
+      type: object
+      required:
+      - name
+      - code
+      properties:
+        name:
+          type: string
+        code:
+          type: string
+        hod:
+          type: string
+          nullable: true
+        hods:
+          type: array
+          items:
+            type: string
+        teamLead:
+          type: string
+          nullable: true
+        isActive:
+          type: boolean
+    Department:
+      allOf:
+      - $ref: '#/components/schemas/DepartmentWrite'
+      - type: object
+        properties:
+          _id:
+            $ref: '#/components/schemas/ObjectId'
+          createdBy:
+            $ref: '#/components/schemas/ObjectId'
+          createdAt:
+            type: string
+            format: date-time
+          updatedAt:
+            type: string
+            format: date-time
+    TeamWrite:
+      type: object
+      required:
+      - name
+      properties:
+        name:
+          type: string
+        description:
+          type: string
+        hodId:
+          type: string
+          nullable: true
+        teamLeadId:
+          type: string
+          nullable: true
+        isActive:
+          type: boolean
+    Team:
+      type: object
+      properties:
+        _id:
+          $ref: '#/components/schemas/ObjectId'
+        name:
+          type: string
+        description:
+          type: string
+        hod:
+          nullable: true
+          allOf:
+          - $ref: '#/components/schemas/User'
+        teamLead:
+          nullable: true
+          allOf:
+          - $ref: '#/components/schemas/User'
+        members:
+          type: array
+          items:
+            $ref: '#/components/schemas/User'
+        isActive:
+          type: boolean
+    LoadRow:
+      type: object
+      properties:
+        description:
+          type: string
+        qty:
+          type: number
+        kw:
+          type: number
+        hp:
+          type: number
+        ampere:
+          type: number
+        startingMethod:
+          type: string
+    InquiryLoadRow:
+      type: object
+      properties:
+        srNo:
+          type: integer
+        loadDescription:
+          type: string
+        qty:
+          type: number
+        ratingKwHp:
+          type: string
+        fullLoadCurrent:
+          type: string
+        remarks:
+          type: string
+    MainIncomer:
+      type: object
+      properties:
+        mainIncomerType:
+          type: string
+        supplyVoltage:
+          type: string
+        customSupplyVoltage:
+          type: string
+        pole:
+          type: string
+        frequency:
+          type: string
+        make:
+          type: string
+        customMake:
+          type: string
+        kaRating:
+          type: string
+        controlFeeder:
+          type: string
+        sameAsAbove:
+          type: boolean
+    InquiryWrite:
+      type: object
+      required:
+      - customerName
+      - productType
+      additionalProperties: true
+      properties:
+        inquiryDate:
+          type: string
+          format: date
+        customerRef:
+          type: string
+        customerName:
+          type: string
+        companyName:
+          type: string
+        companyType:
+          type: string
+        contacts:
+          type: array
+          items:
+            $ref: '#/components/schemas/Contact'
+        contactPerson:
+          type: string
+        mobileNumber:
+          type: string
+        email:
+          type: string
+          format: email
+        designation:
+          type: string
+        siteAddress:
+          type: string
+        city:
+          type: string
+        location:
+          type: string
+        projectName:
+          type: string
+        industryType:
+          type: string
+        offerType:
+          type: string
+        previousOrderRef:
+          type: string
+        inquiryType:
+          type: string
+          enum:
+          - PLC_AUTOMATION
+          - VFD_PANEL
+          - MCC_PANEL
+          - MCC_CUM_PLC
+          - LEGACY
+        panelTypes:
+          type: array
+          items:
+            type: string
+        customPanelType:
+          type: string
+        applicationDescription:
+          type: string
+        applicationProcess:
+          type: string
+        productType:
+          type: string
+          enum:
+          - PLC
+          - MCC
+          - VFD
+          - PLC_MCC
+        supplyVoltage:
+          type: string
+        controlVoltage:
+          type: string
+        controlFeeder:
+          type: boolean
+        frequency:
+          type: string
+        panelAreaClassification:
+          type: string
+        panelAreaClass:
+          type: string
+        ipRating:
+          type: string
+        installationType:
+          type: string
+        shortCircuitCapacity:
+          type: string
+        busbarMaterial:
+          type: string
+        enclosureType:
+          type: string
+        enclosureMaterial:
+          type: string
+        enclosureStandard:
+          type: string
+        enclosureMake:
+          type: string
+        panelStructure:
+          type: string
+        switchgearMake:
+          type: string
+        customSwitchgearMake:
+          type: string
+        panelColourRal:
+          type: string
+        cableEntry:
+          type: string
+        cableGlandMaterial:
+          type: string
+        barrierVariant:
+          type: string
+        loadDetails:
+          type: array
+          items:
+            $ref: '#/components/schemas/LoadRow'
+        controlType:
+          type: string
+        controlMatrix:
+          type: object
+          additionalProperties: true
+        panelMounting:
+          type: string
+        certificationRequired: {}
+        certificationDetails:
+          type: string
+        drawingsAttached:
+          type: boolean
+        drawingsSldAttached:
+          type: string
+          enum:
+          - ''
+          - 'Yes'
+          - 'No'
+        equipmentListAttached:
+          type: string
+          enum:
+          - ''
+          - 'Yes'
+          - 'No'
+        referenceBomAttached:
+          type: string
+          enum:
+          - ''
+          - 'Yes'
+          - 'No'
+        commissioningScope:
+          type: boolean
+        deliveryDate:
+          type: string
+          format: date
+        programmingScope:
+          type: string
+        onsiteSupport:
+          type: boolean
+        deliveryTerms:
+          type: string
+        paymentTerms:
+          type: string
+        plcDetails:
+          type: object
+          additionalProperties: true
+        vfdDetails:
+          type: object
+          additionalProperties: true
+          properties:
+            mainIncomer:
+              $ref: '#/components/schemas/MainIncomer'
+            loadDetails:
+              type: array
+              items:
+                $ref: '#/components/schemas/InquiryLoadRow'
+        mccDetails:
+          type: object
+          additionalProperties: true
+        flpEnclosureDetails:
+          type: object
+          additionalProperties: true
+        rioBoxDetails:
+          type: object
+          additionalProperties: true
+        additionalNotes:
+          type: string
+        internalRemarks:
+          type: string
+        preparedBy:
+          type: string
+        reviewStatus:
+          type: string
+        remarks:
+          type: string
+        estimatedValue:
+          type: number
+        priority:
+          type: string
+          enum:
+          - High
+          - Medium
+          - Low
+        status:
+          type: string
+        nextFollowUpDate:
+          type: string
+          format: date
+        existingAttachments:
+          type: array
+          items:
+            $ref: '#/components/schemas/Attachment'
+        existingBomAttachments:
+          type: array
+          items:
+            $ref: '#/components/schemas/Attachment'
+      example:
+        customerName: ABC Industries
+        companyName: ABC Industries Pvt Ltd
+        productType: PLC
+        inquiryType: PLC_AUTOMATION
+        projectName: Automation Panel
+        priority: Medium
+        contacts:
+        - name: Customer Contact
+          phone: '9876543210'
+          email: contact@example.com
+          designation: Engineer
+        panelTypes:
+        - PLC
+        supplyVoltage: 415 V
+        frequency: 50 Hz
+        status: New
+        plcDetails:
+          mainIncomerFeeder:
+            mainIncomerType: MCCB
+            supplyVoltage: 415 V
+    Inquiry:
+      allOf:
+      - $ref: '#/components/schemas/InquiryWrite'
+      - type: object
+        properties:
+          _id:
+            $ref: '#/components/schemas/ObjectId'
+          inquiryId:
+            type: string
+            example: INQ-1350
+          attachments:
+            type: array
+            items:
+              $ref: '#/components/schemas/Attachment'
+          bomAttachments:
+            type: array
+            items:
+              $ref: '#/components/schemas/Attachment'
+          convertedToProject:
+            type: boolean
+          projectReference:
+            type: string
+            nullable: true
+          createdBy:
+            $ref: '#/components/schemas/User'
+          createdAt:
+            type: string
+            format: date-time
+          updatedAt:
+            type: string
+            format: date-time
+    InquiryStatusUpdate:
+      type: object
+      required:
+      - status
+      additionalProperties: true
+      properties:
+        status:
+          type: string
+          enum:
+          - New
+          - Technical Evaluation
+          - Technical BoM Submitted
+          - BoM Approval Pending
+          - Revision
+          - Commercial BOM Submission
+          - Order Won
+          - Order Lost
+          - Inquiry Hold
+        orderLostReason:
+          type: string
+          enum:
+          - Price
+          - Commercial
+          - Priority
+          - Timing
+          - Trust Issue
+          - Certification
+        orderLostAdditionalRemark:
+          type: string
+        holdReason:
+          type: string
+          enum:
+          - Due to Customer
+          - Specification
+          - Technical
+          - Commercial
+        holdAdditionalRemark:
+          type: string
+        bomApprovalAdditionalRemark:
+          type: string
+        revisionCustomerComment:
+          type: string
+        revisionInternalNotes:
+          type: string
+        bomSubmissionRemarks:
+          type: string
+    PlanningTask:
+      type: object
+      additionalProperties: true
+      properties:
+        taskId:
+          type: string
+        gridId:
+          type: string
+        gridName:
+          type: string
+        taskType:
+          type: string
+          enum:
+          - Production
+          - Programming
+          - Common
+          - Joint
+        department:
+          type: string
+        taskName:
+          type: string
+        inqNo:
+          type: string
+        remark:
+          type: string
+        assignedTo:
+          type: string
+          nullable: true
+        dependency:
+          type: string
+        milestone:
+          type: boolean
+        plannedStartDate:
+          type: string
+          format: date
+        plannedEndDate:
+          type: string
+          format: date
+        actualCompletedDate:
+          type: string
+          format: date
+        order:
+          type: integer
+        totalDays:
+          type: integer
+          minimum: 1
+        delayDays:
+          type: integer
+          minimum: 0
+        status:
+          type: string
+    PanelSelection:
+      type: object
+      required:
+      - department
+      - panelType
+      - quantity
+      - planningMode
+      properties:
+        department:
+          type: string
+          enum:
+          - Design
+          - Production
+          - Purchase
+          - Automation
+          - Store
+          - QC
+        panelType:
+          type: string
+          enum:
+          - PLC
+          - MCC
+          - VFD
+          - MCC cum PLC
+          - FLP
+          - RIO Box
+        quantity:
+          type: integer
+          minimum: 1
+        planningMode:
+          type: string
+          enum:
+          - common
+          - separate
+    PlanningGrid:
+      type: object
+      additionalProperties: true
+      properties:
+        gridId:
+          type: string
+        name:
+          type: string
+        gridName:
+          type: string
+        department:
+          type: string
+        panelType:
+          type: string
+        panelQuantity:
+          type: integer
+        planningMode:
+          type: string
+          enum:
+          - common
+          - separate
+        unitNumber:
+          type: integer
+        isCommon:
+          type: boolean
+        completionPercentage:
+          type: number
+          minimum: 0
+          maximum: 100
+        projectEndDate:
+          type: string
+          format: date
+        planningTasks:
+          type: array
+          items:
+            $ref: '#/components/schemas/PlanningTask'
+    ProjectWrite:
+      type: object
+      required:
+      - customerName
+      - projectName
+      additionalProperties: true
+      properties:
+        inquiryReference:
+          type: string
+        inquiryNumber:
+          type: string
+        customerRef:
+          type: string
+        customerName:
+          type: string
+        companyName:
+          type: string
+        projectName:
+          type: string
+        selectedDepartments:
+          type: array
+          items:
+            type: string
+        panelSelections:
+          type: array
+          items:
+            $ref: '#/components/schemas/PanelSelection'
+        quantity:
+          type: integer
+          minimum: 1
+        projectQuantity:
+          type: integer
+          minimum: 1
+        orderValue:
+          type: number
+        orderDate:
+          type: string
+          format: date
+        expectedDeliveryDate:
+          type: string
+          format: date
+        actualDeliveryDate:
+          type: string
+          format: date
+        projectEndDate:
+          type: string
+          format: date
+        productionStatus:
+          type: string
+          enum:
+          - Not Started
+          - In Progress
+          - Completed
+        dispatchStatus:
+          type: string
+          enum:
+          - Not Delivered
+          - Delivered
+        installationStatus:
+          type: string
+          enum:
+          - Not Started
+          - In Progress
+          - Completed
+        paymentStatus:
+          type: string
+          enum:
+          - Pending
+          - Partial
+          - Completed
+        projectStatus:
+          type: string
+          enum:
+          - Planning
+          - Design
+          - Production
+          - Testing
+          - Dispatch
+          - Installation
+          - Completed
+          - Delivered
+          - won
+        completionPercentage:
+          type: number
+          minimum: 0
+          maximum: 100
+        assignedTeamMembers:
+          type: array
+          items:
+            type: string
+        planningTasks:
+          type: array
+          items:
+            $ref: '#/components/schemas/PlanningTask'
+        planningGrids:
+          type: array
+          items:
+            $ref: '#/components/schemas/PlanningGrid'
+      example:
+        customerName: ABC Industries
+        projectName: PLC Panel Project
+        quantity: 1
+        orderDate: '2026-07-27'
+        projectEndDate: '2026-09-30'
+        selectedDepartments:
+        - Design
+        - Production
+        - Purchase
+        - Automation
+        - Store
+        - QC
+        panelSelections:
+        - department: Design
+          panelType: PLC
+          quantity: 1
+          planningMode: common
+    Project:
+      allOf:
+      - $ref: '#/components/schemas/ProjectWrite'
+      - type: object
+        properties:
+          _id:
+            $ref: '#/components/schemas/ObjectId'
+          projectId:
+            type: string
+            example: NAPL-0200
+          documents:
+            type: array
+            items:
+              $ref: '#/components/schemas/Attachment'
+          delayedDays:
+            type: integer
+          isDelayed:
+            type: boolean
+          createdBy:
+            $ref: '#/components/schemas/User'
+          createdAt:
+            type: string
+            format: date-time
+          updatedAt:
+            type: string
+            format: date-time
+    KickoffSchedule:
+      type: object
+      required:
+      - date
+      - time
+      properties:
+        date:
+          type: string
+          format: date
+        time:
+          type: string
+          example: '14:30'
+        scheduledAt:
+          type: string
+          format: date-time
+        agenda:
+          type: string
+        meetingLink:
+          type: string
+          format: uri
+        attendees:
+          type: array
+          items:
+            type: string
+    EmailIntegration:
+      type: object
+      properties:
+        isEnabled:
+          type: boolean
+        provider:
+          type: string
+          example: outlook
+        host:
+          type: string
+          example: smtp.office365.com
+        port:
+          type: integer
+          example: 587
+        secure:
+          type: boolean
+        username:
+          type: string
+          format: email
+        fromEmail:
+          type: string
+          format: email
+        password:
+          type: string
+          format: password
+    TicketProduct:
+      type: object
+      required:
+      - productType
+      properties:
+        productType:
+          type: string
+          enum:
+          - N/A
+          - HMI
+          - PLC
+          - Servo
+          - VFD
+          - SCADA
+          - IPC
+          - Other
+        brand:
+          type: string
+        panelFamily:
+          type: string
+        partNumber:
+          type: string
+        serialNumber:
+          type: string
+    RepairReplacement:
+      type: object
+      properties:
+        underWarranty:
+          type: boolean
+        productReceivedDate:
+          type: string
+          format: date
+        receivedDate:
+          type: string
+          format: date
+        expectedDispatchDate:
+          type: string
+          format: date
+        inspectionObservation:
+          type: string
+        repairStatus:
+          type: string
+        dateOfReplacement:
+          type: string
+          format: date
+        replacementSerialNumber:
+          type: string
+        rrSolutionStatus:
+          type: string
+    TicketWrite:
+      type: object
+      required:
+      - title
+      - ticketType
+      - source
+      - department
+      - customer
+      - contactPerson
+      - contactNumber
+      - product
+      additionalProperties: true
+      properties:
+        title:
+          type: string
+        description:
+          type: string
+        additionalDescription:
+          type: string
+        ticketType:
+          type: string
+          enum:
+          - N/A
+          - Support
+          - Repairing & Replacement
+        status:
+          type: string
+          enum:
+          - New
+          - Assigned
+          - Working
+          - Customer Side Pending
+          - Closed
+          - Void
+        priority:
+          type: string
+          enum:
+          - Low
+          - Medium
+          - High
+          - Urgent
+        source:
+          type: string
+          enum:
+          - Call
+          - Mail
+          - WhatsApp
+          - Internal
+          - Other
+        supportType:
+          type: string
+        department:
+          type: string
+        customer:
+          type: string
+        contactPerson:
+          type: string
+        contactNumber:
+          type: string
+        project:
+          type: string
+          nullable: true
+        inquiry:
+          type: string
+          nullable: true
+        assignedTo:
+          type: string
+          nullable: true
+        product:
+          $ref: '#/components/schemas/TicketProduct'
+        repairReplacement:
+          $ref: '#/components/schemas/RepairReplacement'
+        resolution:
+          type: string
+      example:
+        title: VFD communication issue
+        ticketType: Support
+        priority: High
+        source: Call
+        supportType: Free
+        department: AUTOMATION
+        customer: 64b7f1c2a1b2c3d4e5f67890
+        contactPerson: Customer Contact
+        contactNumber: '9876543210'
+        product:
+          productType: VFD
+          brand: ABB
+          partNumber: ACS180
+    Ticket:
+      allOf:
+      - $ref: '#/components/schemas/TicketWrite'
+      - type: object
+        properties:
+          _id:
+            $ref: '#/components/schemas/ObjectId'
+          ticketId:
+            type: string
+            example: TKT-000001
+          attachments:
+            type: array
+            items:
+              $ref: '#/components/schemas/Attachment'
+          createdAt:
+            type: string
+            format: date-time
+          updatedAt:
+            type: string
+            format: date-time
+    TimesheetTaskWrite:
+      type: object
+      required:
+      - title
+      - taskType
+      - date
+      properties:
+        employee:
+          type: string
+        title:
+          type: string
+        description:
+          type: string
+        employeeRemarks:
+          type: string
+        project:
+          type: string
+          nullable: true
+        taskType:
+          type: string
+          enum:
+          - Development
+          - Design
+          - Meeting
+          - Review
+          - Testing
+          - Documentation
+          - Support
+          - Other
+        date:
+          type: string
+          format: date
+        startTime:
+          type: string
+          pattern: ^([01]\d|2[0-3]):[0-5]\d$
+        endTime:
+          type: string
+          pattern: ^([01]\d|2[0-3]):[0-5]\d$
+        hours:
+          type: number
+          minimum: 0
+          maximum: 24
+        status:
+          type: string
+          enum:
+          - Backlog
+          - Planned
+          - In Progress
+          - Review
+          - Completed
+        kanbanOrder:
+          type: number
+      example:
+        title: PLC program testing
+        taskType: Testing
+        date: '2026-07-27'
+        startTime: '10:00'
+        endTime: '12:00'
+        status: In Progress
+    TimesheetTask:
+      allOf:
+      - $ref: '#/components/schemas/TimesheetTaskWrite'
+      - type: object
+        properties:
+          _id:
+            $ref: '#/components/schemas/ObjectId'
+          taskSource:
+            type: string
+            enum:
+            - USER
+            - PROJECT
+          isArchived:
+            type: boolean
+          createdAt:
+            type: string
+            format: date-time
+          updatedAt:
+            type: string
+            format: date-time
+    CommentWrite:
+      type: object
+      required:
+      - content
+      properties:
+        content:
+          type: string
+  responses:
+    BadRequest:
+      description: Bad request
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+    Unauthorized:
+      description: Missing or invalid JWT
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+    Forbidden:
+      description: Authenticated but not permitted
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+    NotFound:
+      description: Resource not found
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+    ServerError:
+      description: Server error
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'

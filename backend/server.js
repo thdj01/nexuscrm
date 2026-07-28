@@ -22,6 +22,8 @@ const timesheetRoutes = require('./routes/timesheetRoutes');
 const teamRoutes = require('./routes/teamRoutes');
 const ticketRoutes = require('./routes/ticketRoutes');
 const { seedDefaultDepartments } = require('./services/departmentSeedService');
+const swaggerUi = require('swagger-ui-express');
+const fs = require('fs');
 
 // Load environment variables
 dotenv.config();
@@ -82,6 +84,29 @@ app.use('/api/timesheet', timesheetRoutes);
 app.use('/api/teams', teamRoutes);
 // app.use('/api/tickets', ticketRoutes);
 app.use('/api/tickets', require('./routes/ticketRoutes'));
+
+// ─── Swagger Documentation ───────────────────────────────────────────────────
+const openApiJsonPath = path.join(__dirname, 'docs', 'nexus-dashboard-openapi.json');
+let swaggerDocument = {};
+if (fs.existsSync(openApiJsonPath)) {
+  try {
+    swaggerDocument = JSON.parse(fs.readFileSync(openApiJsonPath, 'utf8'));
+  } catch (err) {
+    console.error('Failed to parse OpenAPI JSON:', err.message);
+  }
+}
+
+app.get('/api-docs/openapi.json', (_req, res) => {
+  res.sendFile(openApiJsonPath);
+});
+
+app.get('/api-docs/openapi.yaml', (_req, res) => {
+  res.sendFile(path.join(__dirname, 'docs', 'nexus-dashboard-openapi.yaml'));
+});
+
+app.use('/api-docs', swaggerUi.serve, swaggerUi.setup(swaggerDocument, {
+  customSiteTitle: 'Nexus Dashboard API Documentation',
+}));
 
 
 // ─── Health Check ──────────────────────────────────────────────────────────────
