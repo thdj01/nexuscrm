@@ -113,6 +113,7 @@ const MainIncomerSection = ({
             error={getError(errors, errorKey('mainIncomerType'))}
           >
             <SearchableSelect
+              includeNotApplicable
               value={details.mainIncomerType || ''}
               onChange={(value) => onFieldChange?.('mainIncomerType', value)}
               options={normaliseOptions(MAIN_INCOMER_TYPE_OPTIONS)}
@@ -128,6 +129,7 @@ const MainIncomerSection = ({
             error={getError(errors, errorKey('supplyVoltage'))}
           >
             <SearchableSelect
+              includeNotApplicable
               value={details.supplyVoltage || ''}
               onChange={(value) => onFieldChange?.(
                 'supplyVoltage',
@@ -162,6 +164,7 @@ const MainIncomerSection = ({
             error={getError(errors, errorKey('pole'))}
           >
             <SearchableSelect
+              includeNotApplicable
               value={details.pole || ''}
               onChange={(value) => onFieldChange?.('pole', value)}
               options={normaliseOptions(POLE_OPTIONS)}
@@ -177,6 +180,7 @@ const MainIncomerSection = ({
             error={getError(errors, errorKey('frequency'))}
           >
             <SearchableSelect
+              includeNotApplicable
               value={details.frequency || ''}
               onChange={(value) => onFieldChange?.('frequency', value)}
               options={normaliseOptions(FREQUENCY_OPTIONS)}
@@ -192,6 +196,7 @@ const MainIncomerSection = ({
             error={getError(errors, errorKey('make'))}
           >
             <SearchableSelect
+              includeNotApplicable
               value={details.make || ''}
               onChange={(value) => onFieldChange?.(
                 'make',

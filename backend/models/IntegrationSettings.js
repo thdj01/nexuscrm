@@ -55,6 +55,41 @@ const IntegrationSettingsSchema = new mongoose.Schema(
       },
       lastVerificationError: String,
     },
+    whatsapp: {
+      isConfigured: {
+        type: Boolean,
+        default: false,
+      },
+      isEnabled: {
+        type: Boolean,
+        default: true,
+      },
+      notifyNumber: {
+        type: String,
+        trim: true,
+        default: '',
+      },
+      groupId: {
+        type: String,
+        trim: true,
+        default: '',
+      },
+      groupName: {
+        type: String,
+        trim: true,
+        default: '',
+      },
+      allowUnknownSenders: {
+        type: Boolean,
+        default: false,
+      },
+      clientId: {
+        type: String,
+        trim: true,
+        default: 'nexus-session',
+      },
+      lastSavedAt: Date,
+    },
     updatedBy: {
       type: mongoose.Schema.Types.ObjectId,
       ref: 'User',

@@ -673,7 +673,6 @@ const RecentInquiryRows = ({ recent, navigate }) => (
         </div>
 
         <div className="flex w-full min-w-0 flex-wrap items-center gap-1.5 sm:ml-auto sm:w-auto sm:justify-end">
-          <StatusBadge status={inq.priority} size="xs" />
           <StatusBadge status={inq.status} size="xs" />
         </div>
       </div>

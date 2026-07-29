@@ -9,9 +9,21 @@ const {
   verifyEmailConfig,
 } = require('../services/emailSettingsService');
 const {
+  getWhatsAppSettings,
+  getActiveWhatsAppConfig,
+  refreshWhatsAppRuntimeConfig,
+  sanitizeWhatsAppSettings,
+  normalizePhoneNumber,
+  normalizeGroupId,
+  normalizeClientId,
+} = require('../services/whatsappSettingsService');
+const {
   getWhatsAppStatus,
   restartWhatsApp,
   logoutWhatsApp,
+  listWhatsAppGroups,
+  sendTestMessage,
+  sendTestGroupMessage,
 } = require('../services/whatsappService');
 
 function createError(message, statusCode = 400) {
@@ -23,12 +35,16 @@ function createError(message, statusCode = 400) {
 
 async function getIntegrationStatus(_req, res, next) {
   try {
-    const email = await getEmailSettings({ includeSecret: true });
+    const [email, whatsappSettings] = await Promise.all([
+      getEmailSettings({ includeSecret: true }),
+      getWhatsAppSettings(),
+    ]);
 
     res.json({
       success: true,
       data: {
         whatsapp: getWhatsAppStatus(),
+        whatsappSettings: sanitizeWhatsAppSettings(whatsappSettings),
         email: sanitizeEmailSettings(email),
       },
     });
@@ -153,6 +169,78 @@ async function verifyEmailIntegration(req, res, next) {
   }
 }
 
+async function getWhatsappSettingsIntegration(_req, res, next) {
+  try {
+    const settings = await getWhatsAppSettings();
+    res.json({ success: true, data: sanitizeWhatsAppSettings(settings) });
+  } catch (err) {
+    next(err);
+  }
+}
+
+async function updateWhatsappSettingsIntegration(req, res, next) {
+  try {
+    const body = req.body || {};
+    const notifyNumber = normalizePhoneNumber(body.notifyNumber || '');
+    const groupId = normalizeGroupId(body.groupId || '');
+    const clientId = normalizeClientId(body.clientId || 'nexus-session');
+    const isEnabled = Boolean(body.isEnabled);
+
+    if (body.notifyNumber && (notifyNumber.length < 10 || notifyNumber.length > 15)) {
+      return next(createError('WhatsApp notification number must contain 10 to 15 digits including country code.', 400));
+    }
+
+    if (body.groupId && !groupId) {
+      return next(createError('WhatsApp group ID is invalid. Load groups and select a valid group.', 400));
+    }
+
+    const previousConfig = getActiveWhatsAppConfig();
+
+    const saved = await IntegrationSettings.findOneAndUpdate(
+      { singletonKey: 'default' },
+      {
+        $set: {
+          'whatsapp.isConfigured': true,
+          'whatsapp.isEnabled': isEnabled,
+          'whatsapp.notifyNumber': notifyNumber,
+          'whatsapp.groupId': groupId,
+          'whatsapp.groupName': String(body.groupName || '').trim(),
+          'whatsapp.allowUnknownSenders': Boolean(body.allowUnknownSenders),
+          'whatsapp.clientId': clientId,
+          'whatsapp.lastSavedAt': new Date(),
+          updatedBy: req.user?._id,
+        },
+        $setOnInsert: { singletonKey: 'default' },
+      },
+      { new: true, upsert: true }
+    ).lean();
+
+    const activeConfig = await refreshWhatsAppRuntimeConfig();
+    const statusBeforeRestart = getWhatsAppStatus();
+    const restartRequired =
+      previousConfig.isEnabled !== activeConfig.isEnabled ||
+      previousConfig.clientId !== activeConfig.clientId ||
+      (activeConfig.isEnabled && !statusBeforeRestart.hasClient);
+
+    const whatsappStatus = restartRequired
+      ? await restartWhatsApp({ clearSession: false })
+      : getWhatsAppStatus();
+
+    res.json({
+      success: true,
+      message: restartRequired
+        ? 'WhatsApp settings saved and client restarted.'
+        : 'WhatsApp settings saved successfully.',
+      data: {
+        settings: sanitizeWhatsAppSettings(activeConfig),
+        whatsapp: whatsappStatus,
+      },
+    });
+  } catch (err) {
+    next(err);
+  }
+}
+
 function getWhatsappIntegration(_req, res) {
   res.json({ success: true, data: getWhatsAppStatus() });
 }
@@ -183,12 +271,72 @@ async function logoutWhatsappIntegration(_req, res, next) {
   }
 }
 
+async function testWhatsappNumber(req, res, next) {
+  try {
+    const result = await sendTestMessage();
+
+    return res.status(result.ok ? 200 : 400).json({
+      success: result.ok,
+      message: result.ok
+        ? 'WhatsApp direct test message sent successfully.'
+        : 'WhatsApp direct test failed.',
+      data: result,
+      error: result.error || '',
+    });
+  } catch (err) {
+    next(err);
+  }
+}
+
+async function testWhatsappGroup(req, res, next) {
+  try {
+    const result = await sendTestGroupMessage();
+
+    return res.status(result.ok ? 200 : 400).json({
+      success: result.ok,
+      message: result.ok
+        ? 'WhatsApp group test message sent successfully.'
+        : 'WhatsApp group test failed.',
+      data: result,
+      error: result.error || '',
+    });
+  } catch (err) {
+    next(err);
+  }
+}
+
+async function getWhatsappGroups(_req, res, next) {
+  try {
+    const result = await listWhatsAppGroups();
+    const message = result.ok
+      ? (result.groups.length > 0
+          ? `${result.groups.length} WhatsApp group(s) loaded.`
+          : (result.warning || 'WhatsApp is connected, but no groups were found.'))
+      : 'Could not load WhatsApp groups.';
+
+    return res.status(result.ok ? 200 : 400).json({
+      success: result.ok,
+      message,
+      data: result,
+      warning: result.warning || '',
+      error: result.error || '',
+    });
+  } catch (err) {
+    next(err);
+  }
+}
+
 module.exports = {
   getIntegrationStatus,
   getEmailIntegration,
   updateEmailIntegration,
   verifyEmailIntegration,
+  getWhatsappSettingsIntegration,
+  updateWhatsappSettingsIntegration,
   getWhatsappIntegration,
   restartWhatsappIntegration,
   logoutWhatsappIntegration,
+  testWhatsappNumber,
+  testWhatsappGroup,
+  getWhatsappGroups,
 };

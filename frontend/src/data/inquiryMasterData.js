@@ -146,6 +146,7 @@ export const CONTROL_VOLTAGE_OPTIONS = ['110 V AC', '230 V AC', '24 V DC'];
 export const MCC_CONTROL_VOLTAGE_OPTIONS = CONTROL_VOLTAGE_OPTIONS;
 
 export const MCC_PANEL_STRUCTURE_OPTIONS = ['Single Front', 'Double Front', 'Back-to-Back'];
+export const FLP_PANEL_STRUCTURE_OPTIONS = ['Single Front', 'Double Front', 'LHS & RHS'];
 
 export const MCC_CABLE_ENTRY_MV_LV_OPTIONS = ['Top', 'Bottom'];
 
@@ -313,6 +314,19 @@ export const defaultVfdDetails = () => ({
   },
   switchgearMake: '',
   customSwitchgearMake: '',
+  outgoingFeederDetails: {
+    totalNoOfFeeders: '',
+    feederTypes: [],
+    noOfDolStarters: '',
+    totalLoadKw: '',
+    noOfStarDeltaStarters: '',
+    switchgearMake: '',
+    noOfSoftStarters: '',
+    softStarterMake: '',
+    noOfVfdFeeders: '',
+    vfdMake: '',
+    controlTransformerRequired: '',
+  },
   loadDetails: [
     defaultVfdLoadRow(1),
   ],
@@ -379,12 +393,11 @@ export const defaultMccDetails = () => ({
 
 // ── Weatherproof / FLP enclosure selection sheet options ────────────────────
 export const FLP_ENCLOSURE_TYPE_OPTIONS = ['Weatherproof', 'Flameproof (FLP)'];
-export const FLP_MATERIAL_OPTIONS = ['CRCA', 'SS304', 'SS316', 'Aluminium'];
+export const FLP_MATERIAL_OPTIONS = ['Cast Aluminium Alloy LM-6', 'SS304', 'SS316', 'Aluminium'];
 export const FLP_IP_RATING_OPTIONS = ['IP54', 'IP55', 'IP65', 'IP66'];
 export const FLP_YES_NO_OPTIONS = ['Yes', 'No'];
 export const FLP_MOUNTING_OPTIONS = ['Wall', 'Floor', 'Pole'];
 export const FLP_ZONE_DIVISION_OPTIONS = [
-  'Safe Area',
   'Zone 1',
   'Zone 2',
   'Class I Div 1',
@@ -392,67 +405,34 @@ export const FLP_ZONE_DIVISION_OPTIONS = [
 ];
 export const FLP_GAS_GROUP_OPTIONS = ['IIA', 'IIB', 'IIC'];
 export const FLP_TEMPERATURE_CLASS_OPTIONS = ['T1', 'T2', 'T3', 'T4', 'T5', 'T6'];
-export const FLP_CERTIFICATION_OPTIONS = ['ATEX', 'IECEx', 'PESO', 'Customer Standard'];
+export const FLP_CERTIFICATION_OPTIONS = ['ATEX', 'PESO', 'CIMFR', 'Customer Standard'];
 
 export const defaultFlpEnclosureDetails = () => ({
-  enclosureSelection: {
-    enclosureType: '',
-    application: '',
-    installation: '',
-    hazardousArea: '',
-    outdoorInstallation: '',
-    remarks: '',
-  },
   commonTechnical: {
     equipmentMounted: '',
     makeModel: '',
     voltage: '',
     currentRating: '',
     controlVoltage: '',
-    cableEntryDirection: '',
     glandType: '',
-    ambientTemperature: '',
-    humidity: '',
-    corrosiveAtmosphere: '',
   },
   weatherproof: {
     material: '',
-    ipRating: '',
+    ipRating: 'IP65',
     mounting: '',
-    doorType: '',
-    sunshadeCanopy: '',
     makeModel: '',
-    thermostat: '',
     windowRequired: '',
-    breatherDrain: '',
-    paintingRal: '',
-    corrosionClass: '',
     specialRequirement: '',
   },
   flameproof: {
-    areaClassification: '',
-    zoneDivision: '',
-    gasGroup: '',
+    areaClassification: 'Hazardous Area',
+    zoneDivision: [],
+    gasGroup: [],
     temperatureClass: '',
-    gasName: '',
-    certification: '',
+    certification: [],
     protectionConcept: '',
     material: '',
-    ipRating: '',
-    internalDevice: '',
-    makeModel: '',
-    breather: '',
-    windowRequired: '',
-    numberOfGlands: '',
-    cableType: '',
-  },
-  preliminarySummary: {
-    selectedEnclosureType: '',
-    material: '',
-    ipRating: '',
-    areaRequirement: '',
-    sizeRequirement: '',
-    remarks: '',
+    ipRating: 'IP65',
   },
 });
 
@@ -526,8 +506,8 @@ export const defaultRioBoxDetails = () => ({
     remarks: row.remarks,
   })),
   enclosureConditions: {
-    enclosureMaterial: 'CRCA Painted',
-    ipRating: 'IP54',
+    enclosureType: 'CRCA Painted',
+    ipRating: 'IP65',
     areaClassification: 'Safe Area',
     indoorOutdoor: 'Indoor',
     ambientTemperature: '0 to 50 °C',

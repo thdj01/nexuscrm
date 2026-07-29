@@ -24,8 +24,7 @@
 //
 // Notes:
 //   • Sender phone must match an active User phone number in User Management.
-//   • To allow unknown numbers for testing, set WHATSAPP_ALLOW_UNKNOWN_SENDERS=true
-//     in backend/.env and restart backend.
+//   • Incoming sender permissions are controlled from Master → Integration Settings.
 // ─────────────────────────────────────────────────────────────────────────────
 
 'use strict';
@@ -40,11 +39,27 @@ try {
 } catch {
   qrcodeImage = null;
 }
-const { Client, LocalAuth, MessageMedia } = require('whatsapp-web.js');
+
+// Keep the API server alive even when whatsapp-web.js or Puppeteer was not
+// installed correctly. The Integration Settings page will show the real error
+// instead of the whole backend crashing during startup.
+let Client = null;
+let LocalAuth = null;
+let MessageMedia = null;
+let whatsappDependencyError = '';
+try {
+  ({ Client, LocalAuth, MessageMedia } = require('whatsapp-web.js'));
+} catch (error) {
+  whatsappDependencyError = error?.message || 'whatsapp-web.js could not be loaded';
+}
 
 const Project = require('../models/Project');
 const ProjectActivityLog = require('../models/ProjectActivityLog');
 const User = require('../models/User');
+const {
+  getActiveWhatsAppConfig,
+  refreshWhatsAppRuntimeConfig,
+} = require('./whatsappSettingsService');
 
 let clientReady = false;
 let client = null;
@@ -67,7 +82,10 @@ const ALLOWED_TASK_STATUSES = ['Pending', 'In Progress', 'Delay', 'Completed', '
 // This prevents the linked-device session from being lost when backend files
 // are replaced from a new zip. Existing backend/.wwebjs_auth sessions are
 // migrated automatically into this persistent location on first boot.
-const WHATSAPP_CLIENT_ID = String(process.env.WHATSAPP_CLIENT_ID || 'nexus-session').trim() || 'nexus-session';
+
+function getWhatsAppClientId() {
+  return getActiveWhatsAppConfig().clientId || 'nexus-session';
+}
 
 function getDefaultWhatsAppDataRoot() {
   if (process.env.NEXUS_DATA_DIR) return path.resolve(process.env.NEXUS_DATA_DIR, 'whatsapp');
@@ -98,10 +116,6 @@ const WHATSAPP_READY_TIMEOUT_MS = Math.max(45_000, Number(process.env.WHATSAPP_R
 // General helpers
 // ─────────────────────────────────────────────────────────────────────────────
 
-function isTruthy(value) {
-  return ['true', '1', 'yes', 'y'].includes(String(value || '').trim().toLowerCase());
-}
-
 function firstExistingPath(paths = []) {
   return paths.find((candidate) => candidate && fs.existsSync(candidate)) || '';
 }
@@ -114,8 +128,8 @@ function copyDirectoryIfMissing(source, target) {
   fs.cpSync(source, target, { recursive: true, force: false, errorOnExist: false });
 }
 
-function getSessionPathIn(authDataPath) {
-  return path.join(authDataPath, `session-${WHATSAPP_CLIENT_ID}`);
+function getSessionPathIn(authDataPath, clientId = getWhatsAppClientId()) {
+  return path.join(authDataPath, `session-${clientId}`);
 }
 
 function migrateLegacyWhatsAppSessionIfNeeded() {
@@ -176,6 +190,72 @@ function resolveChromeExecutablePath() {
 
 function onlyDigits(value = '') {
   return String(value || '').replace(/\D/g, '');
+}
+
+function maskPhoneNumber(value = '') {
+  const digits = onlyDigits(value);
+  if (!digits) return '';
+  if (digits.length <= 4) return '*'.repeat(digits.length);
+  return `${'*'.repeat(Math.max(4, digits.length - 4))}${digits.slice(-4)}`;
+}
+
+function maskGroupId(value = '') {
+  const raw = String(value || '').trim();
+  if (!raw) return '';
+  const digits = onlyDigits(raw);
+  if (!digits) return 'Configured';
+  return `${digits.slice(0, 4)}${'*'.repeat(Math.max(4, digits.length - 8))}${digits.slice(-4)}@g.us`;
+}
+
+function isWhatsAppEnabled() {
+  return Boolean(getActiveWhatsAppConfig().isEnabled);
+}
+
+function resolveBrowserExecutablePath() {
+  const configuredOrSystemPath = resolveChromeExecutablePath();
+  if (configuredOrSystemPath && fs.existsSync(configuredOrSystemPath)) {
+    return configuredOrSystemPath;
+  }
+
+  try {
+    const puppeteer = require('puppeteer');
+    const bundledPath = puppeteer.executablePath();
+    if (bundledPath && fs.existsSync(bundledPath)) return bundledPath;
+  } catch {
+    // The Integration Settings diagnostics will report that Chrome is missing.
+  }
+
+  return configuredOrSystemPath || '';
+}
+
+function getWhatsAppConfigurationStatus() {
+  const activeConfig = getActiveWhatsAppConfig();
+  const notifyDigits = onlyDigits(activeConfig.notifyNumber || '');
+  const groupId = getConfiguredWhatsAppGroupId();
+  const browserPath = resolveBrowserExecutablePath();
+  const configuredChromePath = String(process.env.CHROME_EXECUTABLE_PATH || '').trim();
+
+  return {
+    source: activeConfig.source || 'env',
+    isConfigured: Boolean(activeConfig.isConfigured),
+    enabled: Boolean(activeConfig.isEnabled),
+    dependencyAvailable: Boolean(Client && LocalAuth),
+    dependencyError: whatsappDependencyError,
+    browserAvailable: Boolean(browserPath && fs.existsSync(browserPath)),
+    browserExecutablePath: browserPath,
+    configuredChromePath,
+    notifyNumberConfigured: Boolean(notifyDigits),
+    notifyNumberValid: notifyDigits.length >= 10 && notifyDigits.length <= 15,
+    notifyNumberMasked: maskPhoneNumber(notifyDigits),
+    groupConfigured: Boolean(groupId),
+    groupIdValid: /^\d+@g\.us$/i.test(groupId),
+    groupIdMasked: maskGroupId(groupId),
+    groupName: activeConfig.groupName || '',
+    allowUnknownSenders: Boolean(activeConfig.allowUnknownSenders),
+    clientId: activeConfig.clientId || 'nexus-session',
+    authDataPath: WHATSAPP_AUTH_DATA_PATH,
+    cacheDataPath: WHATSAPP_CACHE_DATA_PATH,
+  };
 }
 
 function normalizeComparable(value = '') {
@@ -734,14 +814,14 @@ async function handleIncomingWhatsAppMessage(message) {
     }
 
     const senderUser = await resolveSenderUser(message);
-    if (!senderUser && !isTruthy(process.env.WHATSAPP_ALLOW_UNKNOWN_SENDERS)) {
+    if (!senderUser && !getActiveWhatsAppConfig().allowUnknownSenders) {
       const detected = getCandidateSenderDigits(message).join(', ') || 'not detected';
       await safeReply(
         message,
         `❌ Your WhatsApp number is not registered in Nexus User Management.\n` +
         `Detected sender number: ${detected}\n` +
         `Please add this number in User Management. Accepted formats: +918780223547, 918780223547, or 8780223547.\n\n` +
-        `For quick testing only, you can set WHATSAPP_ALLOW_UNKNOWN_SENDERS=true in backend/.env and restart backend.`
+        `An admin can allow unknown senders from Master → Integration Settings for testing.`
       );
       return;
     }
@@ -768,6 +848,10 @@ function setWhatsAppStatus(status, error = '') {
   lastUpdatedAt = new Date();
 }
 
+async function reloadWhatsAppSettings() {
+  return refreshWhatsAppRuntimeConfig();
+}
+
 function getWhatsAppStatus() {
   const account = client?.info
     ? {
@@ -792,6 +876,7 @@ function getWhatsAppStatus() {
     lastAuthenticatedAt,
     lastDisconnectedAt,
     account,
+    configuration: getWhatsAppConfigurationStatus(),
   };
 }
 
@@ -875,7 +960,17 @@ async function safelyDestroyClient({ callLogout = false } = {}) {
 }
 
 function scheduleWhatsAppReconnect(reason = '') {
-  if (manualRestartInProgress || reconnectTimer) return;
+  if (manualRestartInProgress || reconnectTimer || !isWhatsAppEnabled()) return;
+
+  const reasonText = String(reason || '').toLowerCase();
+  if (
+    reasonText.includes('chrome executable not found') ||
+    reasonText.includes('dependency is unavailable') ||
+    reasonText.includes('cannot find module')
+  ) {
+    console.warn('[whatsappService] Automatic reconnect stopped until the configuration problem is fixed. Use Restart Client from Integration Settings afterward.');
+    return;
+  }
 
   const delayMs = Math.min(60_000, 15_000 + (reconnectAttempt * 5_000));
   console.warn(`[whatsappService] Attempting to reinitialise in ${Math.round(delayMs / 1000)} seconds…`);
@@ -899,6 +994,16 @@ function scheduleWhatsAppReconnect(reason = '') {
 }
 
 function createClient() {
+  if (!isWhatsAppEnabled()) {
+    throw new Error('WhatsApp integration is disabled in Master → Integration Settings');
+  }
+
+  if (!Client || !LocalAuth) {
+    throw new Error(
+      `WhatsApp dependency is unavailable. Run PUPPETEER_SKIP_DOWNLOAD=true npm install inside backend. ${whatsappDependencyError}`.trim()
+    );
+  }
+
   setWhatsAppStatus('initialising');
   ensureWhatsAppStorageDirs();
 
@@ -918,14 +1023,19 @@ function createClient() {
     ],
   };
 
-  const chromePath = resolveChromeExecutablePath();
-  if (chromePath) {
-    puppeteerConfig.executablePath = chromePath;
+  const chromePath = resolveBrowserExecutablePath();
+  if (!chromePath || !fs.existsSync(chromePath)) {
+    const configuredPath = String(process.env.CHROME_EXECUTABLE_PATH || '').trim();
+    const detail = configuredPath
+      ? `Configured path does not exist: ${configuredPath}`
+      : 'Install Google Chrome or set CHROME_EXECUTABLE_PATH in backend/.env.';
+    throw new Error(`Chrome executable not found. ${detail}`);
   }
+  puppeteerConfig.executablePath = chromePath;
 
   const wClient = new Client({
     authStrategy: new LocalAuth({
-      clientId: WHATSAPP_CLIENT_ID,
+      clientId: getWhatsAppClientId(),
       dataPath: WHATSAPP_AUTH_DATA_PATH,
     }),
     puppeteer: puppeteerConfig,
@@ -1036,6 +1146,12 @@ function attachIncomingHandler(wClient) {
 
 function initWhatsApp() {
   try {
+    if (!isWhatsAppEnabled()) {
+      setWhatsAppStatus('disabled', 'WhatsApp integration is disabled in Master → Integration Settings');
+      console.warn('[whatsappService] WhatsApp integration is disabled.');
+      return;
+    }
+
     if (client && !manualRestartInProgress) {
       console.warn('[whatsappService] initWhatsApp skipped because a client already exists');
       return;
@@ -1094,7 +1210,7 @@ async function logoutWhatsApp({ clearSession = true } = {}) {
 // ─────────────────────────────────────────────────────────────────────────────
 
 async function sendWhatsAppNotification(text, toNumber = null) {
-  const rawNumber = toNumber ?? process.env.WHATSAPP_NOTIFY_NUMBER;
+  const rawNumber = toNumber ?? getActiveWhatsAppConfig().notifyNumber;
 
   if (!rawNumber) {
     console.warn('[whatsappService] WhatsApp recipient number not set — skipping');
@@ -1102,9 +1218,13 @@ async function sendWhatsAppNotification(text, toNumber = null) {
   }
 
   const digits = onlyDigits(rawNumber);
-  if (!digits) {
-    console.warn('[whatsappService] WhatsApp recipient number has no digits — skipping');
-    return { ok: false, status: 'Skipped', error: 'Recipient number is invalid' };
+  if (!digits || digits.length < 10 || digits.length > 15) {
+    console.warn('[whatsappService] WhatsApp recipient number is invalid — use country code and digits only');
+    return {
+      ok: false,
+      status: 'Skipped',
+      error: 'Recipient number is invalid. Use country code without +, spaces, or leading local zero.',
+    };
   }
 
   if (!clientReady || !client) {
@@ -1132,15 +1252,13 @@ async function sendWhatsAppNotification(text, toNumber = null) {
 }
 
 function getConfiguredWhatsAppGroupId() {
-  const rawGroupId = String(process.env.WHATSAPP_GROUP_ID || '').trim();
+  const rawGroupId = String(getActiveWhatsAppConfig().groupId || '').trim();
 
   if (!rawGroupId) return '';
-
-  // whatsapp-web.js expects group ids like: 120363426636428049@g.us
   if (rawGroupId.includes('@g.us')) return rawGroupId;
 
   const digits = onlyDigits(rawGroupId);
-  return digits ? `${digits}@g.us` : rawGroupId;
+  return digits ? `${digits}@g.us` : '';
 }
 
 function resolveAttachmentPath(file = {}) {
@@ -1154,12 +1272,25 @@ function resolveAttachmentPath(file = {}) {
   return path.join(__dirname, '..', 'uploads', storagePath);
 }
 
-async function sendWhatsAppGroupNotification(text) {
-  const groupId = getConfiguredWhatsAppGroupId();
+async function sendWhatsAppGroupNotification(text, overrideGroupId = null) {
+  const rawOverride = String(overrideGroupId || '').trim();
+  const groupId = rawOverride
+    ? (rawOverride.includes('@g.us') ? rawOverride : `${onlyDigits(rawOverride)}@g.us`)
+    : getConfiguredWhatsAppGroupId();
 
   if (!groupId) {
-    console.warn('[whatsappService] WHATSAPP_GROUP_ID not configured — skipping group message');
-    return { ok: false, status: 'Skipped', error: 'WHATSAPP_GROUP_ID not configured' };
+    console.warn('[whatsappService] WhatsApp notification group is not configured in Integration Settings — skipping group message');
+    return { ok: false, status: 'Skipped', error: 'WhatsApp notification group is not configured in Master → Integration Settings' };
+  }
+
+  if (!/^\d+@g\.us$/i.test(groupId)) {
+    console.warn('[whatsappService] WhatsApp group id is invalid:', groupId);
+    return {
+      ok: false,
+      status: 'Skipped',
+      error: 'WhatsApp group id is invalid. Load groups from Integration Settings and select the correct group.',
+      recipient: groupId,
+    };
   }
 
   if (!clientReady || !client) {
@@ -1190,10 +1321,11 @@ async function sendWhatsAppGroupWithAttachments(text, attachments = []) {
   const attachmentResults = [];
 
   for (const file of files) {
-    const fullPath = resolveAttachmentPath(file);
-    const fileName = file?.name || file?.storedName || path.basename(fullPath || 'attachment');
+    const hasBuffer = Buffer.isBuffer(file?.buffer);
+    const fullPath = hasBuffer ? '' : resolveAttachmentPath(file);
+    const fileName = file?.name || file?.filename || file?.storedName || path.basename(fullPath || 'attachment');
 
-    if (!fullPath || !fs.existsSync(fullPath)) {
+    if (!hasBuffer && (!fullPath || !fs.existsSync(fullPath))) {
       const error = `Attachment file not found: ${fullPath || fileName}`;
       console.warn('[whatsappService]', error);
       attachmentResults.push({ ok: false, status: 'Skipped', fileName, error });
@@ -1201,7 +1333,14 @@ async function sendWhatsAppGroupWithAttachments(text, attachments = []) {
     }
 
     try {
-      const media = MessageMedia.fromFilePath(fullPath);
+      const media = hasBuffer
+        ? new MessageMedia(
+            file?.mimeType || file?.contentType || 'application/octet-stream',
+            file.buffer.toString('base64'),
+            fileName,
+            file.buffer.length
+          )
+        : MessageMedia.fromFilePath(fullPath);
       media.filename = fileName;
 
       await client.sendMessage(groupId, media, { sendMediaAsDocument: true });
@@ -1226,25 +1365,226 @@ async function sendWhatsAppGroupWithAttachments(text, attachments = []) {
   };
 }
 
-async function sendTestMessage() {
+function withWhatsAppTimeout(promise, timeoutMs = 20_000, label = 'WhatsApp operation') {
+  let timer;
+  return Promise.race([
+    Promise.resolve(promise).finally(() => clearTimeout(timer)),
+    new Promise((_, reject) => {
+      timer = setTimeout(() => {
+        reject(new Error(`${label} timed out after ${Math.round(timeoutMs / 1000)} seconds`));
+      }, timeoutMs);
+    }),
+  ]);
+}
+
+function getSerializedWhatsAppId(value) {
+  if (!value) return '';
+  if (typeof value === 'string') return value;
+  return value._serialized || value.serialized || value.user || '';
+}
+
+function normalizeWhatsAppGroup(record = {}) {
+  const id = getSerializedWhatsAppId(record.id || record.chatId || record.contactId);
+  const isGroup = Boolean(
+    record.isGroup ||
+    record.groupMetadata ||
+    /@g\.us$/i.test(id)
+  );
+
+  if (!isGroup || !/@g\.us$/i.test(id)) return null;
+
+  const participants =
+    record.participants ||
+    record.groupMetadata?.participants ||
+    record.groupMetadata?.participantSet ||
+    [];
+
+  return {
+    id,
+    name: String(
+      record.name ||
+      record.formattedTitle ||
+      record.title ||
+      record.pushname ||
+      record.shortName ||
+      'Unnamed WhatsApp Group'
+    ).trim(),
+    participantCount: Number.isFinite(Number(record.participantCount))
+      ? Number(record.participantCount)
+      : (Array.isArray(participants) ? participants.length : null),
+  };
+}
+
+function mergeWhatsAppGroups(...collections) {
+  const byId = new Map();
+
+  collections.flat().forEach((record) => {
+    const group = normalizeWhatsAppGroup(record);
+    if (!group) return;
+
+    const previous = byId.get(group.id);
+    byId.set(group.id, {
+      ...previous,
+      ...group,
+      name: group.name !== 'Unnamed WhatsApp Group'
+        ? group.name
+        : (previous?.name || group.name),
+      participantCount: group.participantCount ?? previous?.participantCount ?? null,
+    });
+  });
+
+  return [...byId.values()].sort((a, b) => a.name.localeCompare(b.name));
+}
+
+async function loadGroupsFromChats() {
+  if (typeof client?.getChats !== 'function') return [];
+  const chats = await withWhatsAppTimeout(client.getChats(), 20_000, 'Loading WhatsApp chats');
+  return Array.isArray(chats) ? chats : [];
+}
+
+async function loadGroupsFromContacts() {
+  if (typeof client?.getContacts !== 'function') return [];
+  const contacts = await withWhatsAppTimeout(client.getContacts(), 20_000, 'Loading WhatsApp contacts');
+  return (Array.isArray(contacts) ? contacts : []).filter((contact) => {
+    const id = getSerializedWhatsAppId(contact?.id);
+    return Boolean(contact?.isGroup || /@g\.us$/i.test(id));
+  });
+}
+
+async function loadGroupsFromBrowserStore() {
+  if (!client?.pupPage || typeof client.pupPage.evaluate !== 'function') return [];
+
+  return withWhatsAppTimeout(
+    client.pupPage.evaluate(() => {
+      const chatStore = window.Store?.Chat;
+      const models = typeof chatStore?.getModelsArray === 'function'
+        ? chatStore.getModelsArray()
+        : (Array.isArray(chatStore?._models) ? chatStore._models : []);
+
+      return (Array.isArray(models) ? models : [])
+        .map((chat) => {
+          const id = chat?.id?._serialized || chat?.id?.serialized || '';
+          const participants =
+            chat?.groupMetadata?.participants ||
+            chat?.groupMetadata?.participantSet ||
+            [];
+
+          return {
+            id,
+            isGroup: Boolean(chat?.isGroup || chat?.groupMetadata || /@g\.us$/i.test(id)),
+            name: chat?.name || chat?.formattedTitle || chat?.title || '',
+            participantCount: Array.isArray(participants) ? participants.length : null,
+          };
+        })
+        .filter((chat) => chat.isGroup && /@g\.us$/i.test(chat.id));
+    }),
+    20_000,
+    'Loading WhatsApp groups from browser session'
+  );
+}
+
+async function listWhatsAppGroups() {
+  if (!clientReady || !client) {
+    return {
+      ok: false,
+      status: 'Not Ready',
+      groups: [],
+      error: 'WhatsApp is not ready. Scan the QR code and wait until the status becomes ready.',
+    };
+  }
+
+  const diagnostics = [];
+  let groups = [];
+
+  try {
+    const chats = await loadGroupsFromChats();
+    groups = mergeWhatsAppGroups(chats);
+    diagnostics.push(`chats:${Array.isArray(chats) ? chats.length : 0}`);
+  } catch (error) {
+    diagnostics.push(`chats-error:${error.message}`);
+    console.warn('[whatsappService] getChats group lookup failed:', error.message);
+  }
+
+  if (groups.length === 0) {
+    try {
+      const contacts = await loadGroupsFromContacts();
+      groups = mergeWhatsAppGroups(groups, contacts);
+      diagnostics.push(`contacts:${Array.isArray(contacts) ? contacts.length : 0}`);
+    } catch (error) {
+      diagnostics.push(`contacts-error:${error.message}`);
+      console.warn('[whatsappService] getContacts group lookup failed:', error.message);
+    }
+  }
+
+  if (groups.length === 0) {
+    try {
+      const browserGroups = await loadGroupsFromBrowserStore();
+      groups = mergeWhatsAppGroups(groups, browserGroups);
+      diagnostics.push(`browser:${Array.isArray(browserGroups) ? browserGroups.length : 0}`);
+    } catch (error) {
+      diagnostics.push(`browser-error:${error.message}`);
+      console.warn('[whatsappService] Browser-store group lookup failed:', error.message);
+    }
+  }
+
+  if (groups.length === 0) {
+    return {
+      ok: true,
+      status: 'Ready',
+      groups: [],
+      warning: 'WhatsApp is connected, but no groups were found. Open WhatsApp on the linked phone, confirm this account is a member of at least one group, then click Load Groups again.',
+      diagnostics,
+    };
+  }
+
+  return {
+    ok: true,
+    status: 'Ready',
+    groups,
+    diagnostics,
+  };
+}
+
+async function sendTestMessage(toNumber = null) {
   const result = await sendWhatsAppNotification(
-    `✅ Nexus WhatsApp test message.\nTime: ${new Date().toLocaleString('en-IN')}`
+    `✅ Nexus WhatsApp direct test message.
+Time: ${new Date().toLocaleString('en-IN')}`,
+    toNumber
   );
 
   return {
     ok: Boolean(result?.ok),
-    recipient: result?.recipient || process.env.WHATSAPP_NOTIFY_NUMBER || '',
+    status: result?.status || '',
+    recipient: result?.recipient || toNumber || getActiveWhatsAppConfig().notifyNumber || '',
+    error: result?.error || '',
+  };
+}
+
+async function sendTestGroupMessage(groupId = null) {
+  const result = await sendWhatsAppGroupNotification(
+    `✅ Nexus WhatsApp group test message.
+Time: ${new Date().toLocaleString('en-IN')}`,
+    groupId
+  );
+
+  return {
+    ok: Boolean(result?.ok),
+    status: result?.status || '',
+    recipient: result?.recipient || groupId || getConfiguredWhatsAppGroupId(),
     error: result?.error || '',
   };
 }
 
 module.exports = {
   initWhatsApp,
+  reloadWhatsAppSettings,
   getWhatsAppStatus,
   restartWhatsApp,
   logoutWhatsApp,
   sendWhatsAppNotification,
   sendWhatsAppGroupNotification,
   sendWhatsAppGroupWithAttachments,
+  listWhatsAppGroups,
   sendTestMessage,
+  sendTestGroupMessage,
 };

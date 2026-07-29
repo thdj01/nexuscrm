@@ -107,7 +107,7 @@ const loadRowSchema = new mongoose.Schema(
 const componentRequirementRowSchema = new mongoose.Schema(
   {
     component: { type: String, trim: true, default: '' },
-    required: { type: String, enum: ['', 'Yes', 'No'], default: '' },
+    required: { type: String, enum: ['', 'Yes', 'No', 'NA - Not Applicable'], default: '' },
     preferredBrand: { type: String, trim: true, default: '' },
     suggestedModelRange: { type: String, trim: true, default: '' },
     remarks: { type: String, trim: true, default: '' },
@@ -123,6 +123,14 @@ const inquiryLoadRowSchema = new mongoose.Schema(
     ratingKwHp: { type: String, trim: true, default: '' },
     fullLoadCurrent: { type: String, trim: true, default: '' },
     remarks: { type: String, trim: true, default: '' },
+  },
+  { _id: false }
+);
+
+const feederLoadDetailsSchema = new mongoose.Schema(
+  {
+    feederType: { type: String, trim: true, required: true },
+    loadDetails: { type: [inquiryLoadRowSchema], default: [] },
   },
   { _id: false }
 );
@@ -209,24 +217,24 @@ const plcDetailsSchema = new mongoose.Schema(
     servoDetails: {
       make: {
         type: String,
-        enum: ['', 'Yaskawa', 'ABB', 'Siemens', 'Mitsubishi', 'Allen-Bradley (AB)', 'Other'],
+        enum: ['', 'Yaskawa', 'ABB', 'Siemens', 'Mitsubishi', 'Allen-Bradley (AB)', 'Other', 'NA - Not Applicable'],
         trim: true,
         default: '',
       },
       customMake: { type: String, trim: true, default: '' },
       inputVoltage: {
         type: String,
-        enum: ['', '1-Phase — 220 V', '3-Phase — 220 V', '3-Phase — 440 V'],
+        enum: ['', '1-Phase — 220 V', '3-Phase — 220 V', '3-Phase — 440 V', 'NA - Not Applicable'],
         trim: true,
         default: '',
       },
       motorCapacityKw: { type: Number, min: 0, default: null },
-      encoderType: { type: String, enum: ['', 'Absolute', 'Incremental'], default: '' },
-      brake: { type: String, enum: ['', 'Yes', 'No'], default: '' },
-      ratedRpm: { type: String, enum: ['', '1500 RPM', '2000 RPM', '3000 RPM'], default: '' },
+      encoderType: { type: String, enum: ['', 'Absolute', 'Incremental', 'NA - Not Applicable'], default: '' },
+      brake: { type: String, enum: ['', 'Yes', 'No', 'NA - Not Applicable'], default: '' },
+      ratedRpm: { type: String, enum: ['', '1500 RPM', '2000 RPM', '3000 RPM', 'NA - Not Applicable'], default: '' },
       amplifierCommunication: {
         type: String,
-        enum: ['', 'PTO', 'Ethernet', 'EtherNet/IP'],
+        enum: ['', 'PTO', 'Ethernet', 'EtherNet/IP', 'NA - Not Applicable'],
         default: '',
       },
       communicationProtocol: { type: String, trim: true, default: '' },
@@ -239,7 +247,7 @@ const plcDetailsSchema = new mongoose.Schema(
       ao: { type: plcIoRequirementRowSchema, default: () => ({}) },
     },
     redundancy: {
-      plcRedundancy: { type: String, enum: ['', 'Hot', 'Cold'], default: '' },
+      plcRedundancy: { type: String, enum: ['', 'Hot', 'Cold', 'NA - Not Applicable'], default: '' },
       networkRedundancy: { type: Boolean, default: false },
       communicationRedundancy: { type: Boolean, default: false },
     },
@@ -248,9 +256,9 @@ const plcDetailsSchema = new mongoose.Schema(
       default: [],
     },
     supportRequirements: {
-      onsiteSupportRequired: { type: String, enum: ['', 'Required', 'Not Required'], default: '' },
+      onsiteSupportRequired: { type: String, enum: ['', 'Required', 'Not Required', 'NA - Not Applicable'], default: '' },
       onsiteSupportDays: { type: Number, default: 0 },
-      commissioningSupportRequired: { type: String, enum: ['', 'Required', 'Not Required'], default: '' },
+      commissioningSupportRequired: { type: String, enum: ['', 'Required', 'Not Required', 'NA - Not Applicable'], default: '' },
       commissioningSupportDays: { type: Number, default: 0 },
     },
     ioDetails: {
@@ -262,8 +270,8 @@ const plcDetailsSchema = new mongoose.Schema(
       highSpeedCounterInputs: { type: Number, default: 0 },
       communicationProtocol: { type: String, trim: true, default: '' },
       networkTopology: { type: String, trim: true, default: '' },
-      plcCpuRedundancyRequired: { type: String, enum: ['', 'Yes', 'No'], default: '' },
-      powerSupplyRedundancy: { type: String, enum: ['', 'Yes', 'No'], default: '' },
+      plcCpuRedundancyRequired: { type: String, enum: ['', 'Yes', 'No', 'NA - Not Applicable'], default: '' },
+      powerSupplyRedundancy: { type: String, enum: ['', 'Yes', 'No', 'NA - Not Applicable'], default: '' },
       ioSpareCapacityPercent: { type: Number, default: 0 },
     },
   },
@@ -275,14 +283,30 @@ const vfdDetailsSchema = new mongoose.Schema(
     mainIncomer: { type: mainIncomerDetailsSchema, default: () => ({}) },
     switchgearMake: { type: String, trim: true, default: '' },
     customSwitchgearMake: { type: String, trim: true, default: '' },
+    outgoingFeederDetails: {
+      totalNoOfFeeders: { type: Number, default: 0 },
+      feederTypes: { type: [String], default: [] },
+      noOfDolStarters: { type: Number, default: 0 },
+      totalLoadKw: { type: Number, default: 0 },
+      noOfStarDeltaStarters: { type: Number, default: 0 },
+      switchgearMake: { type: String, trim: true, default: '' },
+      customSwitchgearMake: { type: String, trim: true, default: '' },
+      noOfSoftStarters: { type: Number, default: 0 },
+      softStarterMake: { type: String, trim: true, default: '' },
+      noOfVfdFeeders: { type: Number, default: 0 },
+      vfdMake: { type: String, trim: true, default: '' },
+      controlVoltage: { type: String, trim: true, default: '' },
+      controlTransformerRequired: { type: String, enum: ['', 'Yes', 'No', 'NA - Not Applicable'], default: '' },
+    },
+    feederLoadDetails: { type: [feederLoadDetailsSchema], default: [] },
     loadDetails: { type: [inquiryLoadRowSchema], default: [] },
     vfdOptions: { type: vfdSelectionOptionsSchema, default: () => ({}) },
     softStarter: { type: softStarterDetailsSchema, default: () => ({}) },
     additionalComponents: { type: [componentRequirementRowSchema], default: [] },
-    referenceBomAttached: { type: String, enum: ['', 'Yes', 'No'], default: '' },
-    onsiteSupportRequired: { type: String, enum: ['', 'Required', 'Not Required'], default: '' },
+    referenceBomAttached: { type: String, enum: ['', 'Yes', 'No', 'NA - Not Applicable'], default: '' },
+    onsiteSupportRequired: { type: String, enum: ['', 'Required', 'Not Required', 'NA - Not Applicable'], default: '' },
     onsiteSupportDays: { type: Number, default: 0 },
-    commissioningSupportRequired: { type: String, enum: ['', 'Required', 'Not Required'], default: '' },
+    commissioningSupportRequired: { type: String, enum: ['', 'Required', 'Not Required', 'NA - Not Applicable'], default: '' },
     commissioningSupportDays: { type: Number, default: 0 },
   },
   { _id: false }
@@ -322,8 +346,9 @@ const mccDetailsSchema = new mongoose.Schema(
       noOfVfdFeeders: { type: Number, default: 0 },
       vfdMake: { type: String, trim: true, default: '' },
       controlVoltage: { type: String, trim: true, default: '' },
-      controlTransformerRequired: { type: String, enum: ['', 'Yes', 'No'], default: '' },
+      controlTransformerRequired: { type: String, enum: ['', 'Yes', 'No', 'NA - Not Applicable'], default: '' },
     },
+    feederLoadDetails: { type: [feederLoadDetailsSchema], default: [] },
     loadDetails: { type: [inquiryLoadRowSchema], default: [] },
     layoutPreferences: {
       panelType: { type: String, trim: true, default: '' },
@@ -332,14 +357,14 @@ const mccDetailsSchema = new mongoose.Schema(
       busbarArrangement: { type: String, trim: true, default: '' },
     },
     notesAndSupport: {
-      onsiteSupportRequired: { type: String, enum: ['', 'Required', 'Not Required'], default: '' },
+      onsiteSupportRequired: { type: String, enum: ['', 'Required', 'Not Required', 'NA - Not Applicable'], default: '' },
       onsiteSupportDays: { type: Number, default: 0 },
-      commissioningSupportRequired: { type: String, enum: ['', 'Required', 'Not Required'], default: '' },
+      commissioningSupportRequired: { type: String, enum: ['', 'Required', 'Not Required', 'NA - Not Applicable'], default: '' },
       commissioningSupportDays: { type: Number, default: 0 },
       commissioningScope: { type: String, trim: true, default: '' },
-      trainingRequired: { type: String, enum: ['', 'Yes', 'No'], default: '' },
+      trainingRequired: { type: String, enum: ['', 'Yes', 'No', 'NA - Not Applicable'], default: '' },
       warrantyPeriodMonths: { type: Number, default: 0 },
-      amcRequiredAfterWarranty: { type: String, enum: ['', 'Yes', 'No'], default: '' },
+      amcRequiredAfterWarranty: { type: String, enum: ['', 'Yes', 'No', 'NA - Not Applicable'], default: '' },
       additionalComments: { type: String, trim: true, default: '' },
     },
   },
@@ -540,6 +565,18 @@ const inquirySchema = new mongoose.Schema(
       trim: true,
     },
 
+    hazardousArea: {
+      type: String,
+      trim: true,
+      default: '',
+    },
+
+    outdoorInstallation: {
+      type: String,
+      trim: true,
+      default: '',
+    },
+
     shortCircuitCapacity: {               // [FIX H1] was missing
       type: String,
       trim: true,
@@ -552,16 +589,6 @@ const inquirySchema = new mongoose.Schema(
     },
 
     enclosureType: {
-      type: String,
-      trim: true,
-    },
-
-    enclosureMaterial: {                  // New document-aligned field
-      type: String,
-      trim: true,
-    },
-
-    enclosureStandard: {                  // Legacy/frontend alias kept for compatibility
       type: String,
       trim: true,
     },
@@ -648,19 +675,19 @@ const inquirySchema = new mongoose.Schema(
 
     drawingsSldAttached: {               // New document-aligned field
       type: String,
-      enum: ['', 'Yes', 'No'],
+      enum: ['', 'Yes', 'No', 'NA - Not Applicable'],
       default: '',
     },
 
     equipmentListAttached: {             // New document-aligned field
       type: String,
-      enum: ['', 'Yes', 'No'],
+      enum: ['', 'Yes', 'No', 'NA - Not Applicable'],
       default: '',
     },
 
     referenceBomAttached: {              // VFD source-of-truth field
       type: String,
-      enum: ['', 'Yes', 'No'],
+      enum: ['', 'Yes', 'No', 'NA - Not Applicable'],
       default: '',
     },
 
@@ -763,17 +790,6 @@ const inquirySchema = new mongoose.Schema(
     },
 
     // ── Existing fields (unchanged) ───────────────────────────────────────────
-    estimatedValue: {
-      type:    Number,
-      default: 0,
-    },
-
-    priority: {
-      type:    String,
-      enum:    ['High', 'Medium', 'Low'],
-      default: 'Medium',
-    },
-
     status: {
       type: String,
       enum: [

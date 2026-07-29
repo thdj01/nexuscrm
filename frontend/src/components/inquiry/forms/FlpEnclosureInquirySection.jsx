@@ -1,5 +1,5 @@
-import React from 'react';
-import { ShieldCheck } from 'lucide-react';
+import React, { useEffect, useRef, useState } from 'react';
+import { Check, ChevronDown, ShieldCheck } from 'lucide-react';
 
 import {
   SectionCard,
@@ -10,31 +10,258 @@ import {
 } from '../../common/FormComponents.extended';
 
 import {
-  FLP_ENCLOSURE_TYPE_OPTIONS,
   FLP_MATERIAL_OPTIONS,
   FLP_IP_RATING_OPTIONS,
-  FLP_YES_NO_OPTIONS,
   FLP_MOUNTING_OPTIONS,
   FLP_ZONE_DIVISION_OPTIONS,
   FLP_GAS_GROUP_OPTIONS,
   FLP_TEMPERATURE_CLASS_OPTIONS,
   FLP_CERTIFICATION_OPTIONS,
-  INSTALLATION_TYPE_OPTIONS,
 } from '../../../data/inquiryMasterData';
+
+const NOT_APPLICABLE = 'NA - Not Applicable';
 
 const Subsection = ({ title, children }) => (
   <div className="rounded-2xl border border-slate-200 bg-slate-50/60 p-4 sm:p-5">
-    <h4 className="mb-4 text-sm font-semibold text-slate-800">{title}</h4>
+    <h4 className="mb-4 text-sm font-semibold text-slate-800">
+      {title}
+    </h4>
+
     {children}
   </div>
 );
 
-const getError = (errors = {}, path = '') => errors?.[path] || '';
+const normalizeMultiValue = (value) => {
+  if (Array.isArray(value)) {
+    return value.filter(Boolean);
+  }
+
+  if (!value) {
+    return [];
+  }
+
+  return String(value)
+    .split(',')
+    .map((item) => item.trim())
+    .filter(Boolean);
+};
+
+const MultiSelectDropdown = ({
+  values,
+  options,
+  onChange,
+  disabled = false,
+  placeholder = 'Select one or more options',
+}) => {
+  const [open, setOpen] = useState(false);
+  const containerRef = useRef(null);
+
+  const selected = normalizeMultiValue(values);
+
+  useEffect(() => {
+    const handleOutsideClick = (event) => {
+      if (
+        containerRef.current &&
+        !containerRef.current.contains(event.target)
+      ) {
+        setOpen(false);
+      }
+    };
+
+    document.addEventListener('mousedown', handleOutsideClick);
+
+    return () => {
+      document.removeEventListener(
+        'mousedown',
+        handleOutsideClick
+      );
+    };
+  }, []);
+
+  const toggleOption = (option) => {
+    if (disabled) {
+      return;
+    }
+
+    /*
+     * NA is treated as an exclusive option.
+     * Selecting NA removes every other selection.
+     */
+    if (option === NOT_APPLICABLE) {
+      onChange(
+        selected.includes(NOT_APPLICABLE)
+          ? []
+          : [NOT_APPLICABLE]
+      );
+
+      return;
+    }
+
+    const selectedWithoutNA = selected.filter(
+      (item) => item !== NOT_APPLICABLE
+    );
+
+    const nextValues = selectedWithoutNA.includes(option)
+      ? selectedWithoutNA.filter((item) => item !== option)
+      : [...selectedWithoutNA, option];
+
+    onChange(nextValues);
+  };
+
+  const selectedText = selected.length
+    ? selected.join(', ')
+    : placeholder;
+
+  return (
+    <div
+      ref={containerRef}
+      className="relative"
+    >
+      <button
+        type="button"
+        disabled={disabled}
+        aria-haspopup="listbox"
+        aria-expanded={open}
+        onClick={() => {
+          if (!disabled) {
+            setOpen((current) => !current);
+          }
+        }}
+        className={[
+          'flex min-h-[42px] w-full items-center',
+          'justify-between gap-2 rounded-lg border',
+          'bg-white px-3 py-2 text-left text-base',
+          'focus:outline-none focus:ring-2',
+          'focus:ring-purple-500 sm:text-sm',
+          disabled
+            ? 'cursor-not-allowed border-gray-200 bg-gray-50 text-gray-400'
+            : 'border-gray-300 text-gray-800',
+        ].join(' ')}
+      >
+        <span
+          className={[
+            'min-w-0 flex-1 truncate',
+            selected.length
+              ? 'text-gray-800'
+              : 'text-gray-400',
+          ].join(' ')}
+          title={selectedText}
+        >
+          {selectedText}
+        </span>
+
+        <ChevronDown
+          size={16}
+          className={[
+            'flex-shrink-0 text-gray-400',
+            'transition-transform',
+            open ? 'rotate-180' : '',
+          ].join(' ')}
+        />
+      </button>
+
+      {open && !disabled && (
+        <div
+          className={[
+            'absolute z-[80] mt-1 w-full',
+            'min-w-[260px] overflow-hidden',
+            'rounded-lg border border-gray-200',
+            'bg-white shadow-xl',
+          ].join(' ')}
+        >
+          <div
+            className="max-h-64 overflow-y-auto p-1.5"
+            role="listbox"
+            aria-multiselectable="true"
+          >
+            {options.map((option) => {
+              const checked = selected.includes(option);
+
+              return (
+                <label
+                  key={option}
+                  className={[
+                    'flex cursor-pointer items-center',
+                    'gap-2 rounded-md px-3 py-2',
+                    'text-sm transition-colors',
+                    checked
+                      ? 'bg-purple-50 font-medium text-purple-700'
+                      : 'text-gray-700 hover:bg-gray-50',
+                  ].join(' ')}
+                >
+                  <input
+                    type="checkbox"
+                    checked={checked}
+                    onChange={() => toggleOption(option)}
+                    className={[
+                      'h-4 w-4 rounded',
+                      'border-gray-300 text-purple-600',
+                      'focus:ring-purple-500',
+                    ].join(' ')}
+                  />
+
+                  <span className="min-w-0 flex-1">
+                    {option}
+                  </span>
+
+                  {checked && (
+                    <Check
+                      size={14}
+                      className="flex-shrink-0 text-purple-600"
+                    />
+                  )}
+                </label>
+              );
+            })}
+          </div>
+
+          <div
+            className={[
+              'flex items-center justify-between',
+              'border-t border-gray-100',
+              'bg-gray-50 px-3 py-2',
+              'text-xs text-gray-500',
+            ].join(' ')}
+          >
+            <span>
+              {selected.length} selected
+            </span>
+
+            <div className="flex items-center gap-3">
+              {selected.length > 0 && (
+                <button
+                  type="button"
+                  onClick={() => onChange([])}
+                  className={[
+                    'font-medium text-gray-600',
+                    'hover:text-gray-800',
+                  ].join(' ')}
+                >
+                  Clear
+                </button>
+              )}
+
+              <button
+                type="button"
+                onClick={() => setOpen(false)}
+                className={[
+                  'font-medium text-purple-700',
+                  'hover:text-purple-800',
+                ].join(' ')}
+              >
+                Done
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+};
 
 const FlpEnclosureInquirySection = ({
   form,
   setForm,
-  errors = {},
   disabled = false,
   number,
   sectionIndex,
@@ -43,103 +270,73 @@ const FlpEnclosureInquirySection = ({
 }) => {
   const details = form?.flpEnclosureDetails || {};
 
-  const updateField = (group, field, value) => {
-    setForm((prev) => ({
-      ...prev,
+  const updateField = (groupName, fieldName, value) => {
+    setForm((previousForm) => ({
+      ...previousForm,
+
       flpEnclosureDetails: {
-        ...(prev.flpEnclosureDetails || {}),
-        [group]: {
-          ...((prev.flpEnclosureDetails || {})[group] || {}),
-          [field]: value,
+        ...(previousForm.flpEnclosureDetails || {}),
+
+        [groupName]: {
+          ...(
+            (
+              previousForm.flpEnclosureDetails ||
+              {}
+            )[groupName] || {}
+          ),
+
+          [fieldName]: value,
         },
       },
     }));
   };
 
-  const group = (key) => details?.[key] || {};
+  const getGroup = (groupName) => (
+    details?.[groupName] || {}
+  );
+
+  const commonTechnical = getGroup('commonTechnical');
+  const weatherproof = getGroup('weatherproof');
+  const flameproof = getGroup('flameproof');
 
   return (
-    <div ref={(el) => setSectionRef?.(sectionIndex, el)}>
+    <div
+      ref={(element) => {
+        setSectionRef?.(sectionIndex, element);
+      }}
+    >
       <SectionCard
         number={String(number)}
-        title="Weatherproof / FLP Enclosure Selection"
-        subtitle="Dedicated enclosure inquiry-stage selection form for weatherproof and flameproof applications."
+        title="Weatherproof / FLP Enclosure Details"
+        subtitle={
+          'Internal component, weatherproof and flameproof enclosure requirements.'
+        }
         icon={ShieldCheck}
         color="purple"
         active={activeSection === sectionIndex}
       >
         <div className="space-y-5">
-          <Subsection title="Enclosure Type Selection">
-            <div className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-3">
-              <FormField
-                label="Enclosure Type"
-                error={getError(errors, 'flpEnclosureDetails.enclosureSelection.enclosureType')}
-              >
-                <SearchableSelect
-                  value={group('enclosureSelection').enclosureType || ''}
-                  onChange={(value) => updateField('enclosureSelection', 'enclosureType', value)}
-                  options={FLP_ENCLOSURE_TYPE_OPTIONS}
-                  placeholder="Select enclosure type"
-                  disabled={disabled}
-                />
-              </FormField>
-
-              <FormField label="Application">
-                <Input
-                  value={group('enclosureSelection').application || ''}
-                  onChange={(event) => updateField('enclosureSelection', 'application', event.target.value)}
-                  placeholder="Enter application"
-                  disabled={disabled}
-                />
-              </FormField>
-
-              <FormField label="Installation">
-                <SearchableSelect
-                  value={group('enclosureSelection').installation || ''}
-                  onChange={(value) => updateField('enclosureSelection', 'installation', value)}
-                  options={INSTALLATION_TYPE_OPTIONS}
-                  placeholder="Select installation"
-                  disabled={disabled}
-                />
-              </FormField>
-
-              <FormField label="Hazardous Area">
-                <SearchableSelect
-                  value={group('enclosureSelection').hazardousArea || ''}
-                  onChange={(value) => updateField('enclosureSelection', 'hazardousArea', value)}
-                  options={FLP_YES_NO_OPTIONS}
-                  placeholder="Select"
-                  disabled={disabled}
-                />
-              </FormField>
-
-              <FormField label="Outdoor Installation">
-                <SearchableSelect
-                  value={group('enclosureSelection').outdoorInstallation || ''}
-                  onChange={(value) => updateField('enclosureSelection', 'outdoorInstallation', value)}
-                  options={FLP_YES_NO_OPTIONS}
-                  placeholder="Select"
-                  disabled={disabled}
-                />
-              </FormField>
-
-              <FormField label="Remarks">
-                <Input
-                  value={group('enclosureSelection').remarks || ''}
-                  onChange={(event) => updateField('enclosureSelection', 'remarks', event.target.value)}
-                  placeholder="Enter remarks"
-                  disabled={disabled}
-                />
-              </FormField>
-            </div>
-          </Subsection>
-
-          <Subsection title="Common Technical Details">
-            <div className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-3">
+          {/* Internal Component Technical Details */}
+          <Subsection title="Internal Component Technical Details">
+            <div
+              className={[
+                'grid grid-cols-1 gap-x-4 gap-y-4',
+                'md:grid-cols-2 xl:grid-cols-3',
+              ].join(' ')}
+            >
               <FormField label="Equipment Mounted">
                 <Input
-                  value={group('commonTechnical').equipmentMounted || ''}
-                  onChange={(event) => updateField('commonTechnical', 'equipmentMounted', event.target.value)}
+                  value={
+                    commonTechnical.equipmentMounted ||
+                    ''
+                  }
+                  onChange={(event) => {
+                    updateField(
+                      'commonTechnical',
+                      'equipmentMounted',
+                      event.target.value
+                    );
+                  }}
                   placeholder="Enter equipment mounted"
                   disabled={disabled}
                 />
@@ -147,8 +344,17 @@ const FlpEnclosureInquirySection = ({
 
               <FormField label="Make / Model">
                 <Input
-                  value={group('commonTechnical').makeModel || ''}
-                  onChange={(event) => updateField('commonTechnical', 'makeModel', event.target.value)}
+                  value={
+                    commonTechnical.makeModel ||
+                    ''
+                  }
+                  onChange={(event) => {
+                    updateField(
+                      'commonTechnical',
+                      'makeModel',
+                      event.target.value
+                    );
+                  }}
                   placeholder="Enter make / model"
                   disabled={disabled}
                 />
@@ -156,8 +362,17 @@ const FlpEnclosureInquirySection = ({
 
               <FormField label="Voltage">
                 <Input
-                  value={group('commonTechnical').voltage || ''}
-                  onChange={(event) => updateField('commonTechnical', 'voltage', event.target.value)}
+                  value={
+                    commonTechnical.voltage ||
+                    ''
+                  }
+                  onChange={(event) => {
+                    updateField(
+                      'commonTechnical',
+                      'voltage',
+                      event.target.value
+                    );
+                  }}
                   placeholder="Enter voltage"
                   disabled={disabled}
                 />
@@ -165,8 +380,17 @@ const FlpEnclosureInquirySection = ({
 
               <FormField label="Current Rating">
                 <Input
-                  value={group('commonTechnical').currentRating || ''}
-                  onChange={(event) => updateField('commonTechnical', 'currentRating', event.target.value)}
+                  value={
+                    commonTechnical.currentRating ||
+                    ''
+                  }
+                  onChange={(event) => {
+                    updateField(
+                      'commonTechnical',
+                      'currentRating',
+                      event.target.value
+                    );
+                  }}
                   placeholder="Enter current rating"
                   disabled={disabled}
                 />
@@ -174,67 +398,61 @@ const FlpEnclosureInquirySection = ({
 
               <FormField label="Control Voltage">
                 <Input
-                  value={group('commonTechnical').controlVoltage || ''}
-                  onChange={(event) => updateField('commonTechnical', 'controlVoltage', event.target.value)}
+                  value={
+                    commonTechnical.controlVoltage ||
+                    ''
+                  }
+                  onChange={(event) => {
+                    updateField(
+                      'commonTechnical',
+                      'controlVoltage',
+                      event.target.value
+                    );
+                  }}
                   placeholder="Enter control voltage"
-                  disabled={disabled}
-                />
-              </FormField>
-
-              <FormField label="Cable Entry Direction">
-                <Input
-                  value={group('commonTechnical').cableEntryDirection || ''}
-                  onChange={(event) => updateField('commonTechnical', 'cableEntryDirection', event.target.value)}
-                  placeholder="Enter cable entry direction"
                   disabled={disabled}
                 />
               </FormField>
 
               <FormField label="Gland Type">
                 <Input
-                  value={group('commonTechnical').glandType || ''}
-                  onChange={(event) => updateField('commonTechnical', 'glandType', event.target.value)}
+                  value={
+                    commonTechnical.glandType ||
+                    ''
+                  }
+                  onChange={(event) => {
+                    updateField(
+                      'commonTechnical',
+                      'glandType',
+                      event.target.value
+                    );
+                  }}
                   placeholder="Enter gland type"
-                  disabled={disabled}
-                />
-              </FormField>
-
-              <FormField label="Ambient Temperature">
-                <Input
-                  value={group('commonTechnical').ambientTemperature || ''}
-                  onChange={(event) => updateField('commonTechnical', 'ambientTemperature', event.target.value)}
-                  placeholder="Example: 0 to 50 °C"
-                  disabled={disabled}
-                />
-              </FormField>
-
-              <FormField label="Humidity">
-                <Input
-                  value={group('commonTechnical').humidity || ''}
-                  onChange={(event) => updateField('commonTechnical', 'humidity', event.target.value)}
-                  placeholder="Enter humidity"
-                  disabled={disabled}
-                />
-              </FormField>
-
-              <FormField label="Corrosive Atmosphere">
-                <SearchableSelect
-                  value={group('commonTechnical').corrosiveAtmosphere || ''}
-                  onChange={(value) => updateField('commonTechnical', 'corrosiveAtmosphere', value)}
-                  options={FLP_YES_NO_OPTIONS}
-                  placeholder="Select"
                   disabled={disabled}
                 />
               </FormField>
             </div>
           </Subsection>
 
+          {/* Weatherproof Enclosure Details */}
           <Subsection title="Weatherproof Enclosure Details">
-            <div className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-3">
+            <div
+              className={[
+                'grid grid-cols-1 gap-x-4 gap-y-4',
+                'md:grid-cols-2 xl:grid-cols-3',
+              ].join(' ')}
+            >
               <FormField label="Material">
                 <SearchableSelect
-                  value={group('weatherproof').material || ''}
-                  onChange={(value) => updateField('weatherproof', 'material', value)}
+                  includeNotApplicable
+                  value={weatherproof.material || ''}
+                  onChange={(value) => {
+                    updateField(
+                      'weatherproof',
+                      'material',
+                      value
+                    );
+                  }}
                   options={FLP_MATERIAL_OPTIONS}
                   placeholder="Select material"
                   disabled={disabled}
@@ -243,8 +461,18 @@ const FlpEnclosureInquirySection = ({
 
               <FormField label="IP Rating">
                 <SearchableSelect
-                  value={group('weatherproof').ipRating || ''}
-                  onChange={(value) => updateField('weatherproof', 'ipRating', value)}
+                  includeNotApplicable
+                  value={
+                    weatherproof.ipRating ||
+                    'IP65'
+                  }
+                  onChange={(value) => {
+                    updateField(
+                      'weatherproof',
+                      'ipRating',
+                      value
+                    );
+                  }}
                   options={FLP_IP_RATING_OPTIONS}
                   placeholder="Select IP rating"
                   disabled={disabled}
@@ -253,94 +481,72 @@ const FlpEnclosureInquirySection = ({
 
               <FormField label="Mounting">
                 <SearchableSelect
-                  value={group('weatherproof').mounting || ''}
-                  onChange={(value) => updateField('weatherproof', 'mounting', value)}
+                  includeNotApplicable
+                  value={weatherproof.mounting || ''}
+                  onChange={(value) => {
+                    updateField(
+                      'weatherproof',
+                      'mounting',
+                      value
+                    );
+                  }}
                   options={FLP_MOUNTING_OPTIONS}
                   placeholder="Select mounting"
                   disabled={disabled}
                 />
               </FormField>
 
-              <FormField label="Door Type">
-                <Input
-                  value={group('weatherproof').doorType || ''}
-                  onChange={(event) => updateField('weatherproof', 'doorType', event.target.value)}
-                  placeholder="Enter door type"
-                  disabled={disabled}
-                />
-              </FormField>
-
-              <FormField label="Sunshade / Canopy">
-                <SearchableSelect
-                  value={group('weatherproof').sunshadeCanopy || ''}
-                  onChange={(value) => updateField('weatherproof', 'sunshadeCanopy', value)}
-                  options={FLP_YES_NO_OPTIONS}
-                  placeholder="Select"
-                  disabled={disabled}
-                />
-              </FormField>
-
               <FormField label="Make / Model">
                 <Input
-                  value={group('weatherproof').makeModel || ''}
-                  onChange={(event) => updateField('weatherproof', 'makeModel', event.target.value)}
+                  value={weatherproof.makeModel || ''}
+                  onChange={(event) => {
+                    updateField(
+                      'weatherproof',
+                      'makeModel',
+                      event.target.value
+                    );
+                  }}
                   placeholder="Enter make / model"
-                  disabled={disabled}
-                />
-              </FormField>
-
-              <FormField label="Thermostat">
-                <SearchableSelect
-                  value={group('weatherproof').thermostat || ''}
-                  onChange={(value) => updateField('weatherproof', 'thermostat', value)}
-                  options={FLP_YES_NO_OPTIONS}
-                  placeholder="Select"
                   disabled={disabled}
                 />
               </FormField>
 
               <FormField label="Window Required">
                 <SearchableSelect
-                  value={group('weatherproof').windowRequired || ''}
-                  onChange={(value) => updateField('weatherproof', 'windowRequired', value)}
-                  options={FLP_YES_NO_OPTIONS}
+                  includeNotApplicable
+                  value={
+                    weatherproof.windowRequired ||
+                    ''
+                  }
+                  onChange={(value) => {
+                    updateField(
+                      'weatherproof',
+                      'windowRequired',
+                      value
+                    );
+                  }}
+                  options={['Yes', 'No']}
                   placeholder="Select"
                   disabled={disabled}
                 />
               </FormField>
 
-              <FormField label="Breather Drain">
-                <SearchableSelect
-                  value={group('weatherproof').breatherDrain || ''}
-                  onChange={(value) => updateField('weatherproof', 'breatherDrain', value)}
-                  options={FLP_YES_NO_OPTIONS}
-                  placeholder="Select"
-                  disabled={disabled}
-                />
-              </FormField>
-
-              <FormField label="Painting / RAL">
-                <Input
-                  value={group('weatherproof').paintingRal || ''}
-                  onChange={(event) => updateField('weatherproof', 'paintingRal', event.target.value)}
-                  placeholder="Enter painting / RAL"
-                  disabled={disabled}
-                />
-              </FormField>
-
-              <FormField label="Corrosion Class">
-                <Input
-                  value={group('weatherproof').corrosionClass || ''}
-                  onChange={(event) => updateField('weatherproof', 'corrosionClass', event.target.value)}
-                  placeholder="Enter corrosion class"
-                  disabled={disabled}
-                />
-              </FormField>
-
-              <FormField label="Special Requirement" className="md:col-span-2 xl:col-span-3">
+              <FormField
+                label="Special Requirement"
+                className="md:col-span-2 xl:col-span-3"
+              >
                 <Textarea
-                  value={group('weatherproof').specialRequirement || ''}
-                  onChange={(event) => updateField('weatherproof', 'specialRequirement', event.target.value)}
+                  value={
+                    weatherproof.specialRequirement ||
+                    ''
+                  }
+                  onChange={(event) => {
+                    updateField(
+                      'weatherproof',
+                      'specialRequirement',
+                      event.target.value
+                    );
+                  }}
                   placeholder="Enter special requirement"
                   disabled={disabled}
                   rows={3}
@@ -349,71 +555,124 @@ const FlpEnclosureInquirySection = ({
             </div>
           </Subsection>
 
+          {/* Flameproof Enclosure Details */}
           <Subsection title="Flameproof (FLP) Enclosure Details">
-            <div className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-3">
+            <div
+              className={[
+                'grid grid-cols-1 gap-x-4 gap-y-4',
+                'md:grid-cols-2 xl:grid-cols-3',
+              ].join(' ')}
+            >
               <FormField label="Area Classification">
-                <SearchableSelect
-                  value={group('flameproof').areaClassification || ''}
-                  onChange={(value) => updateField('flameproof', 'areaClassification', value)}
-                  options={['Safe Area', 'Hazardous Area']}
-                  placeholder="Select area classification"
+                <Input
+                  value={
+                    flameproof.areaClassification ||
+                    'Hazardous Area'
+                  }
+                  onChange={(event) => {
+                    updateField(
+                      'flameproof',
+                      'areaClassification',
+                      event.target.value
+                    );
+                  }}
+                  placeholder="Enter area classification"
                   disabled={disabled}
                 />
               </FormField>
 
               <FormField label="Zone / Division">
-                <SearchableSelect
-                  value={group('flameproof').zoneDivision || ''}
-                  onChange={(value) => updateField('flameproof', 'zoneDivision', value)}
-                  options={FLP_ZONE_DIVISION_OPTIONS}
-                  placeholder="Select zone / division"
+                <MultiSelectDropdown
+                  values={flameproof.zoneDivision}
+                  options={[
+                    ...FLP_ZONE_DIVISION_OPTIONS,
+                    NOT_APPLICABLE,
+                  ]}
+                  onChange={(value) => {
+                    updateField(
+                      'flameproof',
+                      'zoneDivision',
+                      value
+                    );
+                  }}
                   disabled={disabled}
+                  placeholder="Select one or more options"
                 />
               </FormField>
 
               <FormField label="Gas Group">
-                <SearchableSelect
-                  value={group('flameproof').gasGroup || ''}
-                  onChange={(value) => updateField('flameproof', 'gasGroup', value)}
-                  options={FLP_GAS_GROUP_OPTIONS}
-                  placeholder="Select gas group"
+                <MultiSelectDropdown
+                  values={flameproof.gasGroup}
+                  options={[
+                    ...FLP_GAS_GROUP_OPTIONS,
+                    NOT_APPLICABLE,
+                  ]}
+                  onChange={(value) => {
+                    updateField(
+                      'flameproof',
+                      'gasGroup',
+                      value
+                    );
+                  }}
                   disabled={disabled}
+                  placeholder="Select one or more options"
                 />
               </FormField>
 
               <FormField label="Temperature Class">
                 <SearchableSelect
-                  value={group('flameproof').temperatureClass || ''}
-                  onChange={(value) => updateField('flameproof', 'temperatureClass', value)}
-                  options={FLP_TEMPERATURE_CLASS_OPTIONS}
+                  includeNotApplicable
+                  value={
+                    flameproof.temperatureClass ||
+                    ''
+                  }
+                  onChange={(value) => {
+                    updateField(
+                      'flameproof',
+                      'temperatureClass',
+                      value
+                    );
+                  }}
+                  options={
+                    FLP_TEMPERATURE_CLASS_OPTIONS
+                  }
                   placeholder="Select temperature class"
                   disabled={disabled}
                 />
               </FormField>
 
-              <FormField label="Gas Name">
-                <Input
-                  value={group('flameproof').gasName || ''}
-                  onChange={(event) => updateField('flameproof', 'gasName', event.target.value)}
-                  placeholder="Enter gas name"
-                  disabled={disabled}
-                />
-              </FormField>
-
               <FormField label="Certification">
-                <SearchableSelect
-                  value={group('flameproof').certification || ''}
-                  onChange={(value) => updateField('flameproof', 'certification', value)}
-                  options={FLP_CERTIFICATION_OPTIONS}
-                  placeholder="Select certification"
+                <MultiSelectDropdown
+                  values={flameproof.certification}
+                  options={[
+                    ...FLP_CERTIFICATION_OPTIONS,
+                    NOT_APPLICABLE,
+                  ]}
+                  onChange={(value) => {
+                    updateField(
+                      'flameproof',
+                      'certification',
+                      value
+                    );
+                  }}
                   disabled={disabled}
+                  placeholder="Select one or more options"
                 />
               </FormField>
 
               <FormField label="Protection Concept">
                 <Input
-                  value={group('flameproof').protectionConcept || ''}
-                  onChange={(event) => updateField('flameproof', 'protectionConcept', event.target.value)}
+                  value={
+                    flameproof.protectionConcept ||
+                    ''
+                  }
+                  onChange={(event) => {
+                    updateField(
+                      'flameproof',
+                      'protectionConcept',
+                      event.target.value
+                    );
+                  }}
                   placeholder="Example: Ex d / Ex e"
                   disabled={disabled}
                 />
@@ -421,8 +680,15 @@ const FlpEnclosureInquirySection = ({
 
               <FormField label="Material">
                 <SearchableSelect
-                  value={group('flameproof').material || ''}
-                  onChange={(value) => updateField('flameproof', 'material', value)}
+                  includeNotApplicable
+                  value={flameproof.material || ''}
+                  onChange={(value) => {
+                    updateField(
+                      'flameproof',
+                      'material',
+                      value
+                    );
+                  }}
                   options={FLP_MATERIAL_OPTIONS}
                   placeholder="Select material"
                   disabled={disabled}
@@ -431,129 +697,20 @@ const FlpEnclosureInquirySection = ({
 
               <FormField label="IP Rating">
                 <SearchableSelect
-                  value={group('flameproof').ipRating || ''}
-                  onChange={(value) => updateField('flameproof', 'ipRating', value)}
+                  includeNotApplicable
+                  value={
+                    flameproof.ipRating ||
+                    'IP65'
+                  }
+                  onChange={(value) => {
+                    updateField(
+                      'flameproof',
+                      'ipRating',
+                      value
+                    );
+                  }}
                   options={FLP_IP_RATING_OPTIONS}
                   placeholder="Select IP rating"
-                  disabled={disabled}
-                />
-              </FormField>
-
-              <FormField label="Internal Device">
-                <Input
-                  value={group('flameproof').internalDevice || ''}
-                  onChange={(event) => updateField('flameproof', 'internalDevice', event.target.value)}
-                  placeholder="Enter internal device"
-                  disabled={disabled}
-                />
-              </FormField>
-
-              <FormField label="Make / Model">
-                <Input
-                  value={group('flameproof').makeModel || ''}
-                  onChange={(event) => updateField('flameproof', 'makeModel', event.target.value)}
-                  placeholder="Enter make / model"
-                  disabled={disabled}
-                />
-              </FormField>
-
-              <FormField label="Breather">
-                <SearchableSelect
-                  value={group('flameproof').breather || ''}
-                  onChange={(value) => updateField('flameproof', 'breather', value)}
-                  options={FLP_YES_NO_OPTIONS}
-                  placeholder="Select"
-                  disabled={disabled}
-                />
-              </FormField>
-
-              <FormField label="Window Required">
-                <SearchableSelect
-                  value={group('flameproof').windowRequired || ''}
-                  onChange={(value) => updateField('flameproof', 'windowRequired', value)}
-                  options={FLP_YES_NO_OPTIONS}
-                  placeholder="Select"
-                  disabled={disabled}
-                />
-              </FormField>
-
-              <FormField label="No. of Glands">
-                <Input
-                  type="number"
-                  min="0"
-                  value={group('flameproof').numberOfGlands ?? ''}
-                  onChange={(event) => updateField('flameproof', 'numberOfGlands', event.target.value)}
-                  placeholder="Enter quantity"
-                  disabled={disabled}
-                />
-              </FormField>
-
-              <FormField label="Cable Type">
-                <Input
-                  value={group('flameproof').cableType || ''}
-                  onChange={(event) => updateField('flameproof', 'cableType', event.target.value)}
-                  placeholder="Enter cable type"
-                  disabled={disabled}
-                />
-              </FormField>
-            </div>
-          </Subsection>
-
-          <Subsection title="Preliminary Engineering Summary">
-            <div className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-3">
-              <FormField label="Selected Enclosure Type">
-                <SearchableSelect
-                  value={group('preliminarySummary').selectedEnclosureType || ''}
-                  onChange={(value) => updateField('preliminarySummary', 'selectedEnclosureType', value)}
-                  options={FLP_ENCLOSURE_TYPE_OPTIONS}
-                  placeholder="Select enclosure type"
-                  disabled={disabled}
-                />
-              </FormField>
-
-              <FormField label="Material">
-                <SearchableSelect
-                  value={group('preliminarySummary').material || ''}
-                  onChange={(value) => updateField('preliminarySummary', 'material', value)}
-                  options={FLP_MATERIAL_OPTIONS}
-                  placeholder="Select material"
-                  disabled={disabled}
-                />
-              </FormField>
-
-              <FormField label="IP Rating">
-                <SearchableSelect
-                  value={group('preliminarySummary').ipRating || ''}
-                  onChange={(value) => updateField('preliminarySummary', 'ipRating', value)}
-                  options={FLP_IP_RATING_OPTIONS}
-                  placeholder="Select IP rating"
-                  disabled={disabled}
-                />
-              </FormField>
-
-              <FormField label="Area Requirement">
-                <Input
-                  value={group('preliminarySummary').areaRequirement || ''}
-                  onChange={(event) => updateField('preliminarySummary', 'areaRequirement', event.target.value)}
-                  placeholder="Enter area requirement"
-                  disabled={disabled}
-                />
-              </FormField>
-
-              <FormField label="Size Requirement">
-                <Input
-                  value={group('preliminarySummary').sizeRequirement || ''}
-                  onChange={(event) => updateField('preliminarySummary', 'sizeRequirement', event.target.value)}
-                  placeholder="Enter size requirement"
-                  disabled={disabled}
-                />
-              </FormField>
-
-              <FormField label="Remarks">
-                <Input
-                  value={group('preliminarySummary').remarks || ''}
-                  onChange={(event) => updateField('preliminarySummary', 'remarks', event.target.value)}
-                  placeholder="Enter remarks"
                   disabled={disabled}
                 />
               </FormField>

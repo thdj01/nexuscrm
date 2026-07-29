@@ -233,6 +233,7 @@ const RioBoxInquirySection = ({
 
               <FormField label="Mounting">
                 <SearchableSelect
+                  includeNotApplicable
                   value={application.mounting || ''}
                   onChange={(value) => updateField('application', 'mounting', value)}
                   options={RIO_MOUNTING_OPTIONS}
@@ -261,6 +262,7 @@ const RioBoxInquirySection = ({
 
               <FormField label="System Voltage">
                 <SearchableSelect
+                  includeNotApplicable
                   value={application.systemVoltage || ''}
                   onChange={(value) => updateField('application', 'systemVoltage', value)}
                   options={RIO_POWER_SUPPLY_OPTIONS}
@@ -271,6 +273,7 @@ const RioBoxInquirySection = ({
 
               <FormField label="Communication Protocol">
                 <SearchableSelect
+                  includeNotApplicable
                   value={application.communicationProtocol || ''}
                   onChange={(value) => updateField('application', 'communicationProtocol', value)}
                   options={RIO_PROTOCOL_OPTIONS}
@@ -281,6 +284,7 @@ const RioBoxInquirySection = ({
 
               <FormField label="Network Medium">
                 <SearchableSelect
+                  includeNotApplicable
                   value={application.networkMedium || ''}
                   onChange={(value) => updateField('application', 'networkMedium', value)}
                   options={RIO_NETWORK_MEDIUM_OPTIONS}
@@ -291,6 +295,7 @@ const RioBoxInquirySection = ({
 
               <FormField label="Topology">
                 <SearchableSelect
+                  includeNotApplicable
                   value={application.topology || ''}
                   onChange={(value) => updateField('application', 'topology', value)}
                   options={RIO_TOPOLOGY_OPTIONS}
@@ -310,6 +315,7 @@ const RioBoxInquirySection = ({
 
               <FormField label="Redundancy Required">
                 <SearchableSelect
+                  includeNotApplicable
                   value={application.redundancyRequired || ''}
                   onChange={(value) => updateField('application', 'redundancyRequired', value)}
                   options={RIO_REDUNDANCY_OPTIONS}
@@ -320,6 +326,7 @@ const RioBoxInquirySection = ({
 
               <FormField label="Local HMI Required">
                 <SearchableSelect
+                  includeNotApplicable
                   value={application.localHmiRequired || ''}
                   onChange={(value) => updateField('application', 'localHmiRequired', value)}
                   options={RIO_YES_NO_OPTIONS}
@@ -413,6 +420,7 @@ const RioBoxInquirySection = ({
             <div className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-3">
               <FormField label="Enclosure Material">
                 <SearchableSelect
+                  includeNotApplicable
                   value={enclosureConditions.enclosureMaterial || ''}
                   onChange={(value) => updateField('enclosureConditions', 'enclosureMaterial', value)}
                   options={RIO_ENCLOSURE_MATERIAL_OPTIONS}
@@ -423,6 +431,7 @@ const RioBoxInquirySection = ({
 
               <FormField label="IP Rating">
                 <SearchableSelect
+                  includeNotApplicable
                   value={enclosureConditions.ipRating || ''}
                   onChange={(value) => updateField('enclosureConditions', 'ipRating', value)}
                   options={RIO_IP_RATING_OPTIONS}
@@ -433,6 +442,7 @@ const RioBoxInquirySection = ({
 
               <FormField label="Area Classification">
                 <SearchableSelect
+                  includeNotApplicable
                   value={enclosureConditions.areaClassification || ''}
                   onChange={(value) => updateField('enclosureConditions', 'areaClassification', value)}
                   options={RIO_AREA_CLASSIFICATION_OPTIONS}
@@ -443,6 +453,7 @@ const RioBoxInquirySection = ({
 
               <FormField label="Indoor / Outdoor">
                 <SearchableSelect
+                  includeNotApplicable
                   value={enclosureConditions.indoorOutdoor || ''}
                   onChange={(value) => updateField('enclosureConditions', 'indoorOutdoor', value)}
                   options={['Indoor', 'Outdoor']}
@@ -462,6 +473,7 @@ const RioBoxInquirySection = ({
 
               <FormField label="Canopy Required">
                 <SearchableSelect
+                  includeNotApplicable
                   value={enclosureConditions.canopyRequired || ''}
                   onChange={(value) => updateField('enclosureConditions', 'canopyRequired', value)}
                   options={RIO_YES_NO_OPTIONS}
@@ -472,6 +484,7 @@ const RioBoxInquirySection = ({
 
               <FormField label="Cable Entry">
                 <SearchableSelect
+                  includeNotApplicable
                   value={enclosureConditions.cableEntry || ''}
                   onChange={(value) => updateField('enclosureConditions', 'cableEntry', value)}
                   options={RIO_CABLE_ENTRY_OPTIONS}
@@ -493,6 +506,7 @@ const RioBoxInquirySection = ({
 
               <FormField label="Gland Plate Required">
                 <SearchableSelect
+                  includeNotApplicable
                   value={enclosureConditions.glandPlateRequired || ''}
                   onChange={(value) => updateField('enclosureConditions', 'glandPlateRequired', value)}
                   options={RIO_YES_NO_OPTIONS}
@@ -503,6 +517,7 @@ const RioBoxInquirySection = ({
 
               <FormField label="Power Supply Available">
                 <SearchableSelect
+                  includeNotApplicable
                   value={enclosureConditions.powerSupplyAvailable || ''}
                   onChange={(value) => updateField('enclosureConditions', 'powerSupplyAvailable', value)}
                   options={RIO_POWER_SUPPLY_OPTIONS}
@@ -513,6 +528,7 @@ const RioBoxInquirySection = ({
 
               <FormField label="UPS Supply Available">
                 <SearchableSelect
+                  includeNotApplicable
                   value={enclosureConditions.upsSupplyAvailable || ''}
                   onChange={(value) => updateField('enclosureConditions', 'upsSupplyAvailable', value)}
                   options={RIO_YES_NO_OPTIONS}
@@ -523,6 +539,7 @@ const RioBoxInquirySection = ({
 
               <FormField label="Space Heater Required">
                 <SearchableSelect
+                  includeNotApplicable
                   value={enclosureConditions.spaceHeaterRequired || ''}
                   onChange={(value) => updateField('enclosureConditions', 'spaceHeaterRequired', value)}
                   options={RIO_YES_NO_OPTIONS}
@@ -537,6 +554,7 @@ const RioBoxInquirySection = ({
             <div className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-4">
               <FormField label="Network Switch">
                 <SearchableSelect
+                  includeNotApplicable
                   value={accessories.networkSwitch || ''}
                   onChange={(value) => updateField('accessories', 'networkSwitch', value)}
                   options={RIO_YES_NO_OPTIONS}
@@ -547,6 +565,7 @@ const RioBoxInquirySection = ({
 
               <FormField label="Fiber Converter">
                 <SearchableSelect
+                  includeNotApplicable
                   value={accessories.fiberConverter || ''}
                   onChange={(value) => updateField('accessories', 'fiberConverter', value)}
                   options={RIO_YES_NO_OPTIONS}
@@ -557,6 +576,7 @@ const RioBoxInquirySection = ({
 
               <FormField label="24 VDC Power Supply">
                 <SearchableSelect
+                  includeNotApplicable
                   value={accessories.powerSupply24Vdc || ''}
                   onChange={(value) => updateField('accessories', 'powerSupply24Vdc', value)}
                   options={RIO_YES_NO_OPTIONS}
@@ -567,6 +587,7 @@ const RioBoxInquirySection = ({
 
               <FormField label="Redundant PSU">
                 <SearchableSelect
+                  includeNotApplicable
                   value={accessories.redundantPsu || ''}
                   onChange={(value) => updateField('accessories', 'redundantPsu', value)}
                   options={RIO_YES_NO_OPTIONS}
@@ -577,6 +598,7 @@ const RioBoxInquirySection = ({
 
               <FormField label="Marshalling Terminals">
                 <SearchableSelect
+                  includeNotApplicable
                   value={accessories.marshallingTerminals || ''}
                   onChange={(value) => updateField('accessories', 'marshallingTerminals', value)}
                   options={RIO_YES_NO_OPTIONS}
@@ -587,6 +609,7 @@ const RioBoxInquirySection = ({
 
               <FormField label="Interposing Relays">
                 <SearchableSelect
+                  includeNotApplicable
                   value={accessories.interposingRelays || ''}
                   onChange={(value) => updateField('accessories', 'interposingRelays', value)}
                   options={['Yes', 'No', 'As Required']}
@@ -597,6 +620,7 @@ const RioBoxInquirySection = ({
 
               <FormField label="Intrinsic Safety Barriers">
                 <SearchableSelect
+                  includeNotApplicable
                   value={accessories.intrinsicSafetyBarriers || ''}
                   onChange={(value) => updateField('accessories', 'intrinsicSafetyBarriers', value)}
                   options={RIO_YES_NO_OPTIONS}
@@ -607,6 +631,7 @@ const RioBoxInquirySection = ({
 
               <FormField label="Local Isolator">
                 <SearchableSelect
+                  includeNotApplicable
                   value={accessories.localIsolator || ''}
                   onChange={(value) => updateField('accessories', 'localIsolator', value)}
                   options={RIO_YES_NO_OPTIONS}

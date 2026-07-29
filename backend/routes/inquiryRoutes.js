@@ -6,12 +6,12 @@ const router = express.Router();
 const {
   getInquiries,
   getInquiry,
-  downloadInquiryPdf,
   createInquiry,
   updateInquiry,
   updateInquiryStatus,
   updateInquiryFollowUp,
   getFollowUps,
+  downloadInquiryPdf,
   uploadMiddleware,
 } = require('../controllers/inquiryController');
 const { protect } = require('../middleware/authMiddleware');
@@ -37,6 +37,15 @@ router.route('/')
     createInquiry
   );
 
+router.get(
+  '/:id/pdf',
+  requireAnyPermission(
+    INQUIRY_PERMISSIONS.VIEW,
+    INQUIRY_PERMISSIONS.EDIT
+  ),
+  downloadInquiryPdf
+);
+
 router.patch(
   '/:id/status',
   requirePermission(INQUIRY_PERMISSIONS.EDIT),
@@ -48,15 +57,6 @@ router.patch(
   '/:id/follow-up',
   requirePermission(INQUIRY_PERMISSIONS.FOLLOW_UP),
   updateInquiryFollowUp
-);
-
-router.get(
-  '/:id/pdf',
-  requireAnyPermission(
-    INQUIRY_PERMISSIONS.VIEW,
-    INQUIRY_PERMISSIONS.EDIT
-  ),
-  downloadInquiryPdf
 );
 
 router.route('/:id')

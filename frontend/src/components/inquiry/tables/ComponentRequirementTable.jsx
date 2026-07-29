@@ -2,6 +2,8 @@ import React from 'react';
 import { Download, Plus } from 'lucide-react';
 import { Input, Select, Button } from '../../common/FormComponents.extended';
 
+const NOT_APPLICABLE = 'NA - Not Applicable';
+
 const EMPTY_ROW = {
   component: '',
   required: 'No',
@@ -23,11 +25,14 @@ const normaliseDropdownOptions = (options = []) =>
 
 const getDropdownValue = (value = '', options = []) => {
   if (!value) return '';
+  if (value === NOT_APPLICABLE) return NOT_APPLICABLE;
 
   return options.some((option) => option.value === value) ? value : 'Other';
 };
 
-const normaliseRequiredValue = (value) => (value === 'Yes' ? 'Yes' : 'No');
+const normaliseRequiredValue = (value) => (
+  ['Yes', 'No', NOT_APPLICABLE].includes(value) ? value : 'No'
+);
 
 const normaliseRow = (row = {}, component = '') => ({
   ...EMPTY_ROW,
@@ -39,6 +44,7 @@ const normaliseRow = (row = {}, component = '') => ({
 const hasMeaningfulComponentValue = (row = {}) => (
   row.__visible === true ||
   row.required === 'Yes' ||
+  row.required === NOT_APPLICABLE ||
   ['preferredBrand', 'suggestedModelRange', 'remarks'].some((field) =>
     String(row?.[field] ?? '').trim() !== ''
   )
@@ -95,25 +101,17 @@ const ErrorText = ({ children }) => {
   );
 };
 
-const RequiredCheckbox = ({ checked, onChange, disabled = false, error = '' }) => (
-  <label
-    title={checked ? 'Required' : 'Not required'}
-    className={`flex min-h-[40px] min-w-0 cursor-pointer items-center justify-center rounded-lg border px-2 py-2 text-sm font-medium transition ${
-      checked
-        ? 'border-blue-300 bg-blue-50 text-blue-700'
-        : 'border-gray-200 bg-white text-gray-600 hover:bg-gray-50'
-    } ${error ? 'border-red-400 ring-1 ring-red-200' : ''} ${
-      disabled ? 'cursor-not-allowed opacity-60' : ''
-    }`}
+const RequiredSelector = ({ value, onChange, disabled = false, error = '' }) => (
+  <Select
+    value={normaliseRequiredValue(value)}
+    onChange={(event) => onChange(event.target.value)}
+    disabled={disabled}
+    className={`min-h-[40px] min-w-0 w-full ${error ? 'border-red-400 focus:ring-red-400' : ''}`}
   >
-    <input
-      type="checkbox"
-      checked={checked}
-      onChange={(event) => onChange(event.target.checked)}
-      disabled={disabled}
-      className="h-4 w-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500"
-    />
-  </label>
+    <option value="Yes">Yes</option>
+    <option value="No">No</option>
+    <option value={NOT_APPLICABLE}>{NOT_APPLICABLE}</option>
+  </Select>
 );
 
 // Stacked label + control used by the mobile card layout.
@@ -173,10 +171,10 @@ const ComponentRequirementTable = ({
     safeOnChange(updatedRows);
   };
 
-  const updateRequired = (rowIndex, checked) => {
+  const updateRequired = (rowIndex, value) => {
     const updatedRows = tableRows.map((row, index) => (
       index === rowIndex
-        ? { ...row, required: checked ? 'Yes' : 'No' }
+        ? { ...row, required: normaliseRequiredValue(value) }
         : row
     ));
 
@@ -270,6 +268,7 @@ const ComponentRequirementTable = ({
           className={`min-w-0 w-full ${detailDisabledClass(row)} ${error ? 'border-red-400 focus:ring-red-400' : ''}`}
         >
           <option value="">Select brand</option>
+          <option value={NOT_APPLICABLE}>{NOT_APPLICABLE}</option>
           {brandOptions.map((option) => (
             <option key={option.value} value={option.value}>
               {option.label}
@@ -338,7 +337,6 @@ const ComponentRequirementTable = ({
       <div className="space-y-3 lg:hidden">
         {tableRows.map((row, index) => {
           const err = rowErrors(index);
-          const isRequired = row.required === 'Yes';
           const hasFixedComponent = sourceComponents.length > 0;
 
           return (
@@ -367,9 +365,9 @@ const ComponentRequirementTable = ({
 
               <div className="space-y-3">
                 <MobileField label="Required">
-                  <RequiredCheckbox
-                    checked={isRequired}
-                    onChange={(checked) => updateRequired(index, checked)}
+                  <RequiredSelector
+                    value={row.required}
+                    onChange={(value) => updateRequired(index, value)}
                     disabled={disabled}
                     error={err.required}
                   />
@@ -434,7 +432,6 @@ const ComponentRequirementTable = ({
           <tbody>
             {tableRows.map((row, index) => {
               const err = rowErrors(index);
-              const isRequired = row.required === 'Yes';
               const hasFixedComponent = sourceComponents.length > 0;
 
               return (
@@ -462,9 +459,9 @@ const ComponentRequirementTable = ({
                   </td>
 
                   <td className="min-w-0 align-top px-2 py-3">
-                    <RequiredCheckbox
-                      checked={isRequired}
-                      onChange={(checked) => updateRequired(index, checked)}
+                    <RequiredSelector
+                      value={row.required}
+                      onChange={(value) => updateRequired(index, value)}
                       disabled={disabled}
                       error={err.required}
                     />

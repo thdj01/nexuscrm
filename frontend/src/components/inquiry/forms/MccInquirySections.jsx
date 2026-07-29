@@ -340,6 +340,7 @@ const MccInquirySections = ({
                   error={incomerTypeError}
                 >
                   <SearchableSelect
+                    includeNotApplicable
                     value={incomerDetails.incomerType || ''}
                     onChange={(value) => updateIncomerField(setForm, 'incomerType', value)}
                     options={normaliseOptions(MCC_INCOMER_TYPE_OPTIONS)}
@@ -354,6 +355,7 @@ const MccInquirySections = ({
                   error={incomerMakeError}
                 >
                   <SearchableSelect
+                    includeNotApplicable
                     value={incomerDetails.make || ''}
                     onChange={(value) => updateIncomerField(setForm, 'make', value)}
                     options={normaliseOptions(SWITCHGEAR_MAKE_OPTIONS)}
@@ -385,6 +387,7 @@ const MccInquirySections = ({
                   error={busbarMaterialError}
                 >
                   <SearchableSelect
+                    includeNotApplicable
                     value={incomerDetails.busbarMaterial || ''}
                     onChange={(value) => updateIncomerField(setForm, 'busbarMaterial', value)}
                     options={normaliseOptions(BUSBAR_MATERIAL_OPTIONS)}
@@ -399,6 +402,7 @@ const MccInquirySections = ({
                   error={formOfSeparationError}
                 >
                   <SearchableSelect
+                    includeNotApplicable
                     value={incomerDetails.formOfSeparation || ''}
                     onChange={(value) => updateIncomerField(setForm, 'formOfSeparation', value)}
                     options={normaliseOptions(FORM_OF_SEPARATION_OPTIONS)}
@@ -413,6 +417,7 @@ const MccInquirySections = ({
                   error={panelConstructionError}
                 >
                   <SearchableSelect
+                    includeNotApplicable
                     value={incomerDetails.panelConstruction || ''}
                     onChange={(value) => updateIncomerField(setForm, 'panelConstruction', value)}
                     options={normaliseOptions(PANEL_CONSTRUCTION_OPTIONS)}
@@ -644,6 +649,7 @@ const MccInquirySections = ({
                   error={panelTypeError}
                 >
                   <SearchableSelect
+                    includeNotApplicable
                     value={layoutPreferences.panelType || ''}
                     onChange={(value) => updateLayoutField(setForm, 'panelType', value)}
                     options={normaliseOptions(MCC_PANEL_TYPE_OPTIONS)}
@@ -659,6 +665,7 @@ const MccInquirySections = ({
                     error={panelStructureError}
                   >
                     <SearchableSelect
+                      includeNotApplicable
                       value={layoutPreferences.panelStructure || ''}
                       onChange={(value) => updateLayoutField(setForm, 'panelStructure', value)}
                       options={normaliseOptions(MCC_PANEL_STRUCTURE_OPTIONS)}
@@ -674,6 +681,7 @@ const MccInquirySections = ({
                   error={cableEntryMvLvError}
                 >
                   <SearchableSelect
+                    includeNotApplicable
                     value={layoutPreferences.cableEntryMvLv || ''}
                     onChange={(value) => updateLayoutField(setForm, 'cableEntryMvLv', value)}
                     options={normaliseOptions(MCC_CABLE_ENTRY_MV_LV_OPTIONS)}
@@ -688,6 +696,7 @@ const MccInquirySections = ({
                   error={busbarArrangementError}
                 >
                   <SearchableSelect
+                    includeNotApplicable
                     value={layoutPreferences.busbarArrangement || ''}
                     onChange={(value) => updateLayoutField(setForm, 'busbarArrangement', value)}
                     options={normaliseOptions(MCC_BUSBAR_ARRANGEMENT_OPTIONS)}

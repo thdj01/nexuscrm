@@ -431,8 +431,8 @@ const ProjectDetailPage = () => {
                 {readOnly && canOpenProjectEditor && (
                   <Button
                     onClick={() => setReadOnly(false)}
-                    title="Edit Project"
-                    aria-label="Edit Project"
+                    title="Edit"
+                    aria-label="Edit"
                     className="h-8 rounded-lg px-3 text-xs"
                   >
                     <Edit2 size={16} strokeWidth={2.25} /> Edit

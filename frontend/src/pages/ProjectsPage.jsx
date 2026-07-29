@@ -354,8 +354,8 @@ const ProjectsPage = () => {
           {canOpenProjectEditor && (
             <button
               type="button"
-              title="Edit Project"
-              aria-label="Edit Project"
+              title="Edit"
+              aria-label="Edit"
               onClick={(e) => {
                 e.stopPropagation();
                 const projectId = getProjectId(row);
@@ -500,7 +500,7 @@ const ProjectsPage = () => {
         />
       </Card>
 
-      <Modal isOpen={editModal} onClose={() => { setEditModal(false); setSelected(null); }} title="Edit Project" size="xxl">
+      <Modal isOpen={editModal} onClose={() => { setEditModal(false); setSelected(null); }} title="Edit" size="xxl">
         {selected && (
           <ProjectForm initialData={selected} onSubmit={handleEdit} loading={submitting} canManagePlanning={canManagePlanning} />
         )}

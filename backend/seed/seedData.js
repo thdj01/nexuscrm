@@ -554,11 +554,6 @@ console.log('👥 Team hierarchy assigned');
           projectName:
             'New Factory MCC Panel',
 
-          estimatedValue:
-            850000,
-
-          priority: 'High',
-
           status:
             'Order Received',
 
@@ -603,12 +598,6 @@ console.log('👥 Team hierarchy assigned');
           projectName:
             'MCC Panel',
 
-          estimatedValue:
-            450000,
-
-          priority:
-            'Medium',
-
           status:
             'Commercial Submit',
 
@@ -650,11 +639,6 @@ console.log('👥 Team hierarchy assigned');
 
           projectName:
             'Main MCC Panel',
-
-          estimatedValue:
-            1200000,
-
-          priority: 'High',
 
           status:
             'Commercial Discussion',
@@ -698,11 +682,6 @@ console.log('👥 Team hierarchy assigned');
           projectName:
             'VFD Panel for Pumps',
 
-          estimatedValue:
-            320000,
-
-          priority: 'Low',
-
           status: 'New',
 
           nextFollowUpDate:
@@ -743,11 +722,6 @@ console.log('👥 Team hierarchy assigned');
 
           projectName:
             'Automation PLC Panel',
-
-          estimatedValue:
-            950000,
-
-          priority: 'High',
 
           status:
             'Inquiry Lost',

@@ -9,36 +9,39 @@
 //        reachable from the browser through the same Express server.
 // ─────────────────────────────────────────────────────────────────────────────
 
+const path = require('path');
+const dotenv = require('dotenv');
+
+// Environment variables must be loaded before importing services. WhatsApp
+// reads its client id, Chrome path and persistent session directories while
+// the module is initialised.
+dotenv.config({ path: path.join(__dirname, '.env') });
+
 const express = require('express');
 const morgan  = require('morgan');
-const dotenv  = require('dotenv');
 const cors    = require('cors');
-const path    = require('path');
 
 const connectDB                        = require('./config/db');
-const { initWhatsApp }                 = require('./services/whatsappService');
+const { initWhatsApp, reloadWhatsAppSettings } = require('./services/whatsappService');
 const { initKickoffWorkflowScheduler } = require('./services/kickoffWorkflowScheduler');
 const timesheetRoutes = require('./routes/timesheetRoutes');
 const teamRoutes = require('./routes/teamRoutes');
 const ticketRoutes = require('./routes/ticketRoutes');
 const { seedDefaultDepartments } = require('./services/departmentSeedService');
-const swaggerUi = require('swagger-ui-express');
-const fs = require('fs');
 
-// Load environment variables
-dotenv.config();
-
-// Connect to MongoDB
-connectDB().then(() => seedDefaultDepartments());
-
-// ─── WhatsApp client boot ─────────────────────────────────────────────────────
-// Initialises the whatsapp-web.js singleton.  On first run, a QR code is
-// printed in the terminal — scan it once with WhatsApp → Linked Devices.
-// Session is persisted in .wwebjs_auth/ so subsequent restarts reconnect
-// automatically without a new scan.
-// Any failure here is logged but never prevents the Express server from starting.
-initWhatsApp();
-initKickoffWorkflowScheduler();
+// Connect to MongoDB before starting database-backed integrations.
+// Master → Integration Settings is the source of truth for WhatsApp. Environment
+// variables are used only until the first WhatsApp settings record is saved.
+connectDB()
+  .then(async () => {
+    await seedDefaultDepartments();
+    await reloadWhatsAppSettings();
+    initWhatsApp();
+    initKickoffWorkflowScheduler();
+  })
+  .catch((error) => {
+    console.error('[server] Database/integration startup failed:', error.message);
+  });
 
 const app = express();
 
@@ -79,34 +82,10 @@ app.use('/api/dashboard',     require('./routes/dashboardRoutes'));
 app.use('/api/departments',   require('./routes/departmentRoutes'));
 app.use('/api/users',         require('./routes/userRoutes'));
 app.use('/api/integrations',  require('./routes/integrationRoutes'));
-app.use('/api/test-whatsapp', require('./routes/testWhatsappRoute'));
 app.use('/api/timesheet', timesheetRoutes);
 app.use('/api/teams', teamRoutes);
 // app.use('/api/tickets', ticketRoutes);
 app.use('/api/tickets', require('./routes/ticketRoutes'));
-
-// ─── Swagger Documentation ───────────────────────────────────────────────────
-const openApiJsonPath = path.join(__dirname, 'docs', 'nexus-dashboard-openapi.json');
-let swaggerDocument = {};
-if (fs.existsSync(openApiJsonPath)) {
-  try {
-    swaggerDocument = JSON.parse(fs.readFileSync(openApiJsonPath, 'utf8'));
-  } catch (err) {
-    console.error('Failed to parse OpenAPI JSON:', err.message);
-  }
-}
-
-app.get('/api-docs/openapi.json', (_req, res) => {
-  res.sendFile(openApiJsonPath);
-});
-
-app.get('/api-docs/openapi.yaml', (_req, res) => {
-  res.sendFile(path.join(__dirname, 'docs', 'nexus-dashboard-openapi.yaml'));
-});
-
-app.use('/api-docs', swaggerUi.serve, swaggerUi.setup(swaggerDocument, {
-  customSiteTitle: 'Nexus Dashboard API Documentation',
-}));
 
 
 // ─── Health Check ──────────────────────────────────────────────────────────────

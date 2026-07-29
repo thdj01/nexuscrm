@@ -1,8 +1,17 @@
-import React from 'react';
+import React, { createContext, useContext } from 'react';
+
+const RequiredIndicatorContext = createContext(false);
+
+export const RequiredIndicatorProvider = ({ hide = false, children }) => (
+  <RequiredIndicatorContext.Provider value={Boolean(hide)}>
+    {children}
+  </RequiredIndicatorContext.Provider>
+);
 
 // Input field
 export const FormField = ({ label, error, required, children, className = '', ...rest }) => {
   const hasError = Boolean(error);
+  const hideRequiredIndicator = useContext(RequiredIndicatorContext);
 
   return (
     <div
@@ -17,7 +26,7 @@ export const FormField = ({ label, error, required, children, className = '', ..
       {label && (
         <label className={`text-sm font-medium ${hasError ? 'text-red-700' : 'text-gray-700'}`}>
           {label}
-          {required && <span className="text-red-500 ml-1">*</span>}
+          {required && !hideRequiredIndicator && <span className="required-field-star ml-1 text-red-500">*</span>}
         </label>
       )}
       {children}

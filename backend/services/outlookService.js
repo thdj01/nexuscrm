@@ -17,10 +17,12 @@ function buildInquiryHtml(inquiry = {}, options = {}) {
   return buildInquiryEmailHtml(inquiry, options);
 }
 function buildInquiryAttachments(inquiry = {}) {
-  return (inquiry?.attachments || []).map(file => ({
-    filename: file.name || file.storedName,
-    path: path.join(__dirname, '..', 'uploads', file.storagePath),
-  }));
+  return (inquiry?.attachments || [])
+    .filter((file) => file?.storagePath)
+    .map((file) => ({
+      filename: file.name || file.storedName,
+      path: path.join(__dirname, '..', 'uploads', file.storagePath),
+    }));
 }
 
 async function sendOutlookNotification({
@@ -50,9 +52,9 @@ async function sendOutlookNotification({
     }
 
     const mailHtml = html || buildInquiryHtml(inquiry, { eventType, previousStatus });
-    const mailAttachments = Array.isArray(attachments)
-      ? attachments
-      : buildInquiryAttachments(inquiry);
+    const inquiryAttachments = inquiry ? buildInquiryAttachments(inquiry) : [];
+    const extraAttachments = Array.isArray(attachments) ? attachments : [];
+    const mailAttachments = [...inquiryAttachments, ...extraAttachments];
 
     await transporter.sendMail({
       from: emailConfig.fromEmail || emailConfig.username,

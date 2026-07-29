@@ -856,10 +856,6 @@ const InquiriesPage = () => {
       },
     },
     {
-      key: 'priority', label: 'Priority', width: '80px',
-      render: v => <StatusBadge status={v} size="xs" />,
-    },
-    {
       key: 'status',
       label: 'Status',
       width: '300px',
@@ -1266,7 +1262,7 @@ const InquiriesPage = () => {
                 <Textarea
                   value={statusModalForm.bomSubmissionRemarks}
                   onChange={(e) => setStatusModalValue('bomSubmissionRemarks', e.target.value)}
-                  placeholder={statusModal.type === 'revision' ? 'Enter revision remarks' : 'Enter Technical BoM remarks'}
+                  placeholder={statusModal.type === 'revision' ? 'Enter revision remarks' : 'Enter Technical BOM remarks'}
                   rows={3}
                 />
               </FormField>
@@ -1287,7 +1283,7 @@ const InquiriesPage = () => {
 
               {Array.isArray(statusModal.inquiry?.bomAttachments) && statusModal.inquiry.bomAttachments.length > 0 && (
                 <div className="rounded-xl border border-indigo-100 bg-indigo-50/50 p-3">
-                  <p className="text-sm font-semibold text-slate-800">Uploaded Technical BoM Documents</p>
+                  <p className="text-sm font-semibold text-slate-800">Uploaded Technical BOM Documents</p>
                   <div className="mt-2 space-y-2">
                     {statusModal.inquiry.bomAttachments.map((file, index) => (
                       <div

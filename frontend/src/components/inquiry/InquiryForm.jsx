@@ -14,12 +14,6 @@ const PRODUCT_TYPES = [
   { value: 'PLC_MCC', label: 'MCC cum PLC' },
 ];
 
-const PRIORITIES = [
-  'High',
-  'Medium',
-  'Low',
-];
-
 const STATUSES = [
   'New',
   'Technical Evaluation',
@@ -67,9 +61,6 @@ const defaultForm = {
   productType: 'MCC',
   projectName: '',
 
-  estimatedValue: '',
-
-  priority: 'Medium',
   status: 'New',
 
   nextFollowUpDate: '',
@@ -112,9 +103,6 @@ const InquiryForm = ({
                 .split('T')[0]
             : '',
 
-        estimatedValue:
-          initialData.estimatedValue ||
-          '',
 
         location:
           initialData.location || '',
@@ -176,12 +164,6 @@ const InquiryForm = ({
       delete payload.nextFollowUpDate;
     }
 
-    if (payload.estimatedValue) {
-      payload.estimatedValue =
-        Number(
-          payload.estimatedValue
-        );
-    }
 
     delete payload.companyName;
     onSubmit(payload);
@@ -312,25 +294,6 @@ const InquiryForm = ({
 
       {/* Row 4 */}
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
-
-        <FormField label="Priority">
-          <Select
-            value={form.priority}
-            onChange={set(
-              'priority'
-            )}
-          >
-            {PRIORITIES.map(
-              (priority) => (
-                <option
-                  key={priority}
-                >
-                  {priority}
-                </option>
-              )
-            )}
-          </Select>
-        </FormField>
 
         <FormField label="Status">
           <Select

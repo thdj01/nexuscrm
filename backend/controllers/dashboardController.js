@@ -736,7 +736,7 @@ const getRecentActivity = async (req, res, next) => {
       Inquiry.find(inquiryFYFilter)
         .sort({ createdAt: -1 })
         .limit(5)
-        .select('inquiryId customerRef customerName status priority createdAt panelTypes panelType customPanelType')
+        .select('inquiryId customerRef customerName status createdAt panelTypes panelType customPanelType')
         .populate('customerRef', 'customerId customerName companyType contacts contactPerson email mobileNumber city address gstNumber notes'),
 
       Project.find(projectFYFilter)

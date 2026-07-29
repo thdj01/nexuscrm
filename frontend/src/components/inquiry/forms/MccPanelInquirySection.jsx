@@ -2,7 +2,6 @@ import React from 'react';
 import {
   Cable,
   Gauge,
-  ListChecks,
   PanelsTopLeft,
 } from 'lucide-react';
 
@@ -14,7 +13,7 @@ import {
   MultiCheckSelect,
 } from '../../common/FormComponents.extended';
 
-import InquiryLoadTable from '../tables/InquiryLoadTable';
+import OutgoingFeederLoadLists from '../tables/OutgoingFeederLoadLists';
 import MainIncomerSection from './MainIncomerSection';
 
 import {
@@ -36,11 +35,16 @@ import {
   setPanelMainIncomerDetails,
 } from '../../../utils/mainIncomerUtils';
 
+import {
+  getFeederLoadRows,
+  hasMeaningfulFeederLoadRows,
+  normalizeFeederLoadDetails,
+} from '../../../utils/feederLoadDetails';
+
 const FREQUENCY_OPTIONS = ['50 Hz', '60 Hz'];
 const MAKE_OPTIONS = ['Siemens', 'Schneider', 'L&K', 'ABB', 'Other'];
 const BUSBAR_MATERIAL_OPTIONS = ['Aluminium', 'Copper'];
 const PANEL_TYPE_OPTIONS = ['Draw-out', 'Fixed'];
-const COMMISSIONING_SCOPE_OPTIONS = ['In Our Scope', 'Customer Scope'];
 
 const REMOVED_SUPPLY_VOLTAGE_OPTIONS = new Set([
   '48V DC',
@@ -120,12 +124,22 @@ const getMccDetails = (form = {}) => {
   const sourceOutgoing = source.outgoingFeederDetails || {};
   const sourceSupport = source.notesAndSupport || {};
 
-  const feederTypes = Array.from(new Set(
+  const selectedFeederTypes = Array.from(new Set(
     (Array.isArray(sourceOutgoing.feederTypes)
       ? sourceOutgoing.feederTypes
       : defaults.outgoingFeederDetails.feederTypes
     ).map(normaliseFeederType).filter(Boolean)
   ));
+  const feederTypes = selectedFeederTypes.length > 0
+    ? selectedFeederTypes
+    : (hasMeaningfulFeederLoadRows(source.loadDetails) ? ['DOL Starter'] : []);
+  const feederLoadDetails = normalizeFeederLoadDetails({
+    feederTypes,
+    groups: source.feederLoadDetails,
+    legacyRowsByType: {
+      'DOL Starter': source.loadDetails,
+    },
+  });
 
   const legacyCommissioningScope = sourceSupport.commissioningSupportRequired === 'Required'
     ? 'In Our Scope'
@@ -157,10 +171,12 @@ const getMccDetails = (form = {}) => {
       ...sourceOutgoing,
       feederTypes,
     },
-    loadDetails:
-      Array.isArray(source.loadDetails) && source.loadDetails.length > 0
+    feederLoadDetails,
+    loadDetails: getFeederLoadRows(feederLoadDetails, 'DOL Starter').length
+      ? getFeederLoadRows(feederLoadDetails, 'DOL Starter')
+      : (Array.isArray(source.loadDetails) && source.loadDetails.length > 0
         ? source.loadDetails
-        : defaults.loadDetails,
+        : defaults.loadDetails),
     layoutPreferences: {
       ...defaults.layoutPreferences,
       ...(source.layoutPreferences || {}),
@@ -239,7 +255,6 @@ const MccPanelInquirySection = ({
   const details = getMccDetails(form);
   const incomer = details.incomerDetails || {};
   const outgoing = details.outgoingFeederDetails || {};
-  const support = details.notesAndSupport || {};
   const sourcePanelType = getSameAsAboveSourcePanelType(form?.panelTypes, 'MCC');
   const sourceMainIncomer = getPanelMainIncomerDetails(form, sourcePanelType);
   const sourceMainIncomerSignature = getMainIncomerValueSignature(sourceMainIncomer);
@@ -267,7 +282,6 @@ const MccPanelInquirySection = ({
     ...(Array.isArray(outgoing.feederTypes) ? outgoing.feederTypes : []),
   ]));
 
-  const showDolSelection = (outgoing.feederTypes || []).includes('DOL Starter');
 
   React.useEffect(() => {
     if (showSameAsAbove || !incomer.sameAsAbove) return;
@@ -349,6 +363,7 @@ const MccPanelInquirySection = ({
                 error={getError(errors, 'mccDetails.incomerDetails.busbarMaterial')}
               >
                 <SearchableSelect
+                  includeNotApplicable
                   value={incomer.busbarMaterial || ''}
                   onChange={(value) => updateNestedGroup(setForm, 'incomerDetails', 'busbarMaterial', value)}
                   options={normaliseOptions(BUSBAR_MATERIAL_OPTIONS)}
@@ -364,6 +379,7 @@ const MccPanelInquirySection = ({
                 error={getError(errors, 'mccDetails.incomerDetails.panelConstruction')}
               >
                 <SearchableSelect
+                  includeNotApplicable
                   value={incomer.panelConstruction || ''}
                   onChange={(value) => updateNestedGroup(
                     setForm,
@@ -393,12 +409,25 @@ const MccPanelInquirySection = ({
             >
               <MultiCheckSelect
                 value={outgoing.feederTypes || []}
-                onChange={(value) => updateNestedGroup(
-                  setForm,
-                  'outgoingFeederDetails',
-                  'feederTypes',
-                  value
-                )}
+                onChange={(value) => updateMccDetails(setForm, (currentDetails) => {
+                  const feederLoadDetails = normalizeFeederLoadDetails({
+                    feederTypes: value,
+                    groups: currentDetails.feederLoadDetails,
+                    legacyRowsByType: {
+                      'DOL Starter': currentDetails.loadDetails,
+                    },
+                  });
+
+                  return {
+                    ...currentDetails,
+                    outgoingFeederDetails: {
+                      ...(currentDetails.outgoingFeederDetails || {}),
+                      feederTypes: value,
+                    },
+                    feederLoadDetails,
+                    loadDetails: getFeederLoadRows(feederLoadDetails, 'DOL Starter'),
+                  };
+                })}
                 options={normaliseOptions(feederTypeOptions)}
                 placeholder="Select outgoing feeder types"
                 disabled={disabled}
@@ -407,55 +436,18 @@ const MccPanelInquirySection = ({
             </FormField>
           </Subsection>
 
-          {showDolSelection && (
-            <Subsection
-              icon={ListChecks}
-              title="DOL Selection"
-              subtitle="Enter DOL load details and define the commissioning scope."
-              color="cyan"
-            >
-              <div className="space-y-5">
-                <InquiryLoadTable
-                  rows={details.loadDetails}
-                  onChange={(updatedRows) => updateMccDetails(setForm, (currentDetails) => ({
-                    ...currentDetails,
-                    loadDetails: updatedRows,
-                  }))}
-                  showRemarks={false}
-                  errors={errors}
-                  minRows={0}
-                  disabled={disabled}
-                />
-
-                <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-3">
-                  <FormField
-                    label="Commissioning Scope"
-                    required
-                    error={getError(errors, 'mccDetails.notesAndSupport.commissioningScope')}
-                  >
-                    <SearchableSelect
-                      value={support.commissioningScope || ''}
-                      onChange={(value) => updateNestedGroup(
-                        setForm,
-                        'notesAndSupport',
-                        'commissioningScope',
-                        value,
-                        {
-                          commissioningSupportRequired:
-                            value === 'In Our Scope' ? 'Required' : 'Not Required',
-                          commissioningSupportDays: '',
-                        }
-                      )}
-                      options={normaliseOptions(COMMISSIONING_SCOPE_OPTIONS)}
-                      placeholder="Select commissioning scope"
-                      disabled={disabled}
-                      error={getError(errors, 'mccDetails.notesAndSupport.commissioningScope')}
-                    />
-                  </FormField>
-                </div>
-              </div>
-            </Subsection>
-          )}
+          <OutgoingFeederLoadLists
+            feederTypes={outgoing.feederTypes || []}
+            groups={details.feederLoadDetails || []}
+            onChange={(feederLoadDetails) => updateMccDetails(setForm, (currentDetails) => ({
+              ...currentDetails,
+              feederLoadDetails,
+              loadDetails: getFeederLoadRows(feederLoadDetails, 'DOL Starter'),
+            }))}
+            errors={errors}
+            disabled={disabled}
+            tone="violet"
+          />
         </div>
       </SectionCard>
     </div>

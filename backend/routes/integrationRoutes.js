@@ -6,9 +6,14 @@ const {
   getEmailIntegration,
   updateEmailIntegration,
   verifyEmailIntegration,
+  getWhatsappSettingsIntegration,
+  updateWhatsappSettingsIntegration,
   getWhatsappIntegration,
   restartWhatsappIntegration,
   logoutWhatsappIntegration,
+  testWhatsappNumber,
+  testWhatsappGroup,
+  getWhatsappGroups,
 } = require('../controllers/integrationController');
 const { protect } = require('../middleware/authMiddleware');
 
@@ -33,8 +38,13 @@ router.get('/email', getEmailIntegration);
 router.put('/email', updateEmailIntegration);
 router.post('/email/verify', verifyEmailIntegration);
 
+router.get('/whatsapp/settings', getWhatsappSettingsIntegration);
+router.put('/whatsapp/settings', updateWhatsappSettingsIntegration);
 router.get('/whatsapp/status', getWhatsappIntegration);
 router.post('/whatsapp/restart', restartWhatsappIntegration);
 router.post('/whatsapp/logout', logoutWhatsappIntegration);
+router.post('/whatsapp/test-number', testWhatsappNumber);
+router.post('/whatsapp/test-group', testWhatsappGroup);
+router.get('/whatsapp/groups', getWhatsappGroups);
 
 module.exports = router;

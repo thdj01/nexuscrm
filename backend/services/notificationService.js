@@ -42,12 +42,16 @@ const sendOutlookNotification  = require('./outlookService');
   emailSubject = null,
   emailHtml = null,
   emailText = null,
+  emailAttachments = [],
 }) => {
 
-  // [FIX M2] Notifications are non-critical side-effects.
-  // Any failure here must be logged but must NOT propagate to the controller.
+  // Notifications and emails are independent non-critical side effects.
+  // A database notification failure must not prevent the email (and its PDF)
+  // from being delivered, and an email failure must not affect inquiry creation.
+  let notification = null;
+
   try {
-    const notification = await Notification.create({
+    notification = await Notification.create({
       title,
       message,
       type,
@@ -55,11 +59,12 @@ const sendOutlookNotification  = require('./outlookService');
       relatedInquiry,
       relatedProject,
     });
+  } catch (error) {
+    console.error('[notificationService] Failed to create notification:', error.message);
+  }
 
-    if (sendEmail && emailTo) {
-      // sendOutlookNotification already has its own internal try/catch,
-      // but we keep it inside this outer try so any future refactoring
-      // of outlookService stays safe too.
+  if (sendEmail && emailTo) {
+    try {
       await sendOutlookNotification({
         to: emailTo,
         subject: emailSubject || title,
@@ -68,16 +73,14 @@ const sendOutlookNotification  = require('./outlookService');
         inquiry,
         eventType,
         previousStatus,
+        attachments: emailAttachments,
       });
+    } catch (error) {
+      console.error('[notificationService] Failed to send notification email:', error.message);
     }
-
-    return notification;
-  } catch (error) {
-    // Log the failure but do not rethrow — callers must not fail because
-    // of a notification error.
-    console.error('[notificationService] Failed to create notification:', error.message);
-    return null;
   }
+
+  return notification;
 };
 
 module.exports = createNotification;

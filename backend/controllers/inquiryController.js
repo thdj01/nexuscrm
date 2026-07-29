@@ -373,8 +373,8 @@ const normalizeControlFeeder = (value, supplyVoltage) => (
   isControlFeederSupplyVoltage(supplyVoltage) && boolFromPayload(value)
 );
 
-const shouldPersistPanelColour = (enclosureMaterial = '') => {
-  const normalized = String(enclosureMaterial || '').trim().toUpperCase();
+const shouldPersistPanelColour = (enclosureType = '') => {
+  const normalized = String(enclosureType || '').trim().toUpperCase();
   return Boolean(normalized) && !['SS304', 'SS316'].includes(normalized);
 };
 
@@ -382,7 +382,9 @@ const firstPresent = (...values) => values.find(v => v !== undefined && v !== nu
 
 const sanitizeComponentRequirementRows = (rows = []) => (
   (Array.isArray(rows) ? rows : []).map((row = {}) => {
-    const required = row.required === 'Yes' ? 'Yes' : 'No';
+    const required = ['Yes', 'No', 'NA - Not Applicable'].includes(cleanText(row.required))
+      ? cleanText(row.required)
+      : 'No';
     const base = {
       component: row.component || '',
       required,
@@ -465,7 +467,7 @@ const sanitizePlcDetails = (plcDetails = {}) => {
 
   const hmiRequired = boolFromPayload(plcSystem.hmiRequired);
   const ethernetSwitchRequired = boolFromPayload(plcSystem.ethernetSwitchRequired);
-  const plcRedundancy = ['Hot', 'Cold'].includes(cleanText(redundancy.plcRedundancy))
+  const plcRedundancy = ['Hot', 'Cold', 'NA - Not Applicable'].includes(cleanText(redundancy.plcRedundancy))
     ? cleanText(redundancy.plcRedundancy)
     : '';
   const mainIncomerMake = cleanText(mainIncomer.make);
@@ -518,7 +520,7 @@ const sanitizePlcDetails = (plcDetails = {}) => {
       inputVoltage: cleanText(servoDetails.inputVoltage),
       motorCapacityKw: toNonNegativeNumberOrNull(servoDetails.motorCapacityKw),
       encoderType: cleanText(servoDetails.encoderType),
-      brake: ['Yes', 'No'].includes(cleanText(servoDetails.brake))
+      brake: ['Yes', 'No', 'NA - Not Applicable'].includes(cleanText(servoDetails.brake))
         ? cleanText(servoDetails.brake)
         : '',
       ratedRpm: cleanText(servoDetails.ratedRpm),
@@ -534,14 +536,14 @@ const sanitizePlcDetails = (plcDetails = {}) => {
     },
     automationRequirements: sanitizeComponentRequirementRows(source.automationRequirements),
     supportRequirements: {
-      onsiteSupportRequired: support.onsiteSupportRequired === 'Required'
-        ? 'Required'
+      onsiteSupportRequired: ['Required', 'Not Required', 'NA - Not Applicable'].includes(cleanText(support.onsiteSupportRequired))
+        ? cleanText(support.onsiteSupportRequired)
         : 'Not Required',
       onsiteSupportDays: support.onsiteSupportRequired === 'Required'
         ? toNonNegativeInteger(support.onsiteSupportDays, 0)
         : 0,
-      commissioningSupportRequired: support.commissioningSupportRequired === 'Required'
-        ? 'Required'
+      commissioningSupportRequired: ['Required', 'Not Required', 'NA - Not Applicable'].includes(cleanText(support.commissioningSupportRequired))
+        ? cleanText(support.commissioningSupportRequired)
         : 'Not Required',
       commissioningSupportDays: support.commissioningSupportRequired === 'Required'
         ? toNonNegativeInteger(support.commissioningSupportDays, 0)
@@ -555,20 +557,18 @@ const sanitizePlcDetails = (plcDetails = {}) => {
       analogOutputs: sanitizedIoRequirements.ao.quantity,
       communicationProtocol: cleanText(plcSystem.communicationProtocol || legacyIo.communicationProtocol),
       networkTopology: cleanText(plcSystem.networkTopology || legacyIo.networkTopology),
-      plcCpuRedundancyRequired: plcRedundancy ? 'Yes' : 'No',
+      plcCpuRedundancyRequired: plcRedundancy === 'NA - Not Applicable'
+        ? 'NA - Not Applicable'
+        : (plcRedundancy ? 'Yes' : 'No'),
       thermocoupleRtdInputs: toNonNegativeInteger(legacyIo.thermocoupleRtdInputs, 0),
       highSpeedCounterInputs: toNonNegativeInteger(legacyIo.highSpeedCounterInputs, 0),
       ioSpareCapacityPercent: toNonNegativeInteger(legacyIo.ioSpareCapacityPercent, 0),
-      powerSupplyRedundancy: legacyIo.powerSupplyRedundancy === 'Yes' ? 'Yes' : 'No',
+      powerSupplyRedundancy: ['Yes', 'No', 'NA - Not Applicable'].includes(cleanText(legacyIo.powerSupplyRedundancy))
+        ? cleanText(legacyIo.powerSupplyRedundancy)
+        : 'No',
     },
   };
 };
-
-const sanitizeVfdDetails = (vfdDetails = {}) => ({
-  ...(vfdDetails || {}),
-  mainIncomer: sanitizeMainIncomerDetails(vfdDetails?.mainIncomer),
-  additionalComponents: sanitizeComponentRequirementRows(vfdDetails?.additionalComponents),
-});
 
 const normalizeMccFeederType = (value) => {
   const cleanValue = cleanText(value);
@@ -580,6 +580,93 @@ const normalizeMccFeederType = (value) => {
   };
 
   return legacyMap[cleanValue] || cleanValue;
+};
+
+const sanitizeInquiryLoadRows = (rows = []) => (
+  (Array.isArray(rows) ? rows : []).map((row = {}, index) => ({
+    srNo: index + 1,
+    loadDescription: cleanText(row.loadDescription),
+    qty: toNonNegativeNumberOrNull(row.qty),
+    ratingKwHp: cleanText(row.ratingKwHp),
+    fullLoadCurrent: cleanText(row.fullLoadCurrent),
+    remarks: cleanText(row.remarks),
+  }))
+);
+
+const sanitizeFeederLoadDetails = ({
+  feederTypes = [],
+  groups = [],
+  legacyRowsByType = {},
+} = {}) => {
+  const selectedTypes = Array.from(new Set(
+    (Array.isArray(feederTypes) ? feederTypes : [])
+      .map(normalizeMccFeederType)
+      .filter(Boolean)
+  ));
+  const groupMap = new Map();
+
+  (Array.isArray(groups) ? groups : []).forEach((group = {}) => {
+    const feederType = normalizeMccFeederType(group.feederType);
+    if (!feederType || groupMap.has(feederType)) return;
+    groupMap.set(feederType, group);
+  });
+
+  return selectedTypes.map((feederType) => {
+    const group = groupMap.get(feederType) || {};
+    const rows = Array.isArray(group.loadDetails)
+      ? group.loadDetails
+      : (Array.isArray(legacyRowsByType?.[feederType])
+        ? legacyRowsByType[feederType]
+        : []);
+
+    return {
+      feederType,
+      loadDetails: sanitizeInquiryLoadRows(rows),
+    };
+  });
+};
+
+const getSanitizedFeederRows = (groups = [], feederType = '') => {
+  const normalizedType = normalizeMccFeederType(feederType);
+  const group = (Array.isArray(groups) ? groups : []).find(
+    (item = {}) => normalizeMccFeederType(item.feederType) === normalizedType
+  );
+  return Array.isArray(group?.loadDetails) ? group.loadDetails : [];
+};
+
+const sanitizeVfdDetails = (vfdDetails = {}) => {
+  const source = vfdDetails || {};
+  const outgoing = source.outgoingFeederDetails || {};
+  const feederTypes = Array.from(new Set(
+    (Array.isArray(outgoing.feederTypes) ? outgoing.feederTypes : [])
+      .map(normalizeMccFeederType)
+      .filter(Boolean)
+  ));
+
+  const feederLoadDetails = sanitizeFeederLoadDetails({
+    feederTypes,
+    groups: source.feederLoadDetails,
+    legacyRowsByType: {
+      'VFD Feeder': source.loadDetails,
+      'Soft Starter': source.softStarter?.loadDetails,
+    },
+  });
+
+  return {
+    ...source,
+    mainIncomer: sanitizeMainIncomerDetails(source.mainIncomer),
+    outgoingFeederDetails: {
+      ...outgoing,
+      feederTypes,
+    },
+    feederLoadDetails,
+    loadDetails: getSanitizedFeederRows(feederLoadDetails, 'VFD Feeder'),
+    softStarter: {
+      ...(source.softStarter || {}),
+      loadDetails: getSanitizedFeederRows(feederLoadDetails, 'Soft Starter'),
+    },
+    additionalComponents: sanitizeComponentRequirementRows(source.additionalComponents),
+  };
 };
 
 const sanitizeMccDetails = (mccDetails = {}) => {
@@ -605,6 +692,13 @@ const sanitizeMccDetails = (mccDetails = {}) => {
         ? 'Customer Scope'
         : ''
   );
+  const feederLoadDetails = sanitizeFeederLoadDetails({
+    feederTypes,
+    groups: source.feederLoadDetails,
+    legacyRowsByType: {
+      'DOL Starter': source.loadDetails,
+    },
+  });
 
   return {
     ...source,
@@ -632,7 +726,8 @@ const sanitizeMccDetails = (mccDetails = {}) => {
       ...outgoing,
       feederTypes,
     },
-    loadDetails: Array.isArray(source.loadDetails) ? source.loadDetails : [],
+    feederLoadDetails,
+    loadDetails: getSanitizedFeederRows(feederLoadDetails, 'DOL Starter'),
     layoutPreferences: source.layoutPreferences || {},
     notesAndSupport: {
       ...support,
@@ -653,31 +748,33 @@ const pickTextFields = (source = {}, fields = []) => fields.reduce((result, fiel
   return result;
 }, {});
 
+const normalizeTextArray = (value) => {
+  if (Array.isArray(value)) {
+    return Array.from(new Set(value.map((item) => cleanText(item)).filter(Boolean)));
+  }
+  if (value === undefined || value === null || value === '') return [];
+  return Array.from(new Set(String(value).split(',').map((item) => cleanText(item)).filter(Boolean)));
+};
+
 const sanitizeFlpEnclosureDetails = (details = {}) => ({
-  enclosureSelection: pickTextFields(details?.enclosureSelection, [
-    'enclosureType', 'application', 'installation', 'hazardousArea',
-    'outdoorInstallation', 'remarks',
-  ]),
   commonTechnical: pickTextFields(details?.commonTechnical, [
     'equipmentMounted', 'makeModel', 'voltage', 'currentRating',
-    'controlVoltage', 'cableEntryDirection', 'glandType',
-    'ambientTemperature', 'humidity', 'corrosiveAtmosphere',
+    'controlVoltage', 'glandType',
   ]),
   weatherproof: pickTextFields(details?.weatherproof, [
-    'material', 'ipRating', 'mounting', 'doorType', 'sunshadeCanopy',
-    'makeModel', 'thermostat', 'windowRequired', 'breatherDrain',
-    'paintingRal', 'corrosionClass', 'specialRequirement',
+    'material', 'ipRating', 'mounting', 'makeModel',
+    'windowRequired', 'specialRequirement',
   ]),
-  flameproof: pickTextFields(details?.flameproof, [
-    'areaClassification', 'zoneDivision', 'gasGroup', 'temperatureClass',
-    'gasName', 'certification', 'protectionConcept', 'material', 'ipRating',
-    'internalDevice', 'makeModel', 'breather', 'windowRequired',
-    'numberOfGlands', 'cableType',
-  ]),
-  preliminarySummary: pickTextFields(details?.preliminarySummary, [
-    'selectedEnclosureType', 'material', 'ipRating', 'areaRequirement',
-    'sizeRequirement', 'remarks',
-  ]),
+  flameproof: {
+    ...pickTextFields(details?.flameproof, [
+      'areaClassification', 'temperatureClass', 'protectionConcept',
+      'material', 'ipRating',
+    ]),
+    zoneDivision: normalizeTextArray(details?.flameproof?.zoneDivision),
+    gasGroup: normalizeTextArray(details?.flameproof?.gasGroup),
+    certification: normalizeTextArray(details?.flameproof?.certification)
+      .filter((item) => item !== 'IECEx'),
+  },
 });
 
 const RIO_IO_KEYS = new Set([
@@ -903,13 +1000,12 @@ const getInquiries = async (req, res, next) => {
   try {
     const {
       page = 1, limit = 10,
-      search, status, priority, productType, inquiryType, customerRef, financialYear,
+      search, status, productType, inquiryType, customerRef, financialYear,
     } = req.query;
 
     const query = {};
     applyFinancialYearFilter(query, financialYear);
     if (status)      query.status      = buildStatusQuery(status);
-    if (priority)    query.priority    = priority;
     if (productType) query.productType = buildProductTypeQuery(productType);
     if (inquiryType) query.inquiryType = inquiryType;
     if (customerRef && mongoose.Types.ObjectId.isValid(customerRef)) {
@@ -999,70 +1095,6 @@ const getInquiry = async (req, res, next) => {
     backFillAttachments(data);
 
     res.json({ success: true, data });
-  } catch (error) {
-    next(error);
-  }
-};
-
-// ─────────────────────────────────────────────────────────────────────────────
-// @desc  Download a complete inquiry PDF
-// @route GET /api/inquiries/:id/pdf
-// @access Private
-// ─────────────────────────────────────────────────────────────────────────────
-const downloadInquiryPdf = async (req, res, next) => {
-  try {
-    const identifier = String(req.params.id || '').trim();
-    const lookup = mongoose.Types.ObjectId.isValid(identifier)
-      ? { _id: identifier }
-      : { inquiryId: identifier };
-
-    const inquiry = await Inquiry.findOne(lookup)
-      .populate('createdBy', 'name email')
-      .populate('customerRef', 'customerId customerName companyName companyType contacts contactPerson email mobileNumber city address gstNumber notes')
-      .populate('projectReference', 'projectId projectName')
-      .populate('kickoffMeeting.attendees', 'name email role')
-      .populate('bomAttachments.uploadedBy', 'name email')
-      .lean();
-
-    if (!inquiry) {
-      return res.status(404).json({ success: false, message: 'Inquiry not found' });
-    }
-
-    const data = getLiveCustomerSnapshot(inquiry);
-
-    if (!data.contacts || data.contacts.length === 0) {
-      data.contacts = (data.contactPerson || data.mobileNumber || data.email)
-        ? [{
-            name: data.contactPerson || '',
-            phone: data.mobileNumber || '',
-            email: data.email || '',
-            designation: data.designation || '',
-          }]
-        : [];
-    }
-
-    backFillAttachments(data);
-
-    const pdfBuffer = buildInquiryPdf(data);
-    if (!Buffer.isBuffer(pdfBuffer) || pdfBuffer.length < 5 || pdfBuffer.subarray(0, 5).toString('latin1') !== '%PDF-') {
-      const generationError = new Error('Inquiry PDF generation failed');
-      generationError.statusCode = 500;
-      throw generationError;
-    }
-
-    const fileName = buildInquiryPdfFileName(data);
-    const encodedFileName = encodeURIComponent(fileName);
-
-    res.status(200);
-    res.setHeader('Content-Type', 'application/pdf');
-    res.setHeader('Content-Disposition', `attachment; filename="${fileName}"; filename*=UTF-8''${encodedFileName}`);
-    res.setHeader('Content-Length', String(pdfBuffer.length));
-    res.setHeader('Cache-Control', 'private, no-store, no-cache, must-revalidate');
-    res.setHeader('Pragma', 'no-cache');
-    res.setHeader('Expires', '0');
-    res.setHeader('X-Content-Type-Options', 'nosniff');
-    res.setHeader('Access-Control-Expose-Headers', 'Content-Disposition');
-    return res.end(pdfBuffer);
   } catch (error) {
     next(error);
   }
@@ -1178,18 +1210,18 @@ const createInquiry = async (req, res, next) => {
       panelAreaClass:          firstPresent(b.panelAreaClass, b.panelAreaClassification),
       ipRating:                firstPresent(b.ipRating, b.protectionClass),
       installationType:        b.installationType     || undefined,
+      hazardousArea:           b.hazardousArea        || undefined,
+      outdoorInstallation:     b.outdoorInstallation  || undefined,
       shortCircuitCapacity:    b.shortCircuitCapacity || undefined,
       busbarMaterial:          b.busbarMaterial       || undefined,
-      enclosureType:           firstPresent(b.enclosureType, b.enclosureMaterial, b.enclosureStandard),
-      enclosureMaterial:       firstPresent(b.enclosureMaterial, b.enclosureType, b.enclosureStandard),
-      enclosureStandard:       firstPresent(b.enclosureStandard, b.enclosureType, b.enclosureMaterial),
+      enclosureType:           b.enclosureType || undefined,
       enclosureMake:           b.enclosureMake        || undefined,
       panelStructure:          b.panelStructure       || undefined,
       switchgearMake:          b.switchgearMake       || undefined,
       customSwitchgearMake:    b.customSwitchgearMake || undefined,
-      panelColourRal: shouldPersistPanelColour(
-        firstPresent(b.enclosureType, b.enclosureMaterial, b.enclosureStandard)
-      ) ? (b.panelColourRal || undefined) : undefined,
+      panelColourRal: shouldPersistPanelColour(b.enclosureType)
+        ? (b.panelColourRal || undefined)
+        : undefined,
       cableEntry:              b.cableEntry           || undefined,
       cableGlandMaterial:      b.cableGlandMaterial   || undefined,
       barrierVariant:          b.barrierVariant        || undefined,
@@ -1265,42 +1297,11 @@ const createInquiry = async (req, res, next) => {
 
     const inquiry = await Inquiry.create(payload);
 
-    // 6. Notification (non-fatal — notificationService now has its own try/catch)
-    // await createNotification({
-    //   title:          'New Inquiry Added',
-    //   message:        dashboardMessages.inquiryCreated(inquiry),
-    //   type:           'info',
-    //   recipient:      req.user._id,
-    //   relatedInquiry: inquiry._id,
-    //   sendEmail:      true,
-    //   emailTo:        'project.intern@nexusautomech.com',
-    // });
-
-console.log(
-  'Inquiry Attachments:',
-  JSON.stringify(inquiry.attachments, null, 2)
-);
-
-
-    await createNotification({
-      title:          'New Inquiry Added',
-      message:        dashboardMessages.inquiryCreated(inquiry),
-      type:           'info',
-      recipient:      req.user._id,
-      relatedInquiry: inquiry._id,
-      sendEmail:      true,
-      // emailTo:        'project.intern@nexusautomech.com',
-      emailTo:        'ravi.darji@nexusautomech.com',
-      inquiry,
-      eventType:     'inquiry_created',
-    });
-
-
-    // 7. Customer Master is already resolved before inquiry creation so
-    // inquiry.customerRef remains the universal customer link.
-
+    // Resolve the protected creator reference before building any notification,
+    // email or PDF. This guarantees that every channel shows the actual logged-in
+    // user's name instead of an ObjectId or a generic fallback.
     const populatedInquiry = await Inquiry.findById(inquiry._id)
-      .populate('createdBy', 'name')
+      .populate('createdBy', 'name email')
       .populate('customerRef', 'customerId customerName companyType contacts contactPerson email mobileNumber city address gstNumber notes')
       .populate('bomAttachments.uploadedBy', 'name email');
 
@@ -1311,25 +1312,63 @@ console.log(
     }
     backFillAttachments(data);
 
-    // 8. WhatsApp notification (non-fatal — sendWhatsAppNotification never throws)
-    // Runs after populatedInquiry so createdBy.name is resolved.
+    // Build the same complete inquiry PDF used by the Download PDF action and
+    // attach it to the inquiry-created email. PDF failure is non-fatal because
+    // the inquiry itself has already been saved successfully.
+    const emailAttachments = [];
+    let generatedInquiryPdf = null;
+    try {
+      const pdfBuffer = buildInquiryPdf(data);
+      if (Buffer.isBuffer(pdfBuffer) && pdfBuffer.subarray(0, 5).toString('latin1') === '%PDF-') {
+        generatedInquiryPdf = {
+          filename: buildInquiryPdfFileName(data),
+          content: pdfBuffer,
+          contentType: 'application/pdf',
+        };
+        emailAttachments.push(generatedInquiryPdf);
+      }
+    } catch (pdfError) {
+      console.error('[createInquiry] Failed to build inquiry PDF attachment:', pdfError.message);
+    }
+
+    // Notification and email are non-fatal side effects.
+    await createNotification({
+      title:          'New Inquiry Added',
+      message:        dashboardMessages.inquiryCreated(data),
+      type:           'info',
+      recipient:      req.user._id,
+      relatedInquiry: inquiry._id,
+      sendEmail:      true,
+      emailTo:        process.env.INQUIRY_NOTIFICATION_EMAIL || 'ravi.darji@nexusautomech.com',
+      inquiry:        data,
+      eventType:      'inquiry_created',
+      emailAttachments,
+    });
+
+    // WhatsApp notification also receives the populated creator name.
     const waCreatedBy = data.createdBy?.name || req.user?.name || 'System';
     const whatsappMessage = buildNewInquiryWhatsAppMessage(data, waCreatedBy);
 
+    await sendWhatsAppNotification(whatsappMessage);
 
-    await sendWhatsAppNotification(
-      whatsappMessage
-    );
+    const whatsappAttachments = [...(data.attachments || [])];
+    if (generatedInquiryPdf) {
+      whatsappAttachments.push({
+        name: generatedInquiryPdf.filename,
+        mimeType: generatedInquiryPdf.contentType,
+        buffer: generatedInquiryPdf.content,
+      });
+    }
 
     await sendWhatsAppGroupWithAttachments(
       whatsappMessage,
-      data.attachments || []
+      whatsappAttachments
     );
-    
-res.status(201).json({
-  success: true,
-  data,
-});
+
+    res.status(201).json({
+      success: true,
+      data,
+    });
 
 } catch (error) {
   next(error);
@@ -1452,32 +1491,22 @@ const updateInquiry = async (req, res, next) => {
     setIfPresent('panelAreaClass',          firstPresent(b.panelAreaClass, b.panelAreaClassification));
     setIfPresent('ipRating',                firstPresent(b.ipRating, b.protectionClass));
     setIfPresent('installationType',        b.installationType);
+    setIfPresent('hazardousArea',           b.hazardousArea);
+    setIfPresent('outdoorInstallation',     b.outdoorInstallation);
     setIfPresent('shortCircuitCapacity',    b.shortCircuitCapacity);
     setIfPresent('busbarMaterial',          b.busbarMaterial);
-    setIfPresent('enclosureType',           firstPresent(b.enclosureType, b.enclosureMaterial, b.enclosureStandard));
-    setIfPresent('enclosureMaterial',       firstPresent(b.enclosureMaterial, b.enclosureType, b.enclosureStandard));
-    setIfPresent('enclosureStandard',       firstPresent(b.enclosureStandard, b.enclosureType, b.enclosureMaterial));
+    setIfPresent('enclosureType',           b.enclosureType);
     setIfPresent('enclosureMake',           b.enclosureMake);
     setIfPresent('panelStructure',          b.panelStructure);
     setIfPresent('switchgearMake',          b.switchgearMake);
     setIfPresent('customSwitchgearMake',    b.customSwitchgearMake);
 
-    if (
-      b.panelColourRal !== undefined ||
-      b.enclosureType !== undefined ||
-      b.enclosureMaterial !== undefined ||
-      b.enclosureStandard !== undefined
-    ) {
-      const effectiveEnclosureMaterial = firstPresent(
-        b.enclosureType,
-        b.enclosureMaterial,
-        b.enclosureStandard,
-        inquiry.enclosureType,
-        inquiry.enclosureMaterial,
-        inquiry.enclosureStandard
-      );
+    if (b.panelColourRal !== undefined || b.enclosureType !== undefined) {
+      const effectiveEnclosureType = b.enclosureType !== undefined
+        ? b.enclosureType
+        : inquiry.enclosureType;
 
-      updatePayload.panelColourRal = shouldPersistPanelColour(effectiveEnclosureMaterial)
+      updatePayload.panelColourRal = shouldPersistPanelColour(effectiveEnclosureType)
         ? (b.panelColourRal !== undefined ? b.panelColourRal : inquiry.panelColourRal || '')
         : '';
     }
@@ -1529,10 +1558,8 @@ const updateInquiry = async (req, res, next) => {
     setIfPresent('preparedBy',      b.preparedBy);
     setIfPresent('reviewStatus',    b.reviewStatus);
 
-    // ── Meta (estimator-editable only — keep whatever is sent)
+    // ── Meta
     setIfPresent('status',           requestedStatus);
-    setIfPresent('priority',         b.priority);
-    setIfPresent('estimatedValue',   b.estimatedValue);
     setIfPresent('nextFollowUpDate', b.nextFollowUpDate);
     setIfPresent('remarks',          b.remarks);
 
@@ -1841,6 +1868,72 @@ const updateInquiryStatus = async (req, res, next) => {
 };
 
 // ─────────────────────────────────────────────────────────────────────────────
+// @desc  Download a compact inquiry PDF
+// @route GET /api/inquiries/:id/pdf
+// @access Private — Inquiries - View/Edit
+// ─────────────────────────────────────────────────────────────────────────────
+const downloadInquiryPdf = async (req, res, next) => {
+  try {
+    const identifier = String(req.params.id || '').trim();
+    const lookup = mongoose.Types.ObjectId.isValid(identifier)
+      ? { _id: identifier }
+      : { inquiryId: identifier };
+
+    const inquiry = await Inquiry.findOne(lookup)
+      .populate('createdBy', 'name email')
+      .populate('customerRef', 'customerId customerName companyName companyType contacts contactPerson email mobileNumber city address gstNumber')
+      .populate('projectReference', 'projectId projectName')
+      .lean();
+
+    if (!inquiry) {
+      return res.status(404).json({ success: false, message: 'Inquiry not found' });
+    }
+
+    const data = getLiveCustomerSnapshot(inquiry);
+    delete data.notes;
+    delete data.enclosureMaterial;
+    delete data.enclosureStandard;
+    delete data.priority;
+    delete data.estimatedValue;
+    if (data.customerRef && typeof data.customerRef === 'object') {
+      delete data.customerRef.notes;
+    }
+
+    if (!Array.isArray(data.contacts) || data.contacts.length === 0) {
+      data.contacts = (data.contactPerson || data.mobileNumber || data.email)
+        ? [{
+            name: data.contactPerson || '',
+            phone: data.mobileNumber || '',
+            email: data.email || '',
+            designation: data.designation || '',
+          }]
+        : [];
+    }
+
+    const pdfBuffer = buildInquiryPdf(data);
+    if (!Buffer.isBuffer(pdfBuffer) || pdfBuffer.subarray(0, 5).toString('latin1') !== '%PDF-') {
+      const error = new Error('Inquiry PDF generation failed');
+      error.statusCode = 500;
+      throw error;
+    }
+
+    const fileName = buildInquiryPdfFileName(data);
+    res.status(200);
+    res.setHeader('Content-Type', 'application/pdf');
+    res.setHeader('Content-Disposition', `attachment; filename="${fileName}"; filename*=UTF-8''${encodeURIComponent(fileName)}`);
+    res.setHeader('Content-Length', String(pdfBuffer.length));
+    res.setHeader('Cache-Control', 'private, no-store, no-cache, must-revalidate');
+    res.setHeader('Pragma', 'no-cache');
+    res.setHeader('Expires', '0');
+    res.setHeader('X-Content-Type-Options', 'nosniff');
+    res.setHeader('Access-Control-Expose-Headers', 'Content-Disposition');
+    return res.end(pdfBuffer);
+  } catch (error) {
+    next(error);
+  }
+};
+
+// ─────────────────────────────────────────────────────────────────────────────
 // @desc  Set or clear an inquiry follow-up reminder
 // @route PATCH /api/inquiries/:id/follow-up
 // @access Private — Inquiries - Follow-up / Reminder
@@ -1919,11 +2012,11 @@ const getFollowUps = async (req, res, next) => {
 module.exports = {
   getInquiries,
   getInquiry,
-  downloadInquiryPdf,
   createInquiry,
   updateInquiry,
   updateInquiryStatus,
   updateInquiryFollowUp,
   getFollowUps,
+  downloadInquiryPdf,
   uploadMiddleware,
 };

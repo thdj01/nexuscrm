@@ -100,11 +100,10 @@ const validateMainIncomer = (details = {}, prefix = '', { required = true } = {}
   return errors;
 };
 
-const selectedEnclosureMaterial = (form = {}) =>
-  form.enclosureType || form.enclosureMaterial || form.enclosureStandard || '';
+const selectedEnclosureType = (form = {}) => form.enclosureType || '';
 
 const isPanelColourVisible = (form = {}) => {
-  const material = String(selectedEnclosureMaterial(form)).trim().toUpperCase();
+  const material = String(selectedEnclosureType(form)).trim().toUpperCase();
   return Boolean(material) && !['SS304', 'SS316'].includes(material);
 };
 
@@ -152,12 +151,12 @@ const validateCommonTechnicalFields = (form = {}, requiredFields = {}) => {
     addRequiredError(errors, 'ipRating', form.ipRating, 'Protection class (IP) is required');
   }
 
-  if (requiredFields.enclosureMaterial) {
+  if (requiredFields.enclosureType) {
     addRequiredError(
       errors,
-      'enclosureMaterial',
-      selectedEnclosureMaterial(form),
-      'Enclosure material is required'
+      'enclosureType',
+      selectedEnclosureType(form),
+      'Enclosure type is required'
     );
   }
 
@@ -240,7 +239,7 @@ export const validatePLCInquiry = (form = {}) => {
   const errors = validateCommonTechnicalFields(form, {
     panelAreaClassification: true,
     installationType: true,
-    enclosureMaterial: true,
+    enclosureType: true,
     cableEntry: true,
   });
 
@@ -488,6 +487,15 @@ export const validateVFDInquiry = (form = {}) => {
     validateMainIncomer(mainIncomer, 'vfdDetails.mainIncomer', { required: requireMainIncomer })
   );
 
+  const feederTypes = Array.isArray(vfdDetails.outgoingFeederDetails?.feederTypes)
+    ? vfdDetails.outgoingFeederDetails.feederTypes
+    : [];
+
+  if (feederTypes.length === 0) {
+    errors['vfdDetails.outgoingFeederDetails.feederTypes'] =
+      'At least one outgoing feeder type is required';
+  }
+
   if (
     vfdDetails.onsiteSupportRequired === 'Required' &&
     isBlank(vfdDetails.onsiteSupportDays)
@@ -527,7 +535,7 @@ export const validateMCCInquiry = (form = {}) => {
   const errors = validateCommonTechnicalFields(form, {
     panelAreaClassification: true,
     installationType: true,
-    enclosureMaterial: true,
+    enclosureType: true,
     cableEntry: true,
   });
 
@@ -567,13 +575,9 @@ export const validateMCCInquiry = (form = {}) => {
       'At least one outgoing feeder type is required';
   }
 
-  const hasDolStarter = feederTypes.some((value) =>
-    ['DOL', 'DOL STARTER'].includes(String(value || '').trim().toUpperCase())
-  );
-
-  if (hasDolStarter && isBlank(notesAndSupport.commissioningScope)) {
+  if (isBlank(notesAndSupport.commissioningScope)) {
     errors['mccDetails.notesAndSupport.commissioningScope'] =
-      'Commissioning scope is required for DOL selection';
+      'Commissioning scope is required';
   }
 
   return { errors };

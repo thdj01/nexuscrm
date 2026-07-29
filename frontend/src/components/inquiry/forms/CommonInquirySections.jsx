@@ -50,11 +50,14 @@ import {
   SWITCHGEAR_MAKE_OPTIONS,
   CONTROL_VOLTAGE_OPTIONS,
   MCC_PANEL_STRUCTURE_OPTIONS,
+  FLP_PANEL_STRUCTURE_OPTIONS,
   getInquiryTypeFromPanelTypes,
   getProductTypeFromPanelTypes,
   normalizeInquiryPanelTypes,
   hasInquiryPanelType,
 } from '../../../data/inquiryMasterData';
+
+const COMMISSIONING_SCOPE_OPTIONS = ['In Our Scope', 'Customer Scope'];
 
 const companyTypeOptions = [
   'End User',
@@ -105,7 +108,7 @@ const protectionClassOptions = [
   'IP67',
 ];
 
-const enclosureMaterialOptions = [
+const enclosureTypeOptions = [
   'CRCA / MS',
   'SS304',
   'SS316',
@@ -352,11 +355,17 @@ const togglePanelType = (setForm, panelType) => {
       ? selected.filter((value) => value !== panelType)
       : [...selected, panelType];
 
+    const addingFlp = panelType === 'FLP' && !selected.includes('FLP');
     return {
       ...prev,
       panelTypes: nextPanelTypes,
       inquiryType: getInquiryTypeFromPanelTypes(nextPanelTypes),
       productType: getProductTypeFromPanelTypes(nextPanelTypes),
+      ipRating: prev?.ipRating || 'IP65',
+      hazardousArea: addingFlp ? (prev?.hazardousArea || 'Yes') : prev?.hazardousArea,
+      outdoorInstallation: addingFlp ? (prev?.outdoorInstallation || '') : prev?.outdoorInstallation,
+      enclosureType: addingFlp && prev?.enclosureType === 'CRCA / MS' ? '' : prev?.enclosureType,
+      panelStructure: addingFlp && prev?.panelStructure === 'Back-to-Back' ? '' : prev?.panelStructure,
     };
   });
 };
@@ -688,6 +697,7 @@ const CommonInquirySections = ({
   citySuggestions = [],
   pastInquiries = [],
   customerOptions = [],
+  createdByName = '-',
   canCreateCustomer = false,
   canViewCustomer = false,
   onCustomerSelect,
@@ -735,6 +745,32 @@ const CommonInquirySections = ({
   const showVfdPanelSection = hasInquiryPanelType(panelTypes, 'VFD') && Boolean(vfdPanelContent);
   const showFlpSection = hasInquiryPanelType(panelTypes, 'FLP');
   const showRioSection = hasInquiryPanelType(panelTypes, 'RIO Box');
+  const mccCommissioningScope = form?.mccDetails?.notesAndSupport?.commissioningScope || '';
+  const updateMccCommissioningScope = (value) => {
+    setForm((previousForm) => ({
+      ...previousForm,
+      mccDetails: {
+        ...(previousForm?.mccDetails || {}),
+        notesAndSupport: {
+          ...(previousForm?.mccDetails?.notesAndSupport || {}),
+          commissioningScope: value,
+          commissioningSupportRequired:
+            value === 'In Our Scope'
+              ? 'Required'
+              : value === 'Customer Scope'
+                ? 'Not Required'
+                : value,
+          commissioningSupportDays: '',
+        },
+      },
+    }));
+  };
+  const generalEnclosureTypeOptions = showFlpSection
+    ? ['Cast Aluminium Alloy LM-6', 'SS304', 'SS316', 'FLP']
+    : enclosureTypeOptions;
+  const generalPanelStructureOptions = showFlpSection
+    ? FLP_PANEL_STRUCTURE_OPTIONS
+    : MCC_PANEL_STRUCTURE_OPTIONS;
   const showSharedTechnicalEngineering = hasInquiryPanelType(panelTypes, 'VFD');
   const specializedSectionCount =
     Number(showPlcSection) +
@@ -777,10 +813,10 @@ const CommonInquirySections = ({
   const showCustomSwitchgearMake = isOtherValue(switchgearMake);
   const showCustomSupplyVoltage = form?.supplyVoltage === 'Custom';
   const pastInquiryOptions = buildPastInquiryOptions(pastInquiries, form?.previousOrderRef || '');
-  const selectedEnclosureMaterial = form?.enclosureType || form?.enclosureMaterial || form?.enclosureStandard || '';
-  const normalizedEnclosureMaterial = String(selectedEnclosureMaterial).trim().toUpperCase();
-  const showPanelColourRal = Boolean(normalizedEnclosureMaterial) &&
-    !['SS304', 'SS316'].includes(normalizedEnclosureMaterial);
+  const selectedEnclosureType = form?.enclosureType || '';
+  const normalizedEnclosureType = String(selectedEnclosureType).trim().toUpperCase();
+  const showPanelColourRal = Boolean(normalizedEnclosureType) &&
+    !['SS304', 'SS316'].includes(normalizedEnclosureType);
   const showControlFeeder = isControlFeederSupplyVoltage(form?.supplyVoltage);
   const [bomDragActive, setBomDragActive] = React.useState(false);
 
@@ -931,6 +967,17 @@ const CommonInquirySections = ({
                   />
                 </FormField>
 
+                <FormField label="Created By">
+                  <Input
+                    value={createdByName || '-'}
+                    readOnly
+                    disabled
+                    aria-label="Created By"
+                    title="Automatically taken from the logged-in user"
+                    className="cursor-not-allowed border-gray-200 bg-gray-100 font-medium text-gray-600 opacity-80"
+                  />
+                </FormField>
+
                 {isRepeatOrder && (
                   <FormField
                     label="Previous Order Reference"
@@ -1019,6 +1066,7 @@ const CommonInquirySections = ({
               error={getError(errors, 'panelAreaClassification')}
             >
               <SearchableSelect
+                includeNotApplicable
                 value={form?.panelAreaClassification || form?.panelAreaClass || ''}
                 onChange={(value) => {
                   setForm((prev) => ({
@@ -1035,10 +1083,11 @@ const CommonInquirySections = ({
             </FormField>
 
             <FormField
-              label="Installation Type"
+              label={showFlpSection ? "Installation" : "Installation Type"}
               error={getError(errors, 'installationType')}
             >
               <SearchableSelect
+                includeNotApplicable
                 value={form?.installationType || ''}
                 onChange={(value) => setValue(setForm, 'installationType', value)}
                 options={normaliseSelectOptions(INSTALLATION_TYPE_OPTIONS)}
@@ -1048,11 +1097,46 @@ const CommonInquirySections = ({
               />
             </FormField>
 
+            {showFlpSection && (
+              <FormField
+                label="Hazardous Area"
+                error={getError(errors, 'hazardousArea')}
+              >
+                <SearchableSelect
+                  includeNotApplicable
+                  value={form?.hazardousArea || 'Yes'}
+                  onChange={(value) => setValue(setForm, 'hazardousArea', value)}
+                  options={['Yes', 'No']}
+                  placeholder="Select hazardous area"
+                  error={getError(errors, 'hazardousArea')}
+                  disabled={disabled}
+                />
+              </FormField>
+            )}
+
+            {showFlpSection && (
+              <FormField
+                label="Outdoor Installation"
+                error={getError(errors, 'outdoorInstallation')}
+              >
+                <SearchableSelect
+                  includeNotApplicable
+                  value={form?.outdoorInstallation || ''}
+                  onChange={(value) => setValue(setForm, 'outdoorInstallation', value)}
+                  options={['Yes', 'No']}
+                  placeholder="Select outdoor installation"
+                  error={getError(errors, 'outdoorInstallation')}
+                  disabled={disabled}
+                />
+              </FormField>
+            )}
+
             <FormField
               label="IP Rating"
               error={getError(errors, 'ipRating')}
             >
               <SearchableSelect
+                includeNotApplicable
                 value={form?.ipRating || ''}
                 onChange={(value) => setValue(setForm, 'ipRating', value)}
                 options={normaliseSelectOptions(protectionClassOptions)}
@@ -1064,10 +1148,11 @@ const CommonInquirySections = ({
 
             <FormField
               label="Enclosure Type"
-              error={getError(errors, 'enclosureType') || getError(errors, 'enclosureMaterial')}
+              error={getError(errors, 'enclosureType')}
             >
               <SearchableSelect
-                value={form?.enclosureType || form?.enclosureMaterial || form?.enclosureStandard || ''}
+                includeNotApplicable
+                value={form?.enclosureType || ''}
                 onChange={(value) => {
                   const normalizedValue = String(value || '').trim().toUpperCase();
                   const hidesMaterialColour = ['SS304', 'SS316'].includes(normalizedValue);
@@ -1075,14 +1160,12 @@ const CommonInquirySections = ({
                   setForm((prev) => ({
                     ...prev,
                     enclosureType: value,
-                    enclosureMaterial: value,
-                    enclosureStandard: value,
                     panelColourRal: hidesMaterialColour ? '' : prev.panelColourRal,
                   }));
                 }}
-                options={normaliseSelectOptions(enclosureMaterialOptions)}
+                options={normaliseSelectOptions(generalEnclosureTypeOptions)}
                 placeholder="Select enclosure type"
-                error={getError(errors, 'enclosureType') || getError(errors, 'enclosureMaterial')}
+                error={getError(errors, 'enclosureType')}
                 disabled={disabled}
               />
             </FormField>
@@ -1125,9 +1208,10 @@ const CommonInquirySections = ({
               error={getError(errors, 'panelStructure') || getError(errors, 'mccDetails.layoutPreferences.panelStructure')}
             >
               <SearchableSelect
+                includeNotApplicable
                 value={form?.panelStructure || form?.mccDetails?.layoutPreferences?.panelStructure || ''}
                 onChange={(value) => updateSharedPanelStructure(setForm, value)}
-                options={normaliseSelectOptions(MCC_PANEL_STRUCTURE_OPTIONS)}
+                options={normaliseSelectOptions(generalPanelStructureOptions)}
                 placeholder="Select panel structure"
                 error={getError(errors, 'panelStructure') || getError(errors, 'mccDetails.layoutPreferences.panelStructure')}
                 disabled={disabled}
@@ -1139,6 +1223,7 @@ const CommonInquirySections = ({
               error={getError(errors, 'cableEntry')}
             >
               <SearchableSelect
+                includeNotApplicable
                 value={form?.cableEntry || ''}
                 onChange={(value) => setValue(setForm, 'cableEntry', value)}
                 options={normaliseSelectOptions(cableEntryOptions)}
@@ -1148,11 +1233,30 @@ const CommonInquirySections = ({
               />
             </FormField>
 
+            {showMccSection && (
+              <FormField
+                label="Commissioning Scope"
+                required
+                error={getError(errors, 'mccDetails.notesAndSupport.commissioningScope')}
+              >
+                <SearchableSelect
+                  includeNotApplicable
+                  value={mccCommissioningScope}
+                  onChange={updateMccCommissioningScope}
+                  options={normaliseSelectOptions(COMMISSIONING_SCOPE_OPTIONS)}
+                  placeholder="Select commissioning scope"
+                  error={getError(errors, 'mccDetails.notesAndSupport.commissioningScope')}
+                  disabled={disabled}
+                />
+              </FormField>
+            )}
+
             <FormField
               label="Switchgear Make"
               error={switchgearMakeError}
             >
               <SearchableSelect
+                includeNotApplicable
                 value={switchgearMake}
                 onChange={(value) => updateSharedSwitchgearMake(setForm, value)}
                 options={normaliseSelectOptions(SWITCHGEAR_MAKE_OPTIONS)}
@@ -1262,7 +1366,7 @@ const CommonInquirySections = ({
           <SectionCard
             number={String(vfdPanelSectionIndex + 1)}
             title="VFD Panel"
-            subtitle="VFD and soft starter load details with selection options."
+            subtitle="Outgoing feeder load lists for the selected VFD panel feeders."
             icon={Zap}
             color="orange"
             active={activeSection === vfdPanelSectionIndex}
@@ -1327,6 +1431,7 @@ const CommonInquirySections = ({
                   error={getError(errors, 'supplyVoltage')}
                 >
                   <SearchableSelect
+                includeNotApplicable
                     value={form?.supplyVoltage || ''}
                     onChange={(value) => {
                       setForm((prev) => ({
@@ -1386,6 +1491,7 @@ const CommonInquirySections = ({
                   error={getError(errors, 'controlVoltage')}
                 >
                   <SearchableSelect
+                includeNotApplicable
                     value={form?.controlVoltage || ''}
                     onChange={(value) => setValue(setForm, 'controlVoltage', value)}
                     options={normaliseSelectOptions(CONTROL_VOLTAGE_OPTIONS)}
@@ -1400,6 +1506,7 @@ const CommonInquirySections = ({
                   error={getError(errors, 'frequency')}
                 >
                   <SearchableSelect
+                includeNotApplicable
                     value={form?.frequency || ''}
                     onChange={(value) => setValue(setForm, 'frequency', value)}
                     options={normaliseSelectOptions(frequencyOptions)}
@@ -1414,6 +1521,7 @@ const CommonInquirySections = ({
                   error={getError(errors, 'shortCircuitCapacity')}
                 >
                   <SearchableSelect
+                includeNotApplicable
                     value={form?.shortCircuitCapacity || ''}
                     onChange={(value) => setValue(setForm, 'shortCircuitCapacity', value)}
                     options={normaliseSelectOptions(shortCircuitOptions)}
@@ -1494,6 +1602,8 @@ const CommonInquirySections = ({
               </span>
             </div>
             <div className="grid grid-cols-1 gap-5 md:grid-cols-2 xl:grid-cols-3">
+              {!showFlpSection && (
+                <>
               <FormField
                 label="Certification Required"
                 error={getError(errors, 'certificationRequired')}
@@ -1522,6 +1632,9 @@ const CommonInquirySections = ({
                   </div>
                 </div>
               </FormField>
+
+                </>
+              )}
 
               <FormField
                 label="Drawings / SLD Attached"
@@ -1700,8 +1813,8 @@ const CommonInquirySections = ({
       <div ref={(el) => setSectionRef?.(technicalBomSectionIndex, el)}>
         <SectionCard
           number={String(technicalBomSectionIndex + 1)}
-          title="Technical BoM Documents"
-          subtitle="Upload estimator Technical BoM documents and maintain revision history."
+          title="Technical BOM Documents"
+          subtitle="Upload estimator Technical BOM documents and maintain revision history."
           icon={UploadCloud}
           color="green"
           active={activeSection === technicalBomSectionIndex}
@@ -1710,29 +1823,29 @@ const CommonInquirySections = ({
             <div className="mb-4 flex flex-col gap-2 border-b border-emerald-100 pb-3 sm:flex-row sm:items-center sm:justify-between">
               <div>
                 <h4 className="text-base font-bold text-slate-900">
-                  Estimator Technical BoM Upload
+                  Estimator Technical BOM Upload
                 </h4>
                 <p className="mt-1 text-xs text-slate-500">
-                  The first upload becomes Technical BoM Submitted with Revision 0. Later uploads create Revision 1, Revision 2 and so on.
+                  The first upload becomes Technical BOM Submitted with Revision 0. Later uploads create Revision 1, Revision 2 and so on.
                 </p>
               </div>
               <span className="rounded-full bg-emerald-100 px-3 py-1 text-xs font-semibold text-emerald-700">
-                Auto status: Technical BoM Submitted / Revision
+                Auto status: Technical BOM Submitted / Revision
               </span>
             </div>
 
             {form?.statusDetails?.bomSubmission?.versionLabel && (
               <div className="mb-4 rounded-xl border border-emerald-100 bg-white px-4 py-3 text-sm text-emerald-800">
-                Latest Technical BoM status: <span className="font-semibold">{getBomVersionLabel(form.statusDetails.bomSubmission)}</span>
+                Latest Technical BOM status: <span className="font-semibold">{getBomVersionLabel(form.statusDetails.bomSubmission)}</span>
                 {form.statusDetails.bomSubmission.remarks ? ` — ${form.statusDetails.bomSubmission.remarks}` : ''}
               </div>
             )}
 
-            <FormField label="Technical BoM Remarks" error={getError(errors, 'bomSubmissionRemarks')}>
+            <FormField label="Technical BOM Remarks" error={getError(errors, 'bomSubmissionRemarks')}>
               <Textarea
                 value={form?.bomSubmissionRemarks || ''}
                 onChange={(event) => setValue(setForm, 'bomSubmissionRemarks', event.target.value)}
-                placeholder="Enter Technical BoM remarks"
+                placeholder="Enter Technical BOM remarks"
                 disabled={disabled}
                 rows={2}
               />
@@ -1760,7 +1873,7 @@ const CommonInquirySections = ({
             >
               <UploadCloud className="mx-auto mb-3 h-10 w-10 text-emerald-500" />
               <h4 className="text-sm font-semibold text-gray-800">
-                Drag & drop Technical BoM files here
+                Drag & drop Technical BOM files here
               </h4>
               <p className="mt-1 text-xs text-gray-500">
                 PDF, Word, Excel, images or ZIP files are supported.
@@ -1775,14 +1888,14 @@ const CommonInquirySections = ({
                 className="mt-4"
               >
                 <UploadCloud size={15} />
-                Browse Technical BoM Files
+                Browse Technical BOM Files
               </Button>
             </div>
 
             {Array.isArray(savedBomAttachments) && savedBomAttachments.length > 0 && (
               <div className="mt-5">
                 <h4 className="mb-2 text-sm font-semibold text-gray-800">
-                  Saved Technical BoM Attachments
+                  Saved Technical BOM Attachments
                 </h4>
                 <div className="space-y-2">
                   {savedBomAttachments.map((file, index) => (
@@ -1801,7 +1914,7 @@ const CommonInquirySections = ({
                           rel="noreferrer"
                           className="block truncate text-sm font-medium text-blue-700 hover:underline"
                         >
-                          {file?.name || file?.originalName || file?.storedName || 'Technical BoM Attachment'}
+                          {file?.name || file?.originalName || file?.storedName || 'Technical BOM Attachment'}
                         </a>
                         <p className="text-xs text-gray-500">
                           {getBomVersionLabel(file)}
@@ -1814,7 +1927,7 @@ const CommonInquirySections = ({
                         onClick={() => removeSavedBomAttachment(index)}
                         disabled={disabled}
                         className="inline-flex h-8 w-8 items-center justify-center rounded-lg border border-red-100 bg-red-50 text-red-600 transition hover:bg-red-100 disabled:cursor-not-allowed disabled:opacity-50"
-                        title="Remove saved Technical BoM attachment"
+                        title="Remove saved Technical BOM attachment"
                       >
                         <X size={15} />
                       </button>
@@ -1827,7 +1940,7 @@ const CommonInquirySections = ({
             {Array.isArray(bomStagedFiles) && bomStagedFiles.length > 0 && (
               <div className="mt-5">
                 <h4 className="mb-2 text-sm font-semibold text-gray-800">
-                  Technical BoM Files Ready to Upload
+                  Technical BOM Files Ready to Upload
                 </h4>
                 <div className="space-y-2">
                   {bomStagedFiles.map((file, index) => (
@@ -1840,7 +1953,7 @@ const CommonInquirySections = ({
                       </span>
                       <div className="min-w-0 flex-1">
                         <p className="truncate text-sm font-medium text-gray-800">
-                          {file?.name || 'Technical BoM Attachment'}
+                          {file?.name || 'Technical BOM Attachment'}
                         </p>
                         <p className="text-xs text-gray-500">
                           {typeof formatBytes === 'function' ? formatBytes(file?.size || file?.sizeBytes || 0) : ''}
@@ -1851,7 +1964,7 @@ const CommonInquirySections = ({
                         onClick={() => removeBomStagedFile(index)}
                         disabled={disabled}
                         className="inline-flex h-8 w-8 items-center justify-center rounded-lg border border-red-100 bg-red-50 text-red-600 transition hover:bg-red-100 disabled:cursor-not-allowed disabled:opacity-50"
-                        title="Remove staged Technical BoM file"
+                        title="Remove staged Technical BOM file"
                       >
                         <X size={15} />
                       </button>

@@ -144,6 +144,7 @@ function buildInquiryEmailHtml(inquiry = {}, options = {}) {
     intro: copy.intro,
     rows: [
       ['Inquiry ID', escapeHtml(inquiry.inquiryId || '-')],
+      ['Created By', escapeHtml(resolveCreatedByName(inquiry))],
       ['Customer Name', escapeHtml(resolveCustomerName(inquiry))],
       ['Project Name', escapeHtml(resolveInquiryProjectName(inquiry))],
       ['Site Location', escapeHtml(resolveSiteLocation(inquiry))],
@@ -349,7 +350,7 @@ function buildProjectCreatedAfterKickoffEmailHtml(project = {}, inquiry = {}, wo
 }
 
 const dashboardMessages = {
-  inquiryCreated: (inquiry = {}) => `Inquiry ${inquiry.inquiryId || '-'} created for ${resolveCustomerName(inquiry)}`,
+  inquiryCreated: (inquiry = {}) => `Inquiry ${inquiry.inquiryId || '-'} created by ${resolveCreatedByName(inquiry)} for ${resolveCustomerName(inquiry)}`,
   inquiryUpdated: (inquiry = {}) => `Inquiry ${inquiry.inquiryId || '-'} updated successfully`,
   inquiryStatusChanged: (inquiry = {}) => `Inquiry ${inquiry.inquiryId || '-'} moved to ${inquiry.status || '-'}`,
   inquiryDeleted: (inquiry = {}) => `Inquiry ${inquiry.inquiryId || '-'} deleted successfully`,

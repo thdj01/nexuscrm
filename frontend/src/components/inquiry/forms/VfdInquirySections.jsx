@@ -1,18 +1,20 @@
 import React from 'react';
-import { Zap, Gauge, ListChecks, Wrench, Headphones } from 'lucide-react';
+import { ListChecks, Wrench, Headphones } from 'lucide-react';
 
 import {
   FormField,
   Input,
   SearchableSelect,
+  MultiCheckSelect,
 } from '../../common/FormComponents.extended';
 
 import ComponentRequirementTable from '../tables/ComponentRequirementTable';
-import InquiryLoadTable from '../tables/InquiryLoadTable';
+import OutgoingFeederLoadLists from '../tables/OutgoingFeederLoadLists';
 import MainIncomerSection from './MainIncomerSection';
 
 import {
   VFD_COMPONENT_ROWS,
+  MCC_FEEDER_TYPE_OPTIONS,
   defaultVfdDetails,
 } from '../../../data/inquiryMasterData';
 
@@ -24,6 +26,12 @@ import {
   setPanelMainIncomerDetails,
 } from '../../../utils/mainIncomerUtils';
 
+import {
+  getFeederLoadRows,
+  hasMeaningfulFeederLoadRows,
+  normalizeFeederLoadDetails,
+} from '../../../utils/feederLoadDetails';
+
 const normaliseOptions = (options = []) =>
   options.map((option) => {
     if (typeof option === 'string') return { value: option, label: option };
@@ -31,6 +39,18 @@ const normaliseOptions = (options = []) =>
   });
 
 const getError = (errors = {}, key) => errors?.[key] || '';
+
+const normalizeFeederType = (value) => {
+  const cleanValue = String(value || '').trim();
+  const legacyMap = {
+    DOL: 'DOL Starter',
+    'Star-Delta': 'Star-Delta Starter',
+    VFD: 'VFD Feeder',
+    Servo: 'Servo Feeder',
+  };
+
+  return legacyMap[cleanValue] || cleanValue;
+};
 
 const VFD_PREFERRED_BRAND_OPTIONS = [
   'Siemens',
@@ -45,13 +65,41 @@ const getVfdDetails = (form = {}) => {
   const current = form.vfdDetails || {};
   const currentSoftStarter = current.softStarter || {};
 
+  const currentOutgoing = current.outgoingFeederDetails || {};
+  const selectedFeederTypes = Array.from(new Set(
+    (Array.isArray(currentOutgoing.feederTypes)
+      ? currentOutgoing.feederTypes
+      : defaults.outgoingFeederDetails.feederTypes
+    ).map(normalizeFeederType).filter(Boolean)
+  ));
+
+  const feederTypes = selectedFeederTypes.length > 0
+    ? selectedFeederTypes
+    : (hasMeaningfulFeederLoadRows(current.loadDetails) ? ['VFD Feeder'] : []);
+
+  const feederLoadDetails = normalizeFeederLoadDetails({
+    feederTypes,
+    groups: current.feederLoadDetails,
+    legacyRowsByType: {
+      'VFD Feeder': current.loadDetails,
+      'Soft Starter': currentSoftStarter.loadDetails,
+    },
+  });
+
   return {
     ...defaults,
     ...current,
-    loadDetails:
-      Array.isArray(current.loadDetails) && current.loadDetails.length > 0
+    outgoingFeederDetails: {
+      ...defaults.outgoingFeederDetails,
+      ...currentOutgoing,
+      feederTypes,
+    },
+    feederLoadDetails,
+    loadDetails: getFeederLoadRows(feederLoadDetails, 'VFD Feeder').length
+      ? getFeederLoadRows(feederLoadDetails, 'VFD Feeder')
+      : (Array.isArray(current.loadDetails) && current.loadDetails.length > 0
         ? current.loadDetails
-        : defaults.loadDetails,
+        : defaults.loadDetails),
     additionalComponents:
       Array.isArray(current.additionalComponents) && current.additionalComponents.length > 0
         ? current.additionalComponents
@@ -68,10 +116,11 @@ const getVfdDetails = (form = {}) => {
     softStarter: {
       ...defaults.softStarter,
       ...currentSoftStarter,
-      loadDetails:
-        Array.isArray(currentSoftStarter.loadDetails) && currentSoftStarter.loadDetails.length > 0
+      loadDetails: getFeederLoadRows(feederLoadDetails, 'Soft Starter').length
+        ? getFeederLoadRows(feederLoadDetails, 'Soft Starter')
+        : (Array.isArray(currentSoftStarter.loadDetails) && currentSoftStarter.loadDetails.length > 0
           ? currentSoftStarter.loadDetails
-          : defaults.softStarter.loadDetails,
+          : defaults.softStarter.loadDetails),
       options: {
         ...defaults.softStarter.options,
         ...(currentSoftStarter.options || {}),
@@ -106,44 +155,6 @@ const updateSupportField = (setForm, field, value) => {
   updateVfdDetails(setForm, {
     [field]: value,
   });
-};
-
-const VfdOptionCheckboxes = ({ values = {}, onChange, disabled = false }) => {
-  const options = [
-    { key: 'inputChoke', label: 'Input Choke' },
-    { key: 'outputChoke', label: 'Output Choke' },
-    { key: 'heavyDuty', label: 'Heavy Duty' },
-    { key: 'normalDuty', label: 'Normal Duty' },
-    { key: 'bop', label: 'BOP' },
-  ];
-
-  return (
-    <div className="flex flex-wrap gap-3">
-      {options.map((option) => {
-        const checked = Boolean(values?.[option.key]);
-
-        return (
-          <label
-            key={option.key}
-            className={`flex min-h-[42px] min-w-[135px] flex-1 cursor-pointer items-center gap-3 rounded-xl border px-4 py-2 text-sm font-medium transition ${
-              checked
-                ? 'border-orange-400 bg-orange-50 text-orange-700 shadow-sm'
-                : 'border-slate-300 bg-white text-slate-700 hover:border-orange-300 hover:bg-orange-50/40'
-            } ${disabled ? 'cursor-not-allowed opacity-60' : ''}`}
-          >
-            <input
-              type="checkbox"
-              checked={checked}
-              onChange={(event) => onChange?.(option.key, event.target.checked)}
-              disabled={disabled}
-              className="h-4 w-4 rounded border-slate-400 text-orange-600 focus:ring-orange-500"
-            />
-            <span className="whitespace-nowrap">{option.label}</span>
-          </label>
-        );
-      })}
-    </div>
-  );
 };
 
 const PanelSubsection = ({ icon: Icon, title, subtitle, color = 'orange', compact = false, children }) => {
@@ -186,6 +197,13 @@ const VfdInquirySections = ({
 }) => {
   const vfdDetails = getVfdDetails(form);
   const mainIncomer = vfdDetails.mainIncomer || {};
+  const outgoingFeederDetails = vfdDetails.outgoingFeederDetails || {};
+  const feederTypeOptions = Array.from(new Set([
+    ...MCC_FEEDER_TYPE_OPTIONS,
+    ...(Array.isArray(outgoingFeederDetails.feederTypes)
+      ? outgoingFeederDetails.feederTypes
+      : []),
+  ]));
   const sourcePanelType = getSameAsAboveSourcePanelType(form?.panelTypes, 'VFD');
   const sourceMainIncomer = getPanelMainIncomerDetails(form, sourcePanelType);
   const sourceMainIncomerSignature = getMainIncomerValueSignature(sourceMainIncomer);
@@ -278,116 +296,90 @@ const VfdInquirySections = ({
       />
 
       <PanelSubsection
-        icon={Zap}
-        title="VFD"
-        subtitle="VFD load list and selection requirements."
-        color="orange"
+        icon={ListChecks}
+        title="Outgoing Feeder Types"
+        subtitle="Select all outgoing feeder types required in the VFD panel."
+        color="blue"
       >
-        <div className="space-y-5">
-          <div>
-            <h5 className="mb-3 text-sm font-semibold text-slate-800">Load List</h5>
-            <InquiryLoadTable
-              rows={vfdDetails.loadDetails}
-              onChange={(updatedRows) =>
-                updateVfdDetails(setForm, {
-                  loadDetails: updatedRows,
-                })
-              }
-              showRemarks
-              errors={errors}
-              minRows={0}
-              disabled={disabled}
-            />
-          </div>
-
-          <div className="border-t border-slate-200 pt-4">
-            <h5 className="mb-3 text-sm font-semibold text-slate-800">VFD Options</h5>
-            <VfdOptionCheckboxes
-              values={vfdDetails.vfdOptions}
-              onChange={(field, value) =>
-                updateVfdDetails(setForm, (current) => ({
-                  vfdOptions: {
-                    ...(current.vfdOptions || {}),
-                    [field]: value,
+        <FormField
+          label="Outgoing Feeder Type"
+          required
+          error={getError(errors, 'vfdDetails.outgoingFeederDetails.feederTypes')}
+        >
+          <MultiCheckSelect
+            value={outgoingFeederDetails.feederTypes || []}
+            onChange={(value) =>
+              updateVfdDetails(setForm, (current) => {
+                const feederLoadDetails = normalizeFeederLoadDetails({
+                  feederTypes: value,
+                  groups: current.feederLoadDetails,
+                  legacyRowsByType: {
+                    'VFD Feeder': current.loadDetails,
+                    'Soft Starter': current.softStarter?.loadDetails,
                   },
-                }))
-              }
-              disabled={disabled}
-            />
-          </div>
-        </div>
-      </PanelSubsection>
+                });
 
-      <PanelSubsection
-        icon={Gauge}
-        title="Soft Starter"
-        subtitle="Soft starter load list and selection requirements."
-        color="green"
-      >
-        <div className="space-y-5">
-          <div>
-            <h5 className="mb-3 text-sm font-semibold text-slate-800">Load List</h5>
-            <InquiryLoadTable
-              rows={vfdDetails.softStarter.loadDetails}
-              onChange={(updatedRows) =>
-                updateVfdDetails(setForm, (current) => ({
+                return {
+                  outgoingFeederDetails: {
+                    ...(current.outgoingFeederDetails || {}),
+                    feederTypes: value,
+                  },
+                  feederLoadDetails,
+                  loadDetails: getFeederLoadRows(feederLoadDetails, 'VFD Feeder'),
                   softStarter: {
                     ...(current.softStarter || {}),
-                    loadDetails: updatedRows,
+                    loadDetails: getFeederLoadRows(feederLoadDetails, 'Soft Starter'),
                   },
-                }))
-              }
-              showRemarks
-              errors={errors}
-              minRows={0}
-              disabled={disabled}
-            />
-          </div>
-
-          <div className="border-t border-slate-200 pt-4">
-            <h5 className="mb-3 text-sm font-semibold text-slate-800">Soft Starter Options</h5>
-            <VfdOptionCheckboxes
-              values={vfdDetails.softStarter.options}
-              onChange={(field, value) =>
-                updateVfdDetails(setForm, (current) => ({
-                  softStarter: {
-                    ...(current.softStarter || {}),
-                    options: {
-                      ...(current.softStarter?.options || {}),
-                      [field]: value,
-                    },
-                  },
-                }))
-              }
-              disabled={disabled}
-            />
-          </div>
-        </div>
+                };
+              })
+            }
+            options={normaliseOptions(feederTypeOptions)}
+            placeholder="Select outgoing feeder types"
+            disabled={disabled}
+            error={getError(errors, 'vfdDetails.outgoingFeederDetails.feederTypes')}
+          />
+        </FormField>
       </PanelSubsection>
+
+      <OutgoingFeederLoadLists
+        feederTypes={outgoingFeederDetails.feederTypes || []}
+        groups={vfdDetails.feederLoadDetails || []}
+        onChange={(feederLoadDetails) =>
+          updateVfdDetails(setForm, (current) => ({
+            feederLoadDetails,
+            loadDetails: getFeederLoadRows(feederLoadDetails, 'VFD Feeder'),
+            softStarter: {
+              ...(current.softStarter || {}),
+              loadDetails: getFeederLoadRows(feederLoadDetails, 'Soft Starter'),
+            },
+          }))
+        }
+        errors={errors}
+        disabled={disabled}
+        tone="orange"
+      />
     </div>
   );
 
   const technicalContent = (
     <div className="space-y-4">
-      <PanelSubsection
-        icon={ListChecks}
-        title="Motor / Load Technical Summary"
-        subtitle="VFD load details with rating, current and remarks."
-        color="blue"
-      >
-        <InquiryLoadTable
-          rows={vfdDetails.loadDetails}
-          onChange={(updatedRows) =>
-            updateVfdDetails(setForm, {
-              loadDetails: updatedRows,
-            })
-          }
-          showRemarks
-          errors={errors}
-          minRows={0}
-          disabled={disabled}
-        />
-      </PanelSubsection>
+      <OutgoingFeederLoadLists
+        feederTypes={outgoingFeederDetails.feederTypes || []}
+        groups={vfdDetails.feederLoadDetails || []}
+        onChange={(feederLoadDetails) =>
+          updateVfdDetails(setForm, (current) => ({
+            feederLoadDetails,
+            loadDetails: getFeederLoadRows(feederLoadDetails, 'VFD Feeder'),
+            softStarter: {
+              ...(current.softStarter || {}),
+              loadDetails: getFeederLoadRows(feederLoadDetails, 'Soft Starter'),
+            },
+          }))
+        }
+        errors={errors}
+        disabled={disabled}
+        tone="blue"
+      />
     </div>
   );
 

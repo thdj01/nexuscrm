@@ -212,7 +212,7 @@ const getCustomer = async (req, res, next) => {
       })
         .sort({ createdAt: -1 })
         .limit(10)
-        .select('inquiryId customerRef customerName status productType estimatedValue createdAt'),
+        .select('inquiryId customerRef customerName status productType createdAt'),
       Project.find({
         $or: [
           { customerRef: customer._id },

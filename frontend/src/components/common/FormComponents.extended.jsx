@@ -12,7 +12,7 @@ import { ChevronDown, X, Check, Search, Plus, Trash2, AlertCircle } from 'lucide
 
 // ─── Re-export base primitives so consumers need only one import ──────────────
 export {
-  FormField, Input, Select, Textarea, Button, Card, CardHeader, CardBody,
+  FormField, Input, Select, Textarea, Button, Card, CardHeader, CardBody, RequiredIndicatorProvider,
 } from './FormComponents';
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -227,6 +227,8 @@ export const SearchableSelect = ({
   error,
   className = '',
   disabled = false,
+  includeNotApplicable = false,
+  notApplicableValue = 'NA - Not Applicable',
 }) => {
   const [open,      setOpen]      = useState(false);
   const [search,    setSearch]    = useState('');
@@ -235,9 +237,12 @@ export const SearchableSelect = ({
   const searchRef = useRef(null);
   const listRef   = useRef(null);
 
-  const normalised = options.map(o =>
+  const baseOptions = options.map(o =>
     typeof o === 'string' ? { value: o, label: o } : o
   );
+  const normalised = includeNotApplicable && !baseOptions.some((option) => option?.value === notApplicableValue)
+    ? [...baseOptions, { value: notApplicableValue, label: notApplicableValue }]
+    : baseOptions;
 
   const selectedLabel = normalised.find(o => o.value === value)?.label || '';
 

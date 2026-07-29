@@ -26,6 +26,7 @@ import {
   Button,
   SectionCard,
   StepProgressBar,
+  RequiredIndicatorProvider,
 } from '../components/common/FormComponents.extended';
 
 import CommonInquirySections, { INQUIRY_STATUS_OPTIONS } from '../components/inquiry/forms/CommonInquirySections';
@@ -103,13 +104,13 @@ const defaultForm = () => ({
   frequency:                  '50 Hz',
   panelAreaClassification:    '',
   panelAreaClass:             '',
-  ipRating:                   '',
+  ipRating:                   'IP65',
   installationType:           '',
+  hazardousArea:              'Yes',
+  outdoorInstallation:        '',
   shortCircuitCapacity:       '',
   busbarMaterial:             'Aluminium',
   enclosureType:              '',
-  enclosureMaterial:          '',
-  enclosureStandard:          '',
   enclosureMake:              '',
   panelStructure:             '',
   switchgearMake:             '',
@@ -162,6 +163,13 @@ const defaultForm = () => ({
 });
 
 
+const normalizeCheckboxFlag = (value) => {
+  if (typeof value === 'boolean') return value;
+  return ['true', 'yes', 'required', '1'].includes(
+    String(value ?? '').trim().toLowerCase()
+  );
+};
+
 const isControlFeederSupplyVoltage = (value = '') => {
   const normalized = String(value || '')
     .toUpperCase()
@@ -185,7 +193,7 @@ const BASE_INQUIRY_STEPPER_SECTIONS = {
   technical: { label: 'Technical', color: 'cyan' },
   engineering: { label: 'Engineering', color: 'amber' },
   attachments: { label: 'Attachments', color: 'rose' },
-  technicalBom: { label: 'Technical BoM', color: 'green' },
+  technicalBom: { label: 'Technical BOM', color: 'green' },
 };
 
 const hasSelectedPanelType = (panelTypes) => (
@@ -369,7 +377,9 @@ const normaliseInquiryLoadRows = (rows = [], type = 'VFD') => {
 
 const sanitizeComponentRequirementRows = (rows = []) => (
   (Array.isArray(rows) ? rows : []).map((row = {}) => {
-    const required = row.required === 'Yes' ? 'Yes' : 'No';
+    const required = ['Yes', 'No', 'NA - Not Applicable'].includes(row.required)
+      ? row.required
+      : 'No';
     const base = {
       component: row.component || '',
       required,
@@ -492,14 +502,14 @@ const sanitizePlcDetailsForSubmit = (plcDetails = {}) => {
     },
     automationRequirements: sanitizeComponentRequirementRows(source.automationRequirements || []),
     supportRequirements: {
-      onsiteSupportRequired: support.onsiteSupportRequired === 'Required'
-        ? 'Required'
+      onsiteSupportRequired: ['Required', 'Not Required', 'NA - Not Applicable'].includes(support.onsiteSupportRequired)
+        ? support.onsiteSupportRequired
         : 'Not Required',
       onsiteSupportDays: support.onsiteSupportRequired === 'Required'
         ? toNonNegativeIntegerValue(support.onsiteSupportDays, 0)
         : 0,
-      commissioningSupportRequired: support.commissioningSupportRequired === 'Required'
-        ? 'Required'
+      commissioningSupportRequired: ['Required', 'Not Required', 'NA - Not Applicable'].includes(support.commissioningSupportRequired)
+        ? support.commissioningSupportRequired
         : 'Not Required',
       commissioningSupportDays: support.commissioningSupportRequired === 'Required'
         ? toNonNegativeIntegerValue(support.commissioningSupportDays, 0)
@@ -513,11 +523,15 @@ const sanitizePlcDetailsForSubmit = (plcDetails = {}) => {
       analogOutputs: sanitizedIoRequirements.ao.quantity,
       communicationProtocol: plcSystem.communicationProtocol || legacyIo.communicationProtocol || '',
       networkTopology: plcSystem.networkTopology || legacyIo.networkTopology || '',
-      plcCpuRedundancyRequired: plcRedundancy ? 'Yes' : 'No',
+      plcCpuRedundancyRequired: plcRedundancy === 'NA - Not Applicable'
+        ? 'NA - Not Applicable'
+        : (plcRedundancy ? 'Yes' : 'No'),
       thermocoupleRtdInputs: toNonNegativeIntegerValue(legacyIo.thermocoupleRtdInputs, 0),
       highSpeedCounterInputs: toNonNegativeIntegerValue(legacyIo.highSpeedCounterInputs, 0),
       ioSpareCapacityPercent: toNonNegativeIntegerValue(legacyIo.ioSpareCapacityPercent, 0),
-      powerSupplyRedundancy: legacyIo.powerSupplyRedundancy === 'Yes' ? 'Yes' : 'No',
+      powerSupplyRedundancy: ['Yes', 'No', 'NA - Not Applicable'].includes(legacyIo.powerSupplyRedundancy)
+        ? legacyIo.powerSupplyRedundancy
+        : 'No',
     },
   };
 };
@@ -652,7 +666,9 @@ const ensureNestedDefaults = (record = {}) => {
     'plcController', 'make', 'customMake', 'modelNumber',
     'communicationProtocol', 'networkTopology', 'hmiSize', 'hmiMake',
     'ethernetSwitchPort', 'ethernetSwitchType',
-  ].some((field) => String(existingPlcSystem?.[field] ?? '').trim() !== '');
+  ].some((field) => String(existingPlcSystem?.[field] ?? '').trim() !== '') ||
+    normalizeCheckboxFlag(existingPlcSystem?.hmiRequired) ||
+    normalizeCheckboxFlag(existingPlcSystem?.ethernetSwitchRequired);
 
   const makeIoRequirementRow = (key, legacyQuantityKey) => {
     const existingRow = existingPlcIoRequirements?.[key] || {};
@@ -718,7 +734,9 @@ const ensureNestedDefaults = (record = {}) => {
     redundancy: {
       ...defaultPlc.redundancy,
       plcRedundancy:
-        legacyPlcIoDetails.plcCpuRedundancyRequired === 'Yes' ? 'Hot' : '',
+        legacyPlcIoDetails.plcCpuRedundancyRequired === 'NA - Not Applicable'
+          ? 'NA - Not Applicable'
+          : (legacyPlcIoDetails.plcCpuRedundancyRequired === 'Yes' ? 'Hot' : ''),
       ...existingRedundancy,
     },
     supportRequirements: {
@@ -735,6 +753,16 @@ const ensureNestedDefaults = (record = {}) => {
   const vfdDetails = {
     ...defaultVfd,
     ...(record.vfdDetails || {}),
+    outgoingFeederDetails: {
+      ...defaultVfd.outgoingFeederDetails,
+      ...(record.vfdDetails?.outgoingFeederDetails || {}),
+      feederTypes: Array.from(new Set(
+        (Array.isArray(record.vfdDetails?.outgoingFeederDetails?.feederTypes)
+          ? record.vfdDetails.outgoingFeederDetails.feederTypes
+          : []
+        ).map(normalizeMccFeederType).filter(Boolean)
+      )),
+    },
     mainIncomer: {
       ...defaultVfd.mainIncomer,
       ...existingVfdMainIncomer,
@@ -815,13 +843,14 @@ const ensureNestedDefaults = (record = {}) => {
     },
   };
 
+  const legacyFlpSelection = record.flpEnclosureDetails?.enclosureSelection || {};
+  const existingFlameproof = record.flpEnclosureDetails?.flameproof || {};
+  const normalizeFlpMultiValue = (value) => {
+    if (Array.isArray(value)) return value.filter(Boolean);
+    if (!value) return [];
+    return String(value).split(',').map((item) => item.trim()).filter(Boolean);
+  };
   const flpEnclosureDetails = {
-    ...defaultFlp,
-    ...(record.flpEnclosureDetails || {}),
-    enclosureSelection: {
-      ...defaultFlp.enclosureSelection,
-      ...(record.flpEnclosureDetails?.enclosureSelection || {}),
-    },
     commonTechnical: {
       ...defaultFlp.commonTechnical,
       ...(record.flpEnclosureDetails?.commonTechnical || {}),
@@ -829,14 +858,17 @@ const ensureNestedDefaults = (record = {}) => {
     weatherproof: {
       ...defaultFlp.weatherproof,
       ...(record.flpEnclosureDetails?.weatherproof || {}),
+      ipRating: record.flpEnclosureDetails?.weatherproof?.ipRating || 'IP65',
     },
     flameproof: {
       ...defaultFlp.flameproof,
-      ...(record.flpEnclosureDetails?.flameproof || {}),
-    },
-    preliminarySummary: {
-      ...defaultFlp.preliminarySummary,
-      ...(record.flpEnclosureDetails?.preliminarySummary || {}),
+      ...existingFlameproof,
+      areaClassification: existingFlameproof.areaClassification || 'Hazardous Area',
+      zoneDivision: normalizeFlpMultiValue(existingFlameproof.zoneDivision),
+      gasGroup: normalizeFlpMultiValue(existingFlameproof.gasGroup),
+      certification: normalizeFlpMultiValue(existingFlameproof.certification)
+        .filter((item) => item !== 'IECEx'),
+      ipRating: existingFlameproof.ipRating || 'IP65',
     },
   };
 
@@ -918,10 +950,12 @@ const ensureNestedDefaults = (record = {}) => {
 
     panelAreaClassification: record.panelAreaClassification || record.panelAreaClass || '',
     panelAreaClass: record.panelAreaClass || record.panelAreaClassification || '',
+    ipRating: record.ipRating || 'IP65',
+    installationType: record.installationType || legacyFlpSelection.installation || '',
+    hazardousArea: record.hazardousArea || legacyFlpSelection.hazardousArea || 'Yes',
+    outdoorInstallation: record.outdoorInstallation || legacyFlpSelection.outdoorInstallation || '',
 
-    enclosureType: record.enclosureType || record.enclosureMaterial || record.enclosureStandard || '',
-    enclosureMaterial: record.enclosureMaterial || record.enclosureType || record.enclosureStandard || '',
-    enclosureStandard: record.enclosureStandard || record.enclosureType || record.enclosureMaterial || '',
+    enclosureType: record.enclosureType || legacyFlpSelection.enclosureType || '',
     enclosureMake: record.enclosureMake || '',
     panelStructure: record.panelStructure || record.mccDetails?.layoutPreferences?.panelStructure || '',
     switchgearMake: fallbackSwitchgearMake,
@@ -1134,9 +1168,6 @@ useEffect(() => {
           industryType:     displayIndustryType,
           customIndustryType,
           contacts,
-          // Ensure budget/priority not displayed (remove from loaded data)
-          estimatedValue: undefined,
-          priority:        undefined,
         }));
 
         // Load already-saved attachments (back-filled by controller)
@@ -1584,7 +1615,7 @@ const handleDrop = (e) => {
         [
           'inquiryType', 'panelTypes', 'inquiryDate', 'status',
           'panelAreaClassification', 'panelAreaClass', 'installationType',
-          'ipRating', 'enclosureType', 'enclosureMaterial', 'enclosureMake',
+          'ipRating', 'enclosureType', 'enclosureMake',
           'panelStructure', 'cableEntry', 'switchgearMake', 'customSwitchgearMake',
         ].includes(key)
       ) return indexes.general;
@@ -1742,6 +1773,15 @@ const handleDrop = (e) => {
 
       const sanitizedVfdDetails = {
         ...rawVfdDetails,
+        outgoingFeederDetails: {
+          ...(rawVfdDetails.outgoingFeederDetails || {}),
+          feederTypes: Array.from(new Set(
+            (Array.isArray(rawVfdDetails.outgoingFeederDetails?.feederTypes)
+              ? rawVfdDetails.outgoingFeederDetails.feederTypes
+              : []
+            ).map(normalizeMccFeederType).filter(Boolean)
+          )),
+        },
         mainIncomer: sanitizeMainIncomerForSubmit(rawVfdDetails.mainIncomer),
         switchgearMake: includesVfd ? sharedSwitchgearMake : rawVfdDetails.switchgearMake,
         customSwitchgearMake: includesVfd ? sharedCustomSwitchgearMake : rawVfdDetails.customSwitchgearMake,
@@ -1794,11 +1834,9 @@ const handleDrop = (e) => {
       const compatibilityShortCircuitCapacity =
         form.shortCircuitCapacity || (includesMcc ? mccMainIncomer.kaRating || '' : '');
 
-      const resolvedEnclosureMaterial = String(
-        form.enclosureType || form.enclosureMaterial || form.enclosureStandard || ''
-      ).trim();
-      const shouldSubmitPanelColour = Boolean(resolvedEnclosureMaterial) &&
-        !['SS304', 'SS316'].includes(resolvedEnclosureMaterial.toUpperCase());
+      const resolvedEnclosureType = String(form.enclosureType || '').trim();
+      const shouldSubmitPanelColour = Boolean(resolvedEnclosureType) &&
+        !['SS304', 'SS316'].includes(resolvedEnclosureType.toUpperCase());
 
      const compatibilityControlMatrix =
         includesPlc
@@ -1837,9 +1875,7 @@ const handleDrop = (e) => {
         panelAreaClassification: form.panelAreaClassification || form.panelAreaClass || '',
         panelAreaClass: form.panelAreaClass || form.panelAreaClassification || '',
 
-        enclosureType: form.enclosureType || form.enclosureMaterial || form.enclosureStandard || '',
-        enclosureMaterial: form.enclosureMaterial || form.enclosureType || form.enclosureStandard || '',
-        enclosureStandard: form.enclosureStandard || form.enclosureType || form.enclosureMaterial || '',
+        enclosureType: form.enclosureType || '',
         enclosureMake: form.enclosureMake || '',
         panelStructure: form.panelStructure || sanitizedMccDetails.layoutPreferences?.panelStructure || '',
         switchgearMake: sharedSwitchgearMake,
@@ -1905,8 +1941,6 @@ const handleDrop = (e) => {
         panelAreaClass: preparedPayload.panelAreaClass,
 
         enclosureType: preparedPayload.enclosureType,
-        enclosureMaterial: preparedPayload.enclosureMaterial,
-        enclosureStandard: preparedPayload.enclosureStandard,
         enclosureMake: preparedPayload.enclosureMake,
         panelStructure: preparedPayload.panelStructure,
         switchgearMake: preparedPayload.switchgearMake,
@@ -1931,8 +1965,6 @@ const handleDrop = (e) => {
         customVoltage: undefined,
         ipRatingCustom: undefined,
 
-        estimatedValue: undefined,
-        priority: undefined,
 
         keptAttachments: savedAttachments,
         keptBomAttachments: savedBomAttachments,
@@ -1967,6 +1999,70 @@ const handleDrop = (e) => {
     }
   };
 
+  const handleDownloadPdf = async () => {
+    if (!id || downloadingPdf) return;
+
+    try {
+      setDownloadingPdf(true);
+      const response = await API.get(`/inquiries/${encodeURIComponent(id)}/pdf`, {
+        responseType: 'arraybuffer',
+        headers: { Accept: 'application/pdf' },
+      });
+
+      const contentType = String(response.headers?.['content-type'] || '').toLowerCase();
+      const bytes = new Uint8Array(response.data || []);
+      const signature = String.fromCharCode(...bytes.slice(0, 5));
+
+      if (!contentType.includes('application/pdf') || signature !== '%PDF-') {
+        let message = 'The server did not return a valid PDF file';
+        try {
+          const parsed = JSON.parse(new TextDecoder('utf-8').decode(response.data));
+          message = parsed.message || message;
+        } catch (_) {
+          // Keep the clear fallback message.
+        }
+        throw new Error(message);
+      }
+
+      const disposition = response.headers?.['content-disposition'] || '';
+      const encodedName = disposition.match(/filename\*=UTF-8''([^;]+)/i)?.[1];
+      const quotedName = disposition.match(/filename="([^"]+)"/i)?.[1];
+      const plainName = disposition.match(/filename=([^;]+)/i)?.[1]?.trim();
+      const fallbackName = form.inquiryId ? `Inquiry-${form.inquiryId}.pdf` : 'Inquiry.pdf';
+      const fileName = encodedName
+        ? decodeURIComponent(encodedName)
+        : (quotedName || plainName || fallbackName);
+
+      const blob = new Blob([bytes], { type: 'application/pdf' });
+      const url = window.URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = url;
+      link.download = fileName.replace(/[\\/:*?"<>|]+/g, '-');
+      link.style.display = 'none';
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+      window.setTimeout(() => window.URL.revokeObjectURL(url), 10_000);
+      toast.success('Inquiry PDF downloaded successfully');
+    } catch (error) {
+      let message = error?.message || 'Failed to download inquiry PDF';
+      const responseData = error.response?.data;
+      if (responseData instanceof ArrayBuffer) {
+        try {
+          const parsed = JSON.parse(new TextDecoder('utf-8').decode(responseData));
+          message = parsed.message || message;
+        } catch (_) {
+          // Keep the most useful available message.
+        }
+      } else if (responseData?.message) {
+        message = responseData.message;
+      }
+      toast.error(message);
+    } finally {
+      setDownloadingPdf(false);
+    }
+  };
+
   const customerOptions = customers
     .map((customer) => {
       const value = customer?._id || customer?.id || '';
@@ -1993,6 +2089,15 @@ const handleDrop = (e) => {
     address: form.siteAddress || '',
   };
 
+  const createdByDisplayName = isExistingInquiry
+    ? (
+        form?.createdBy?.name ||
+        form?.createdBy?.email ||
+        form?.createdByName ||
+        '-'
+      )
+    : (user?.name || user?.email || '-');
+
   const currentUserId = String(user?._id || user?.id || '');
   const selectedCustomerCreatorId = String(
     selectedCustomerForDetails?.createdBy?._id ||
@@ -2009,86 +2114,6 @@ const handleDrop = (e) => {
     ))
   );
 
-  const handleDownloadPdf = async () => {
-    if (!id || downloadingPdf) return;
-
-    try {
-      setDownloadingPdf(true);
-      const response = await API.get(`/inquiries/${encodeURIComponent(id)}/pdf`, {
-        responseType: 'arraybuffer',
-        headers: { Accept: 'application/pdf' },
-      });
-
-      const contentType = String(response.headers?.['content-type'] || '').toLowerCase();
-      if (!contentType.includes('application/pdf')) {
-        const decoder = new TextDecoder('utf-8');
-        const text = decoder.decode(response.data);
-        let message = 'The server did not return a PDF file';
-        try {
-          const parsed = JSON.parse(text);
-          message = parsed.message || message;
-        } catch (_) {
-          // Use the clear fallback message above.
-        }
-        throw new Error(message);
-      }
-
-      const bytes = new Uint8Array(response.data);
-      const signature = String.fromCharCode(...bytes.slice(0, 5));
-      if (signature !== '%PDF-') {
-        throw new Error('The generated file is not a valid PDF');
-      }
-
-      const disposition = response.headers?.['content-disposition'] || '';
-      const encodedName = disposition.match(/filename\*=UTF-8''([^;]+)/i)?.[1];
-      const quotedName = disposition.match(/filename="([^"]+)"/i)?.[1];
-      const plainName = disposition.match(/filename=([^;]+)/i)?.[1]?.trim();
-      const fallbackName = form.inquiryId
-        ? `Inquiry-${form.inquiryId}.pdf`
-        : 'Inquiry.pdf';
-      const fileName = encodedName
-        ? decodeURIComponent(encodedName)
-        : (quotedName || plainName || fallbackName);
-
-      const blob = new Blob([bytes], { type: 'application/pdf' });
-      const url = window.URL.createObjectURL(blob);
-      const link = document.createElement('a');
-      link.href = url;
-      link.download = fileName.replace(/[\/:*?"<>|]+/g, '-');
-      link.style.display = 'none';
-      document.body.appendChild(link);
-      link.click();
-      link.remove();
-      window.setTimeout(() => window.URL.revokeObjectURL(url), 10_000);
-      toast.success('Inquiry PDF downloaded successfully');
-    } catch (error) {
-      let message = error?.message || 'Failed to download inquiry PDF';
-      const responseData = error.response?.data;
-
-      if (responseData instanceof ArrayBuffer) {
-        try {
-          const parsed = JSON.parse(new TextDecoder('utf-8').decode(responseData));
-          message = parsed.message || message;
-        } catch (_) {
-          // Keep the most useful available error message.
-        }
-      } else if (responseData instanceof Blob) {
-        try {
-          const parsed = JSON.parse(await responseData.text());
-          message = parsed.message || message;
-        } catch (_) {
-          // Keep the most useful available error message.
-        }
-      } else if (responseData?.message) {
-        message = responseData.message;
-      }
-
-      toast.error(message);
-    } finally {
-      setDownloadingPdf(false);
-    }
-  };
-
   // ─── Page loading ───────────────────────────────────────────────────────────
   if (pageLoading) {
     return (
@@ -2104,7 +2129,8 @@ const handleDrop = (e) => {
   // RENDER
   // ─────────────────────────────────────────────────────────────────────────────
   return (
-    <div className="fade-in min-w-0 max-w-none space-y-0 overflow-x-visible pb-0">
+    <RequiredIndicatorProvider>
+      <div className="fade-in min-w-0 max-w-none space-y-0 overflow-x-visible pb-0">
 
       {/* ── Sticky Page Header + Step Progress Bar ───────────────────────────── */}
       <PageHeader bleed="main" bleedTop={false} contentClassName="px-1 sm:px-2">
@@ -2127,32 +2153,31 @@ const handleDrop = (e) => {
                 ? 'Review the inquiry details below'
                 : isEdit
                   ? 'Update the inquiry details below'
-                  : 'Complete all sections. Fields marked * are required.'}
+                  : 'Complete all required sections before submitting.'}
             </p>
           </div>
 
-          {isView && (
-            <div className="flex w-full flex-col gap-2 sm:flex-row xl:w-auto">
+          {isExistingInquiry && (
+            <div className="flex w-full flex-col gap-2 sm:flex-row lg:w-auto">
               <Button
                 type="button"
                 variant="outline"
-                onClick={handleDownloadPdf}
                 loading={downloadingPdf}
-                disabled={downloadingPdf}
-                className="w-full justify-center sm:w-auto"
+                onClick={handleDownloadPdf}
+                className="w-full justify-center lg:w-auto"
               >
                 {!downloadingPdf && <Download size={16} />}
-                {downloadingPdf ? 'Generating PDF…' : 'Download PDF'}
+                {downloadingPdf ? 'Generating PDF...' : 'Download PDF'}
               </Button>
 
-              {canEditInquiry && (
+              {isView && canEditInquiry && (
                 <Button
                   type="button"
                   variant="primary"
                   onClick={() => navigate(`/inquiries/${id}/edit`)}
-                  className="w-full justify-center sm:w-auto"
+                  className="w-full justify-center lg:w-auto"
                 >
-                  <Edit2 size={16} /> Edit Inquiry
+                  <Edit2 size={16} /> Edit
                 </Button>
               )}
             </div>
@@ -2273,6 +2298,7 @@ const handleDrop = (e) => {
     citySuggestions={citySuggestions}
     pastInquiries={pastInquiries}
     customerOptions={customerOptions}
+    createdByName={createdByDisplayName}
     canCreateCustomer={canCreateCustomer}
     canViewCustomer={canViewCustomer}
     onCustomerSelect={handleCustomerSelect}
@@ -2317,19 +2343,7 @@ const handleDrop = (e) => {
       />
     ) : null}
 
-    technicalContent={(
-      <div className="space-y-4">
-        {hasInquiryPanelType(form.panelTypes, 'VFD') && (
-          <VfdInquirySections
-            form={form}
-            setForm={setSprint2Form}
-            errors={errors}
-            disabled={formDisabled}
-            mode="technical"
-          />
-        )}
-      </div>
-    )}
+    technicalContent={null}
 
     engineeringContent={(
       <div className="space-y-4">
@@ -2448,7 +2462,8 @@ const handleDrop = (e) => {
           canChangeCreatedBy={canEditCustomer}
         />
       </Modal>
-    </div>
+      </div>
+    </RequiredIndicatorProvider>
   );
 };
 

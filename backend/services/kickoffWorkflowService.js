@@ -13,6 +13,7 @@ const {
   sendWhatsAppNotification,
   sendWhatsAppGroupNotification,
 } = require('./whatsappService');
+const { getActiveWhatsAppConfig } = require('./whatsappSettingsService');
 const { SUPPORTED_PROJECT_DEPARTMENTS, isDepartmentAllowedForPanel } = require('../config/projectPlanningCatalog');
 const { initialTasksForDepartment } = require('../utils/projectPlanning');
 
@@ -169,6 +170,10 @@ function snapshotInquiry(inquiry) {
   const obj = inquiry.toObject ? inquiry.toObject() : inquiry;
   const clone = { ...obj };
   delete clone.__v;
+  delete clone.priority;
+  delete clone.estimatedValue;
+  delete clone.enclosureMaterial;
+  delete clone.enclosureStandard;
   return clone;
 }
 
@@ -255,10 +260,11 @@ async function sendKickoffNotifications({ inquiry, workflow, attendees }) {
   const customerEmail = getInquiryCustomerEmail(inquiry);
   const inquiryMadeByName = await getInquiryMadeByName(inquiry);
   const summaryWhatsAppMessage = buildKickoffSummaryWhatsAppMessage(inquiry, workflow, attendees, inquiryMadeByName);
+  const whatsappConfig = getActiveWhatsAppConfig();
 
   // Send one clear kickoff summary message to the configured WhatsApp group, if configured.
   // This message contains assigned persons, date/time, meeting link, and agenda.
-  if (process.env.WHATSAPP_GROUP_ID) {
+  if (whatsappConfig.isEnabled && whatsappConfig.groupId) {
     const groupResult = await sendWhatsAppGroupNotification(summaryWhatsAppMessage);
     const groupStatus = normaliseNotificationResult(groupResult);
 
@@ -271,7 +277,7 @@ async function sendKickoffNotifications({ inquiry, workflow, attendees }) {
       channel: 'WhatsApp',
       recipientType: 'Internal Team',
       recipientName: 'Kick-off Notification Group',
-      recipientContact: process.env.WHATSAPP_GROUP_ID,
+      recipientContact: whatsappConfig.groupId,
       status: groupStatus,
       message: groupStatus === 'Queued'
         ? 'Kickoff summary queued for WhatsApp group until client becomes ready'
@@ -280,9 +286,8 @@ async function sendKickoffNotifications({ inquiry, workflow, attendees }) {
     });
   }
 
-  // Also send the same summary to WHATSAPP_NOTIFY_NUMBER, if configured.
-  // This is useful when the company wants a fixed WhatsApp number to always receive kickoff alerts.
-  if (process.env.WHATSAPP_NOTIFY_NUMBER) {
+  // Also send the same summary to the direct number saved in Integration Settings.
+  if (whatsappConfig.isEnabled && whatsappConfig.notifyNumber) {
     const notifyResult = await sendWhatsAppNotification(summaryWhatsAppMessage);
     const notifyStatus = normaliseNotificationResult(notifyResult);
 
@@ -294,8 +299,8 @@ async function sendKickoffNotifications({ inquiry, workflow, attendees }) {
     await appendWorkflowLog(workflow, {
       channel: 'WhatsApp',
       recipientType: 'Internal Team',
-      recipientName: 'WHATSAPP_NOTIFY_NUMBER',
-      recipientContact: process.env.WHATSAPP_NOTIFY_NUMBER,
+      recipientName: 'Configured WhatsApp Notification Number',
+      recipientContact: whatsappConfig.notifyNumber,
       status: notifyStatus,
       message: notifyStatus === 'Queued'
         ? 'Kickoff summary queued for configured WhatsApp number until client becomes ready'
@@ -603,7 +608,6 @@ async function createProjectFromWorkflow(workflow) {
     panelSelections,
     planningGrids,
     planningTasks: planningGrids.flatMap((grid) => grid.planningTasks),
-    orderValue: inquiry.estimatedValue || 0,
     orderDate: new Date(),
     expectedDeliveryDate: inquiry.deliveryDate,
     projectEndDate: inquiry.deliveryDate,

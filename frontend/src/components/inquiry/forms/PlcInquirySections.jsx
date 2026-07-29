@@ -316,6 +316,7 @@ const PlcInquirySections = ({
             }
           >
             <SearchableSelect
+              includeNotApplicable
               value={ioDetails.communicationProtocol || ''}
               onChange={(value) =>
                 updateIoField(setForm, 'communicationProtocol', value)
@@ -338,6 +339,7 @@ const PlcInquirySections = ({
             }
           >
             <SearchableSelect
+              includeNotApplicable
               value={ioDetails.networkTopology || ''}
               onChange={(value) =>
                 updateIoField(setForm, 'networkTopology', value)
@@ -359,6 +361,7 @@ const PlcInquirySections = ({
             error={programmingDevelopmentScopeError}
           >
             <SearchableSelect
+              includeNotApplicable
               value={plcDetails.programmingDevelopmentScope || ''}
               onChange={(value) =>
                 updatePlcField(setForm, 'programmingDevelopmentScope', value)
@@ -375,6 +378,7 @@ const PlcInquirySections = ({
             error={getError(errors, 'barrierVariant')}
           >
             <SearchableSelect
+              includeNotApplicable
               value={form?.barrierVariant || ''}
               onChange={(value) =>
                 setForm((prev) => ({

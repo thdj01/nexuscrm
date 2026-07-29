@@ -157,6 +157,12 @@ const createIoRow = (quantity = '') => ({
   hart: false,
 });
 
+const normalizeCheckboxValue = (value) => {
+  if (typeof value === 'boolean') return value;
+  const normalized = String(value ?? '').trim().toLowerCase();
+  return ['true', 'yes', 'required', '1'].includes(normalized);
+};
+
 const getPlcDetails = (form = {}) => {
   const defaults = defaultPlcDetails();
   const source = form?.plcDetails || {};
@@ -174,6 +180,8 @@ const getPlcDetails = (form = {}) => {
     plcSystem: {
       ...defaults.plcSystem,
       ...(source.plcSystem || {}),
+      hmiRequired: normalizeCheckboxValue(source.plcSystem?.hmiRequired),
+      ethernetSwitchRequired: normalizeCheckboxValue(source.plcSystem?.ethernetSwitchRequired),
     },
     servoDetails: {
       ...defaults.servoDetails,
@@ -326,24 +334,35 @@ const Subsection = ({ icon: Icon, title, subtitle, color = 'indigo', children })
   );
 };
 
-const CheckboxControl = ({ checked, onChange, label = 'Required', disabled = false }) => (
-  <label
-    className={`flex min-h-[42px] cursor-pointer items-center gap-3 rounded-lg border px-3 py-2 text-sm transition ${
-      checked
-        ? 'border-blue-300 bg-blue-50 text-blue-700'
-        : 'border-slate-200 bg-white text-slate-700 hover:bg-slate-50'
-    } ${disabled ? 'cursor-not-allowed opacity-60' : ''}`}
-  >
-    <input
-      type="checkbox"
-      checked={Boolean(checked)}
-      onChange={(event) => onChange(event.target.checked)}
-      disabled={disabled}
-      className="h-4 w-4 rounded border-slate-300 text-blue-600 focus:ring-blue-500"
-    />
-    <span>{label}</span>
-  </label>
-);
+const CheckboxControl = ({ checked, onChange, label = 'Required', disabled = false }) => {
+  const checkboxId = React.useId();
+  const isChecked = normalizeCheckboxValue(checked);
+
+  return (
+    <div
+      className={`flex min-h-[42px] items-center gap-3 rounded-lg border px-3 py-2 text-sm transition ${
+        isChecked
+          ? 'border-blue-300 bg-blue-50 text-blue-700'
+          : 'border-slate-200 bg-white text-slate-700 hover:bg-slate-50'
+      } ${disabled ? 'cursor-not-allowed opacity-60' : ''}`}
+    >
+      <input
+        id={checkboxId}
+        type="checkbox"
+        checked={isChecked}
+        onChange={(event) => onChange(Boolean(event.currentTarget.checked))}
+        disabled={disabled}
+        className="h-4 w-4 cursor-pointer rounded border-slate-300 text-blue-600 focus:ring-blue-500 disabled:cursor-not-allowed"
+      />
+      <label
+        htmlFor={checkboxId}
+        className={disabled ? 'cursor-not-allowed select-none' : 'cursor-pointer select-none'}
+      >
+        {label}
+      </label>
+    </div>
+  );
+};
 
 const PlcPanelInquirySection = ({
   form,
@@ -416,19 +435,60 @@ const PlcPanelInquirySection = ({
   const showCommissioningSupportDays = supportRequirements.commissioningSupportRequired === 'Required';
 
   const updateSystemField = (field, value, additionalChanges = {}) => {
-    updatePlcDetails(setForm, (currentDetails) => ({
-      ...currentDetails,
-      plcSystem: {
-        ...(currentDetails.plcSystem || {}),
-        [field]: value,
-        ...additionalChanges,
-      },
-      ioDetails: field === 'communicationProtocol'
-        ? { ...(currentDetails.ioDetails || {}), communicationProtocol: value }
-        : field === 'networkTopology'
-          ? { ...(currentDetails.ioDetails || {}), networkTopology: value }
-          : currentDetails.ioDetails,
-    }));
+    updatePlcDetails(setForm, (currentDetails) => {
+      const legacyComponent = field === 'hmiRequired'
+        ? 'HMI / Touch Panel'
+        : field === 'ethernetSwitchRequired'
+          ? 'Industrial Network Switch'
+          : '';
+
+      let automationRequirements = currentDetails.automationRequirements;
+
+      if (legacyComponent) {
+        const currentRows = Array.isArray(currentDetails.automationRequirements)
+          ? currentDetails.automationRequirements
+          : [];
+        const requiredValue = normalizeCheckboxValue(value) ? 'Yes' : 'No';
+        let rowFound = false;
+
+        automationRequirements = currentRows.map((row) => {
+          if (row.component !== legacyComponent) return row;
+          rowFound = true;
+          return {
+            ...row,
+            required: requiredValue,
+          };
+        });
+
+        if (!rowFound) {
+          automationRequirements = [
+            ...automationRequirements,
+            {
+              component: legacyComponent,
+              required: requiredValue,
+              preferredBrand: '',
+              suggestedModelRange: '',
+              remarks: '',
+            },
+          ];
+        }
+      }
+
+      return {
+        ...currentDetails,
+        plcSystem: {
+          ...(currentDetails.plcSystem || {}),
+          [field]: value,
+          ...additionalChanges,
+        },
+        automationRequirements,
+        ioDetails: field === 'communicationProtocol'
+          ? { ...(currentDetails.ioDetails || {}), communicationProtocol: value }
+          : field === 'networkTopology'
+            ? { ...(currentDetails.ioDetails || {}), networkTopology: value }
+            : currentDetails.ioDetails,
+      };
+    });
   };
 
   React.useEffect(() => {
@@ -524,6 +584,7 @@ const PlcPanelInquirySection = ({
                 error={getError(errors, 'plcDetails.plcSystem.make')}
               >
                 <SearchableSelect
+                  includeNotApplicable
                   value={plcSystem.make || ''}
                   onChange={(value) => updateSystemField(
                     'make',
@@ -572,6 +633,7 @@ const PlcPanelInquirySection = ({
                 error={getError(errors, 'plcDetails.plcSystem.communicationProtocol')}
               >
                 <SearchableSelect
+                  includeNotApplicable
                   value={plcSystem.communicationProtocol || ''}
                   onChange={(value) => updateSystemField('communicationProtocol', value)}
                   options={normaliseOptions(communicationProtocolOptions)}
@@ -587,6 +649,7 @@ const PlcPanelInquirySection = ({
                 error={getError(errors, 'plcDetails.plcSystem.networkTopology')}
               >
                 <SearchableSelect
+                  includeNotApplicable
                   value={plcSystem.networkTopology || ''}
                   onChange={(value) => updateSystemField('networkTopology', value)}
                   options={normaliseOptions(networkTopologyOptions)}
@@ -687,6 +750,7 @@ const PlcPanelInquirySection = ({
                 error={getError(errors, 'plcDetails.programmingDevelopmentScope')}
               >
                 <SearchableSelect
+                  includeNotApplicable
                   value={details.programmingDevelopmentScope || ''}
                   onChange={(value) => updatePlcDetails(setForm, {
                     ...details,
@@ -870,7 +934,7 @@ const PlcPanelInquirySection = ({
                 label="PLC Redundancy"
                 error={getError(errors, 'plcDetails.redundancy.plcRedundancy')}
               >
-                <div className="grid min-h-[42px] grid-cols-2 gap-2 rounded-lg border border-slate-200 bg-slate-50 p-1.5">
+                <div className="grid min-h-[42px] grid-cols-1 gap-2 sm:grid-cols-3 rounded-lg border border-slate-200 bg-slate-50 p-1.5">
                   {PLC_REDUNDANCY_OPTIONS.map((option) => (
                     <label
                       key={option}
@@ -948,6 +1012,7 @@ const PlcPanelInquirySection = ({
                     error={getError(errors, 'plcDetails.servoDetails.make')}
                   >
                     <SearchableSelect
+                      includeNotApplicable
                       value={servoDetails.make || ''}
                       onChange={(value) => updateNestedGroup(
                         setForm,
@@ -989,6 +1054,7 @@ const PlcPanelInquirySection = ({
                     error={getError(errors, 'plcDetails.servoDetails.inputVoltage')}
                   >
                     <SearchableSelect
+                      includeNotApplicable
                       value={servoDetails.inputVoltage || ''}
                       onChange={(value) => updateNestedGroup(
                         setForm,
@@ -1030,6 +1096,7 @@ const PlcPanelInquirySection = ({
                     error={getError(errors, 'plcDetails.servoDetails.encoderType')}
                   >
                     <SearchableSelect
+                      includeNotApplicable
                       value={servoDetails.encoderType || ''}
                       onChange={(value) => updateNestedGroup(
                         setForm,
@@ -1049,8 +1116,8 @@ const PlcPanelInquirySection = ({
                     required
                     error={getError(errors, 'plcDetails.servoDetails.brake')}
                   >
-                    <div className="grid min-h-[42px] grid-cols-2 gap-2 rounded-lg border border-slate-200 bg-slate-50 p-1.5">
-                      {['Yes', 'No'].map((option) => (
+                    <div className="grid min-h-[42px] grid-cols-1 gap-2 rounded-lg border border-slate-200 bg-slate-50 p-1.5 sm:grid-cols-3">
+                      {['Yes', 'No', 'NA - Not Applicable'].map((option) => (
                         <label
                           key={option}
                           className={`flex cursor-pointer items-center justify-center gap-2 rounded-md px-3 py-2 text-sm font-medium transition ${
@@ -1085,6 +1152,7 @@ const PlcPanelInquirySection = ({
                     error={getError(errors, 'plcDetails.servoDetails.ratedRpm')}
                   >
                     <SearchableSelect
+                      includeNotApplicable
                       value={servoDetails.ratedRpm || ''}
                       onChange={(value) => updateNestedGroup(
                         setForm,
@@ -1113,6 +1181,7 @@ const PlcPanelInquirySection = ({
                     error={getError(errors, 'plcDetails.servoDetails.amplifierCommunication')}
                   >
                     <SearchableSelect
+                      includeNotApplicable
                       value={servoDetails.amplifierCommunication || ''}
                       onChange={(value) => updateNestedGroup(
                         setForm,
