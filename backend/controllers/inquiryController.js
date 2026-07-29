@@ -234,6 +234,43 @@ const normaliseContacts = (body) => {
   return [];
 };
 
+const resolveInquiryContacts = async (body = {}) => {
+  let contacts = normaliseContacts(body);
+  if (contacts.length > 0) return contacts;
+
+  const customerRef = String(body.customerRef || '').trim();
+  if (mongoose.Types.ObjectId.isValid(customerRef)) {
+    const customer = await Customer.findById(customerRef)
+      .select('customerName contacts contactPerson mobileNumber email designation')
+      .lean();
+
+    if (customer) {
+      contacts = normaliseContacts(customer);
+      if (contacts.length > 0) {
+        return contacts.map((contact, index) => ({
+          ...contact,
+          name: index === 0 && !contact.name
+            ? String(customer.customerName || body.customerName || '').trim()
+            : contact.name,
+        }));
+      }
+    }
+  }
+
+  const fallbackPhone = String(body.mobileNumber || '').trim();
+  const fallbackName = String(body.contactPerson || body.customerName || '').trim();
+  if (fallbackName || fallbackPhone || body.email) {
+    return [{
+      name: fallbackName,
+      phone: fallbackPhone,
+      email: String(body.email || '').trim(),
+      designation: String(body.designation || '').trim(),
+    }];
+  }
+
+  return [];
+};
+
 // ─── Helper: validate contacts array, return error messages ──────────────────
 const validateContacts = (contacts) => {
   const errors = [];
@@ -582,6 +619,20 @@ const normalizeMccFeederType = (value) => {
   return legacyMap[cleanValue] || cleanValue;
 };
 
+const normalizeFeederTypeSelection = (value) => {
+  const source = Array.isArray(value)
+    ? value
+    : typeof value === 'string'
+      ? value.split(',')
+      : value
+        ? [value]
+        : [];
+
+  return Array.from(new Set(
+    source.map(normalizeMccFeederType).filter(Boolean)
+  ));
+};
+
 const sanitizeInquiryLoadRows = (rows = []) => (
   (Array.isArray(rows) ? rows : []).map((row = {}, index) => ({
     srNo: index + 1,
@@ -598,11 +649,7 @@ const sanitizeFeederLoadDetails = ({
   groups = [],
   legacyRowsByType = {},
 } = {}) => {
-  const selectedTypes = Array.from(new Set(
-    (Array.isArray(feederTypes) ? feederTypes : [])
-      .map(normalizeMccFeederType)
-      .filter(Boolean)
-  ));
+  const selectedTypes = normalizeFeederTypeSelection(feederTypes);
   const groupMap = new Map();
 
   (Array.isArray(groups) ? groups : []).forEach((group = {}) => {
@@ -637,11 +684,7 @@ const getSanitizedFeederRows = (groups = [], feederType = '') => {
 const sanitizeVfdDetails = (vfdDetails = {}) => {
   const source = vfdDetails || {};
   const outgoing = source.outgoingFeederDetails || {};
-  const feederTypes = Array.from(new Set(
-    (Array.isArray(outgoing.feederTypes) ? outgoing.feederTypes : [])
-      .map(normalizeMccFeederType)
-      .filter(Boolean)
-  ));
+  const feederTypes = normalizeFeederTypeSelection(outgoing.feederTypes);
 
   const feederLoadDetails = sanitizeFeederLoadDetails({
     feederTypes,
@@ -680,11 +723,7 @@ const sanitizeMccDetails = (mccDetails = {}) => {
     ? cleanText(incomer.customSupplyVoltage || incomer.customIncomingVoltage)
     : '';
   const make = cleanText(incomer.make);
-  const feederTypes = Array.from(new Set(
-    (Array.isArray(outgoing.feederTypes) ? outgoing.feederTypes : [])
-      .map(normalizeMccFeederType)
-      .filter(Boolean)
-  ));
+  const feederTypes = normalizeFeederTypeSelection(outgoing.feederTypes);
   const commissioningScope = cleanText(support.commissioningScope) || (
     support.commissioningSupportRequired === 'Required'
       ? 'In Our Scope'
@@ -1110,8 +1149,9 @@ const createInquiry = async (req, res, next) => {
     // 1. Parse the _json blob sent by the multipart form
     parseJsonField(req);
 
-    // 2. Normalise contacts
-    const contacts = normaliseContacts(req.body);
+    // 2. Normalise contacts. If the mobile form only submitted the
+    // selected Customer Master reference, recover the saved primary contact.
+    const contacts = await resolveInquiryContacts(req.body);
 
     // 3. Validate contacts
     const contactErrors = validateContacts(contacts);

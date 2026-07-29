@@ -116,8 +116,8 @@ export const AutocompleteInput = ({
         setHighlightedIdx(-1);
       }
     };
-    document.addEventListener('mousedown', handler);
-    return () => document.removeEventListener('mousedown', handler);
+    document.addEventListener('pointerdown', handler);
+    return () => document.removeEventListener('pointerdown', handler);
   }, []);
 
   // Reset highlight when dropdown closes or filtered list changes
@@ -197,15 +197,16 @@ export const AutocompleteInput = ({
       {open && filtered.length > 0 && (
         <ul ref={listRef} className="absolute z-50 top-full left-0 right-0 mt-1 bg-white border border-gray-200 rounded-lg shadow-xl max-h-52 overflow-y-auto text-sm">
           {filtered.map((s, i) => (
-            <li
-              key={i}
-              data-ac-item
-              onMouseDown={() => pick(s)}
-              className={`px-3 py-2 cursor-pointer transition-colors flex items-center gap-2
-                ${i === highlightedIdx ? 'bg-blue-100 text-blue-700' : 'hover:bg-blue-50 hover:text-blue-700'}`}
-            >
-              <Search size={12} className="text-gray-300 flex-shrink-0" />
-              <span>{s}</span>
+            <li key={i} data-ac-item>
+              <button
+                type="button"
+                onClick={() => pick(s)}
+                className={`flex w-full items-center gap-2 px-3 py-2 text-left transition-colors
+                  ${i === highlightedIdx ? 'bg-blue-100 text-blue-700' : 'hover:bg-blue-50 hover:text-blue-700'}`}
+              >
+                <Search size={12} className="text-gray-300 flex-shrink-0" />
+                <span>{s}</span>
+              </button>
             </li>
           ))}
         </ul>
@@ -261,8 +262,8 @@ export const SearchableSelect = ({
         setActiveIdx(-1);
       }
     };
-    document.addEventListener('mousedown', handler);
-    return () => document.removeEventListener('mousedown', handler);
+    document.addEventListener('pointerdown', handler);
+    return () => document.removeEventListener('pointerdown', handler);
   }, []);
 
   useEffect(() => {
@@ -345,31 +346,34 @@ export const SearchableSelect = ({
           </div>
           <ul ref={listRef} className="max-h-52 overflow-y-auto text-sm">
             {/* Clear option */}
-            <li
-              data-nav-item
-              onMouseDown={() => pick('')}
-              className={`px-3 py-2 cursor-pointer italic text-xs transition-colors
-                ${activeIdx === 0 ? 'bg-blue-100 text-blue-700' : 'text-gray-400 hover:bg-gray-50'}`}
-            >
-              {placeholder}
+            <li data-nav-item>
+              <button
+                type="button"
+                onClick={() => pick('')}
+                className={`w-full px-3 py-2 text-left text-xs italic transition-colors
+                  ${activeIdx === 0 ? 'bg-blue-100 text-blue-700' : 'text-gray-400 hover:bg-gray-50'}`}
+              >
+                {placeholder}
+              </button>
             </li>
             {filtered.map((o, i) => {
               const navIdx = i + 1; // offset for the clear item
               return (
-                <li
-                  key={o.value}
-                  data-nav-item
-                  onMouseDown={() => pick(o.value)}
-                  className={`px-3 py-2 cursor-pointer flex items-center gap-2 transition-colors
-                    ${activeIdx === navIdx
-                      ? 'bg-blue-100 text-blue-700'
-                      : value === o.value
-                        ? 'bg-blue-50 text-blue-700 font-medium'
-                        : 'text-gray-700 hover:bg-blue-50 hover:text-blue-700'
-                    }`}
-                >
-                  {value === o.value && <Check size={13} className="flex-shrink-0" />}
-                  <span>{o.label}</span>
+                <li key={o.value} data-nav-item>
+                  <button
+                    type="button"
+                    onClick={() => pick(o.value)}
+                    className={`flex w-full items-center gap-2 px-3 py-2 text-left transition-colors
+                      ${activeIdx === navIdx
+                        ? 'bg-blue-100 text-blue-700'
+                        : value === o.value
+                          ? 'bg-blue-50 text-blue-700 font-medium'
+                          : 'text-gray-700 hover:bg-blue-50 hover:text-blue-700'
+                      }`}
+                  >
+                    {value === o.value && <Check size={13} className="flex-shrink-0" />}
+                    <span>{o.label}</span>
+                  </button>
                 </li>
               );
             })}
@@ -395,72 +399,138 @@ export const MultiCheckSelect = ({
   placeholder = 'Select options…',
   error,
   maxSelect,
+  disabled = false,
 }) => {
   const [open, setOpen] = useState(false);
   const wrapRef = useRef(null);
 
-  const normalised = options.map(o =>
-    typeof o === 'string' ? { value: o, label: o } : o
-  );
+  const normalised = options.map((option) => (
+    typeof option === 'string' ? { value: option, label: option } : option
+  ));
+  const selectedValues = Array.isArray(value)
+    ? value.filter(Boolean)
+    : value
+      ? [value]
+      : [];
 
   useEffect(() => {
-    const handler = (e) => { if (wrapRef.current && !wrapRef.current.contains(e.target)) setOpen(false); };
-    document.addEventListener('mousedown', handler);
-    return () => document.removeEventListener('mousedown', handler);
+    const handler = (event) => {
+      if (wrapRef.current && !wrapRef.current.contains(event.target)) {
+        setOpen(false);
+      }
+    };
+
+    document.addEventListener('pointerdown', handler);
+    return () => document.removeEventListener('pointerdown', handler);
   }, []);
 
-  const toggle = (v) => {
-    if (value.includes(v)) {
-      onChange(value.filter(x => x !== v));
-    } else {
-      if (maxSelect && value.length >= maxSelect) return;
-      onChange([...value, v]);
-    }
+  useEffect(() => {
+    if (disabled) setOpen(false);
+  }, [disabled]);
+
+  const commit = (nextValues) => {
+    if (disabled || typeof onChange !== 'function') return;
+    onChange(Array.from(new Set(nextValues.filter(Boolean))));
   };
 
-  const remove = (v, e) => { e.stopPropagation(); onChange(value.filter(x => x !== v)); };
+  const toggle = (optionValue) => {
+    if (selectedValues.includes(optionValue)) {
+      commit(selectedValues.filter((item) => item !== optionValue));
+      return;
+    }
+
+    if (maxSelect && selectedValues.length >= maxSelect) return;
+    commit([...selectedValues, optionValue]);
+  };
+
+  const remove = (optionValue, event) => {
+    event.preventDefault();
+    event.stopPropagation();
+    commit(selectedValues.filter((item) => item !== optionValue));
+  };
+
+  const handleTriggerKeyDown = (event) => {
+    if (disabled) return;
+    if (event.key === 'Enter' || event.key === ' ') {
+      event.preventDefault();
+      setOpen((current) => !current);
+    }
+    if (event.key === 'Escape') setOpen(false);
+  };
 
   return (
     <div ref={wrapRef} className="relative">
       <div
-        onClick={() => setOpen(!open)}
-        className={`min-h-[40px] w-full px-3 py-1.5 text-base sm:text-sm border rounded-lg bg-white cursor-pointer focus-within:ring-2 focus-within:ring-blue-500 flex flex-wrap gap-1 items-center
+        role="button"
+        tabIndex={disabled ? -1 : 0}
+        aria-haspopup="listbox"
+        aria-expanded={open}
+        aria-disabled={disabled}
+        onClick={() => !disabled && setOpen((current) => !current)}
+        onKeyDown={handleTriggerKeyDown}
+        className={`min-h-[40px] w-full px-3 py-1.5 text-base sm:text-sm border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 flex flex-wrap gap-1 items-center
+          ${disabled ? 'cursor-not-allowed bg-gray-50 text-gray-400' : 'cursor-pointer bg-white'}
           ${error ? 'border-red-400' : 'border-gray-300'}`}
       >
-        {value.length === 0 && (
-          <span className="text-gray-400 text-sm py-0.5">{placeholder}</span>
+        {selectedValues.length === 0 && (
+          <span className="py-0.5 text-sm text-gray-400">{placeholder}</span>
         )}
-        {value.map(v => {
-          const label = normalised.find(o => o.value === v)?.label || v;
+
+        {selectedValues.map((selectedValue) => {
+          const label = normalised.find((option) => option.value === selectedValue)?.label || selectedValue;
           return (
-            <span key={v} className="inline-flex items-center gap-1 bg-blue-100 text-blue-800 text-xs font-medium px-2 py-0.5 rounded-full">
+            <span
+              key={selectedValue}
+              className="inline-flex items-center gap-1 rounded-full bg-blue-100 px-2 py-0.5 text-xs font-medium text-blue-800"
+            >
               {label}
-              <button type="button" onMouseDown={(e) => remove(v, e)} className="hover:text-blue-600">
-                <X size={11} />
-              </button>
+              {!disabled && (
+                <button
+                  type="button"
+                  onClick={(event) => remove(selectedValue, event)}
+                  className="touch-manipulation hover:text-blue-600"
+                  aria-label={`Remove ${label}`}
+                >
+                  <X size={11} />
+                </button>
+              )}
             </span>
           );
         })}
-        <ChevronDown size={14} className={`ml-auto text-gray-400 flex-shrink-0 transition-transform ${open ? 'rotate-180' : ''}`} />
+
+        <ChevronDown
+          size={14}
+          className={`ml-auto flex-shrink-0 text-gray-400 transition-transform ${open ? 'rotate-180' : ''}`}
+        />
       </div>
 
-      {open && (
-        <div className="absolute z-50 top-full left-0 right-0 mt-1 bg-white border border-gray-200 rounded-lg shadow-xl max-h-64 overflow-y-auto text-sm">
-          {normalised.map(o => {
-            const selected = value.includes(o.value);
+      {open && !disabled && (
+        <div
+          role="listbox"
+          aria-multiselectable="true"
+          className="absolute left-0 right-0 top-full z-50 mt-1 max-h-64 overflow-y-auto rounded-lg border border-gray-200 bg-white text-sm shadow-xl"
+        >
+          {normalised.map((option) => {
+            const selected = selectedValues.includes(option.value);
             return (
-              <div
-                key={o.value}
-                onMouseDown={() => toggle(o.value)}
-                className={`flex items-center gap-2 px-3 py-2.5 cursor-pointer hover:bg-blue-50 transition-colors
+              <button
+                key={option.value}
+                type="button"
+                role="option"
+                aria-selected={selected}
+                onClick={() => toggle(option.value)}
+                className={`flex w-full touch-manipulation items-center gap-2 px-3 py-2.5 text-left transition-colors hover:bg-blue-50
                   ${selected ? 'bg-blue-50' : ''}`}
               >
-                <div className={`w-4 h-4 rounded border-2 flex items-center justify-center flex-shrink-0 transition-colors
-                  ${selected ? 'bg-blue-600 border-blue-600' : 'border-gray-300'}`}>
+                <span className={`flex h-4 w-4 flex-shrink-0 items-center justify-center rounded border-2 transition-colors
+                  ${selected ? 'border-blue-600 bg-blue-600' : 'border-gray-300'}`}
+                >
                   {selected && <Check size={11} className="text-white" strokeWidth={3} />}
-                </div>
-                <span className={selected ? 'text-blue-700 font-medium' : 'text-gray-700'}>{o.label}</span>
-              </div>
+                </span>
+                <span className={selected ? 'font-medium text-blue-700' : 'text-gray-700'}>
+                  {option.label}
+                </span>
+              </button>
             );
           })}
         </div>

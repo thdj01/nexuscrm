@@ -476,6 +476,17 @@ export const validatePLCInquiry = (form = {}) => {
   return { errors };
 };
 
+const normalizeMultiSelection = (value) => {
+  if (Array.isArray(value)) return value.filter(Boolean);
+  if (typeof value === 'string') {
+    return value
+      .split(',')
+      .map((item) => item.trim())
+      .filter(Boolean);
+  }
+  return value ? [value] : [];
+};
+
 export const validateVFDInquiry = (form = {}) => {
   const errors = {};
   const vfdDetails = form.vfdDetails || {};
@@ -487,9 +498,9 @@ export const validateVFDInquiry = (form = {}) => {
     validateMainIncomer(mainIncomer, 'vfdDetails.mainIncomer', { required: requireMainIncomer })
   );
 
-  const feederTypes = Array.isArray(vfdDetails.outgoingFeederDetails?.feederTypes)
-    ? vfdDetails.outgoingFeederDetails.feederTypes
-    : [];
+  const feederTypes = normalizeMultiSelection(
+    vfdDetails.outgoingFeederDetails?.feederTypes
+  );
 
   if (feederTypes.length === 0) {
     errors['vfdDetails.outgoingFeederDetails.feederTypes'] =
@@ -566,9 +577,9 @@ export const validateMCCInquiry = (form = {}) => {
     errors['mccDetails.incomerDetails.panelConstruction'] = 'Panel type is required';
   }
 
-  const feederTypes = Array.isArray(outgoingFeederDetails.feederTypes)
-    ? outgoingFeederDetails.feederTypes
-    : [];
+  const feederTypes = normalizeMultiSelection(
+    outgoingFeederDetails.feederTypes
+  );
 
   if (feederTypes.length === 0) {
     errors['mccDetails.outgoingFeederDetails.feederTypes'] =

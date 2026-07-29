@@ -133,36 +133,35 @@ const TICKET_PATHS = {
 const StatCard = ({ label, value, icon: Icon, color, onClick }) => {
   const clickableProps = onClick
     ? {
-        role: 'button',
-        tabIndex: 0,
-        onClick,
-        onKeyDown: (event) => {
-          if (event.key === 'Enter' || event.key === ' ') {
-            event.preventDefault();
-            onClick();
-          }
-        },
-      }
+      role: 'button',
+      tabIndex: 0,
+      onClick,
+      onKeyDown: (event) => {
+        if (event.key === 'Enter' || event.key === ' ') {
+          event.preventDefault();
+          onClick();
+        }
+      },
+    }
     : {};
 
   return (
     <div
       {...clickableProps}
-      className={`flex min-w-0 items-start justify-between rounded-xl border border-gray-100 bg-white p-4 shadow-sm transition-all duration-150 ${
-        onClick ? 'cursor-pointer hover:shadow-md hover:border-blue-200 hover:-translate-y-0.5 focus:outline-none focus:ring-2 focus:ring-blue-500/30' : ''
-      }`}
+      className={`flex min-w-0 items-center justify-between rounded-lg border border-gray-100 bg-white px-3 py-2.5 shadow-sm transition-all duration-150 sm:p-3 lg:rounded-xl lg:p-4 ${onClick ? 'cursor-pointer hover:shadow-md hover:border-blue-200 hover:-translate-y-0.5 focus:outline-none focus:ring-2 focus:ring-blue-500/30' : ''
+        }`}
     >
       <div className="min-w-0 flex-1">
-        <p className="text-xs text-gray-500 font-medium uppercase tracking-wide mb-1">{label}</p>
-        <p className="text-xl font-bold text-gray-900">{value}</p>
+        <p className="mb-0.5 text-[10px] font-medium uppercase leading-tight tracking-wide text-gray-500 sm:text-[11px] lg:mb-1 lg:text-xs">{label}</p>
+        <p className="text-lg font-bold leading-none text-gray-900 lg:text-xl">{value}</p>
       </div>
       <div
-        className={`p-2.5 rounded-xl shrink-0 cursor-default ${color}`}
+        className={`ml-2 shrink-0 cursor-default rounded-lg p-2 lg:rounded-xl lg:p-2.5 ${color}`}
         onClick={(event) => event.stopPropagation()}
         onKeyDown={(event) => event.stopPropagation()}
         title="Icon only"
       >
-        <Icon size={18} className="text-white" />
+        <Icon className="h-4 w-4 text-white lg:h-[18px] lg:w-[18px]" />
       </div>
     </div>
   );
@@ -530,11 +529,10 @@ const TaskReminderWidget = ({ taskReminders, navigate, className = '' }) => {
                 key={filter.key}
                 type="button"
                 onClick={() => setActiveFilter(filter.key)}
-                className={`shrink-0 rounded-full border px-3 py-1.5 text-xs font-semibold transition ${
-                  active
+                className={`shrink-0 rounded-full border px-3 py-1.5 text-xs font-semibold transition ${active
                     ? 'border-blue-600 bg-blue-600 text-white shadow-sm'
                     : 'border-gray-200 bg-white text-gray-600 hover:border-blue-200 hover:text-blue-700'
-                }`}
+                  }`}
               >
                 {filter.label}
                 <span className={`ml-1 ${active ? 'text-blue-100' : 'text-gray-400'}`}>{count}</span>
@@ -657,64 +655,64 @@ const InfoPill = ({ children, tone = 'gray' }) => {
 
 const RecentInquiryRows = ({ recent, navigate }) => (
   recent?.recentInquiries?.length > 0 &&
-    recent.recentInquiries.map((inq) => (
-      <div
-        key={inq._id}
-        onClick={() => navigate(`/inquiries/${inq._id}`)}
-        className="flex w-full min-w-0 cursor-pointer flex-col items-start gap-2 px-3 py-3 transition-colors hover:bg-gray-50 sm:flex-row sm:flex-wrap sm:items-center sm:px-5"
-      >
-        <div className="w-full min-w-0 sm:min-w-[150px] sm:flex-1">
-          <p className="break-words text-sm font-semibold text-gray-800">{inq.customerName || inq.companyName || 'Untitled Inquiry'}</p>
-        </div>
-
-        <div className="flex w-full min-w-0 flex-wrap items-center gap-1.5 sm:flex-1">
-          <InfoPill tone="blue">Inquiry No: {inq.inquiryId || '—'}</InfoPill>
-          <InfoPill tone="violet">Panel: {getInquiryPanelLabel(inq)}</InfoPill>
-        </div>
-
-        <div className="flex w-full min-w-0 flex-wrap items-center gap-1.5 sm:ml-auto sm:w-auto sm:justify-end">
-          <StatusBadge status={inq.status} size="xs" />
-        </div>
+  recent.recentInquiries.map((inq) => (
+    <div
+      key={inq._id}
+      onClick={() => navigate(`/inquiries/${inq._id}`)}
+      className="flex w-full min-w-0 cursor-pointer flex-col items-start gap-2 px-3 py-3 transition-colors hover:bg-gray-50 sm:flex-row sm:flex-wrap sm:items-center sm:px-5"
+    >
+      <div className="w-full min-w-0 sm:min-w-[150px] sm:flex-1">
+        <p className="break-words text-sm font-semibold text-gray-800">{inq.customerName || inq.companyName || 'Untitled Inquiry'}</p>
       </div>
-    ))
+
+      <div className="flex w-full min-w-0 flex-wrap items-center gap-1.5 sm:flex-1">
+        <InfoPill tone="blue">Inquiry No: {inq.inquiryId || '—'}</InfoPill>
+        <InfoPill tone="violet">Panel: {getInquiryPanelLabel(inq)}</InfoPill>
+      </div>
+
+      <div className="flex w-full min-w-0 flex-wrap items-center gap-1.5 sm:ml-auto sm:w-auto sm:justify-end">
+        <StatusBadge status={inq.status} size="xs" />
+      </div>
+    </div>
+  ))
 );
 
 const RecentProjectRows = ({ recent, navigate }) => (
   recent?.recentProjects?.length > 0 &&
-    recent.recentProjects.map((proj) => {
-      const inquiryNo = getProjectInquiryNumber(proj);
+  recent.recentProjects.map((proj) => {
+    const inquiryNo = getProjectInquiryNumber(proj);
 
-      return (
-        <div
-          key={proj._id}
-          onClick={() => navigate(`/projects/${proj._id}`)}
-          className="flex w-full min-w-0 cursor-pointer flex-col items-start gap-2 px-3 py-3 transition-colors hover:bg-gray-50 sm:flex-row sm:flex-wrap sm:items-center sm:px-5"
-        >
-          <div className="w-full min-w-0 sm:min-w-[150px] sm:flex-1">
-            <p className="break-words text-sm font-semibold text-gray-800">{proj.projectName || 'Untitled Project'}</p>
-          </div>
-
-          <div className="flex w-full min-w-0 flex-wrap items-center gap-1.5 sm:flex-1">
-            <InfoPill tone="blue">Project No: {proj.projectId || '—'}</InfoPill>
-            <InfoPill tone="emerald">Inquiry No: {inquiryNo || '—'}</InfoPill>
-          </div>
-
-          <div className="flex w-full min-w-0 flex-wrap items-center gap-1.5 sm:ml-auto sm:w-auto sm:justify-end">
-            <StatusBadge status={proj.projectStatus} size="xs" />
-            <button
-              type="button"
-              onClick={(e) => {
-                e.stopPropagation();
-                navigate(`/projects/${proj._id}/activity`);
-              }}
-              className="rounded-lg border border-blue-100 bg-blue-50 px-2.5 py-1 text-xs font-semibold text-blue-700 transition-colors hover:border-blue-200 hover:bg-blue-100"
-            >
-              Activity
-            </button>
-          </div>
+    return (
+      <div
+        key={proj._id}
+        onClick={() => navigate(`/projects/${proj._id}`)}
+        className="flex w-full min-w-0 cursor-pointer flex-col items-start gap-2 px-3 py-3 transition-colors hover:bg-gray-50 sm:flex-row sm:flex-wrap sm:items-center sm:px-5"
+      >
+        <div className="w-full min-w-0 sm:min-w-[150px] sm:flex-1">
+          <p className="break-words text-sm font-semibold text-gray-800">{proj.projectName || 'Untitled Project'}</p>
         </div>
-      );
-    })
+
+        <div className="flex w-full min-w-0 flex-wrap items-center gap-1.5 sm:flex-1">
+          <InfoPill tone="blue">Project No: {proj.projectId || '—'}</InfoPill>
+          <InfoPill tone="emerald">Inquiry No: {inquiryNo || '—'}</InfoPill>
+        </div>
+
+        <div className="flex w-full min-w-0 flex-wrap items-center gap-1.5 sm:ml-auto sm:w-auto sm:justify-end">
+          <StatusBadge status={proj.projectStatus} size="xs" />
+          <button
+            type="button"
+            onClick={(e) => {
+              e.stopPropagation();
+              navigate(`/projects/${proj._id}/activity`);
+            }}
+            className="rounded-lg border border-blue-100 bg-blue-50 px-2.5 py-1 text-xs font-semibold text-blue-700 transition-colors hover:border-blue-200 hover:bg-blue-100"
+          >
+            Activity
+          </button>
+        </div>
+      </div>
+    );
+  })
 );
 
 const RecentListCard = ({ title, emptyMessage, children, className = '' }) => (
@@ -740,9 +738,9 @@ const FinancialYearDropdown = ({ selectedFinancialYear, financialYearOptions, on
 );
 
 const DashboardHeader = ({ stats, navigate, financialYear, financialYearOptions, onFinancialYearChange, showSummaryCards }) => (
-  <div className="grid grid-cols-1 gap-4 lg:grid-cols-[minmax(0,1fr)_auto] lg:items-start">
+  <div className="grid grid-cols-1 gap-3 lg:grid-cols-[minmax(0,1fr)_auto] lg:items-start lg:gap-4">
     {showSummaryCards ? (
-      <div className="grid w-full grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-3">
+      <div className="grid w-full grid-cols-1 gap-3 sm:grid-cols-2 md:grid-cols-3 lg:gap-4">
         <StatCard
           label="Total Inquiries"
           value={stats?.totalInquiries || 0}
@@ -815,7 +813,7 @@ const InquiryStatusCards = ({ charts, navigate, financialYear }) => {
   }));
 
   return (
-    <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3 2xl:grid-cols-5">
+    <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 md:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-5 lg:gap-4">
       {statusItems.map((statusItem, index) => (
         <StatCard
           key={statusItem.name}
@@ -899,7 +897,7 @@ const ProjectSection = ({ stats, charts, recent, navigate, financialYear, header
   <section className="space-y-4">
     <SectionHeader title="Recent Projects" subtitle="Project status, delivery risk, and project-related charts" action={headerAction} />
 
-    <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-4">
+    <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 md:grid-cols-3 xl:grid-cols-4 lg:gap-4">
       <StatCard
         label="Achieved Project"
         value={stats?.wonProjects || 0}
@@ -935,7 +933,7 @@ const ProjectSection = ({ stats, charts, recent, navigate, financialYear, header
       </div>
     )}
 
-    <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-4">
+    <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 md:grid-cols-3 xl:grid-cols-4 lg:gap-4">
       <StatCard label="Delayed Tasks" value={stats?.delayedTasks || 0} icon={XCircle} color="bg-rose-500" onClick={() => navigateWithFinancialYear(navigate, PROJECT_PATHS.delayedTasks, financialYear)} />
       <StatCard label="Due Today" value={stats?.projectsDueToday || 0} icon={CalendarClock} color="bg-yellow-500" onClick={() => navigateWithFinancialYear(navigate, PROJECT_PATHS.dueToday, financialYear)} />
       <StatCard label="Due This Week" value={stats?.projectsDueThisWeek || 0} icon={CalendarClock} color="bg-amber-500" onClick={() => navigateWithFinancialYear(navigate, PROJECT_PATHS.dueThisWeek, financialYear)} />
@@ -968,7 +966,7 @@ const TicketSection = ({ stats, charts, recent, navigate, financialYear, headerA
   <section className="space-y-4">
     <SectionHeader title="Recent Tickets" subtitle="Ticket workload, priority, status, and ticket-related charts" action={headerAction} />
 
-    <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-4">
+    <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 md:grid-cols-3 xl:grid-cols-4 lg:gap-4">
       <StatCard
         label="Open Tickets"
         value={stats?.openTickets || 0}
@@ -992,7 +990,7 @@ const TicketSection = ({ stats, charts, recent, navigate, financialYear, headerA
       />
     </div>
 
-    <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-4">
+    <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 md:grid-cols-3 xl:grid-cols-4 lg:gap-4">
       <StatCard label="Customer Pending" value={stats?.customerPendingTickets || 0} icon={PauseCircle} color="bg-orange-500" onClick={() => navigateWithFinancialYear(navigate, TICKET_PATHS.customerPending, financialYear)} />
       <StatCard label="Closed Tickets" value={stats?.closedTickets || 0} icon={CheckCircle} color="bg-emerald-600" onClick={() => navigateWithFinancialYear(navigate, TICKET_PATHS.closed, financialYear)} />
       <StatCard label="Void Tickets" value={stats?.voidTickets || 0} icon={XCircle} color="bg-gray-600" onClick={() => navigateWithFinancialYear(navigate, TICKET_PATHS.void, financialYear)} />

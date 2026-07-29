@@ -1712,10 +1712,37 @@ const handleDrop = (e) => {
     // ></Button>
     setSubmitting(true);
     try {
-      // Strip transient UI-only `id` field from each contact before sending
-      const cleanContacts = form.contacts
-        .filter(c => c.name || c.phone || c.email)
-        .map(({ id, _id, ...rest }) => rest);
+      // Strip transient UI-only ids and recover the selected Customer Master
+      // contact when a mobile dropdown interaction has not yet hydrated the
+      // local contacts array. This keeps the submitted inquiry consistent with
+      // the selected customer instead of failing with a hidden contact error.
+      const sanitizeContactsForSubmit = (rows = []) => (
+        (Array.isArray(rows) ? rows : [])
+          .map((contact = {}) => ({
+            name: String(contact.name || contact.contactPerson || '').trim(),
+            phone: String(contact.phone || contact.mobileNumber || contact.contactNumber || '').trim(),
+            email: String(contact.email || '').trim(),
+            designation: String(contact.designation || '').trim(),
+          }))
+          .filter((contact) => contact.name || contact.phone || contact.email || contact.designation)
+      );
+
+      let cleanContacts = sanitizeContactsForSubmit(form.contacts);
+
+      if (cleanContacts.length === 0 && form.customerRef) {
+        const selectedCustomer = customers.find((customer) => (
+          String(customer?._id || customer?.id || '') === String(form.customerRef)
+        ));
+        cleanContacts = sanitizeContactsForSubmit(buildContactsFromCustomer(selectedCustomer || {}));
+      }
+
+      // Older customer records sometimes contain a mobile number without a
+      // separate contact-person name. Use the customer name as the primary
+      // contact label so a valid selected customer is not rejected on mobile.
+      cleanContacts = cleanContacts.map((contact, index) => ({
+        ...contact,
+        name: index === 0 && !contact.name ? String(form.customerName || '').trim() : contact.name,
+      }));
 
       // Resolve "Other/Custom" field values before sending
       const resolvedCompanyType = form.companyType === 'Other' ? form.customCompanyType : form.companyType;
@@ -1853,6 +1880,10 @@ const handleDrop = (e) => {
         inquiryType: resolvedInquiryType,
 
         contacts: cleanContacts,
+        contactPerson: cleanContacts[0]?.name || '',
+        mobileNumber: cleanContacts[0]?.phone || '',
+        email: cleanContacts[0]?.email || '',
+        designation: cleanContacts[0]?.designation || '',
         customerRef: form.customerRef || '',
         customerName: form.customerName,
         companyType: resolvedCompanyType || '',
