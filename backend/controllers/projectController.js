@@ -49,6 +49,7 @@ const {
   positiveInteger,
   normalizeTaskStatus: normalizePlanningTaskStatus,
   effectiveTaskStatus,
+  preserveStoredStatusesForDerivedDelay,
   calculateDelayedDays,
   recalculateTaskSequence,
   validatePanelSelections,
@@ -178,7 +179,9 @@ function toPlainProjectResponse(doc) {
 
   const refreshTask = (task = {}) => ({
     ...task,
-    status: effectiveTaskStatus(task),
+    // Keep the persisted workflow status intact. The frontend already derives
+    // the overdue display from plannedEndDate and delayDays.
+    status: normalizePlanningStatus(task.status),
     delayDays: calculateDelayedDays(task),
   });
   if (Array.isArray(obj.planningGrids)) {
@@ -2668,6 +2671,7 @@ const updateProject = async (req, res, next) => {
 
     validateIncomingPlanningStartDates(req.body, oldProject);
     const body = sanitizeProjectPayload(req.body, { partial: true });
+    preserveStoredStatusesForDerivedDelay(oldProject, body);
     [
       '_id', 'id', 'projectId', 'createdBy', 'createdAt', 'updatedAt', '__v',
       'documents', 'kickoffMeeting', 'assignedTeamMembers', 'inquiryReference',

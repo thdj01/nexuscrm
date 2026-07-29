@@ -119,6 +119,76 @@ function effectiveTaskStatus(task, now = new Date()) {
   return end && today > end ? 'Delay' : stored;
 }
 
+function planningTaskIdentity(task = {}, index = 0, fallbackGridId = 'A') {
+  const gridId = String(task.gridId || fallbackGridId || 'A');
+  const taskId = String(task.taskId || task._id || task.taskName || `task-${index}`);
+  return `${gridId}::${taskId}`;
+}
+
+function flattenPlanningTaskEntries(project = {}) {
+  if (Array.isArray(project.planningGrids) && project.planningGrids.length > 0) {
+    return project.planningGrids.flatMap((grid = {}, gridIndex) => (
+      (grid.planningTasks || []).map((task = {}, taskIndex) => ({
+        task,
+        taskIndex,
+        gridId: task.gridId || grid.gridId || String.fromCharCode(65 + gridIndex),
+      }))
+    ));
+  }
+
+  return (project.planningTasks || []).map((task = {}, taskIndex) => ({
+    task,
+    taskIndex,
+    gridId: task.gridId || 'A',
+  }));
+}
+
+/**
+ * Older API responses exposed calculated overdue status ("Delay") as if it were
+ * the stored task status. When the complete project form was saved later, that
+ * display-only value looked like a user-initiated status change and triggered
+ * task-assignee permission checks. Restore the stored status when the incoming
+ * value only mirrors the previous calculated overdue display.
+ */
+function preserveStoredStatusesForDerivedDelay(oldProject = {}, body = {}, now = new Date()) {
+  if (!Array.isArray(body.planningGrids) && !Array.isArray(body.planningTasks)) return body;
+
+  const previousTasks = new Map();
+  flattenPlanningTaskEntries(oldProject).forEach(({ task, taskIndex, gridId }) => {
+    previousTasks.set(planningTaskIdentity(task, taskIndex, gridId), task);
+  });
+
+  const restoreTask = (task = {}, taskIndex = 0, gridId = 'A') => {
+    const previous = previousTasks.get(planningTaskIdentity(task, taskIndex, gridId));
+    if (!previous) return task;
+
+    const storedStatus = normalizeTaskStatus(previous.status);
+    const displayedStatus = effectiveTaskStatus(previous, now);
+    const incomingStatus = normalizeTaskStatus(task.status);
+
+    if (incomingStatus === displayedStatus && incomingStatus !== storedStatus) {
+      return { ...task, status: storedStatus };
+    }
+
+    return task;
+  };
+
+  if (Array.isArray(body.planningGrids)) {
+    body.planningGrids = body.planningGrids.map((grid = {}, gridIndex) => {
+      const gridId = grid.gridId || String.fromCharCode(65 + gridIndex);
+      return {
+        ...grid,
+        planningTasks: (grid.planningTasks || []).map((task, taskIndex) => restoreTask(task, taskIndex, gridId)),
+      };
+    });
+    body.planningTasks = body.planningGrids.flatMap((grid) => grid.planningTasks || []);
+  } else if (Array.isArray(body.planningTasks)) {
+    body.planningTasks = body.planningTasks.map((task, taskIndex) => restoreTask(task, taskIndex, task.gridId || 'A'));
+  }
+
+  return body;
+}
+
 function calculateDelayedDays(task, now = new Date()) {
   const end = startOfDay(task.plannedEndDate || task.endDate);
   if (!end) return 0;
@@ -211,6 +281,7 @@ module.exports = {
   positiveInteger,
   normalizeTaskStatus,
   effectiveTaskStatus,
+  preserveStoredStatusesForDerivedDelay,
   calculateDelayedDays,
   recalculateTaskSequence,
   panelSelectionKey,
