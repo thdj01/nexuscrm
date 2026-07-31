@@ -1034,7 +1034,10 @@ const ElectricalPanelInquiryPage = () => {
   const [pageLoading, setPageLoading] = useState(isExistingInquiry);
   const [downloadingPdf, setDownloadingPdf] = useState(false);
 
-  const formDisabled = submitting || isView;
+  const canEditCurrentInquiry = canEditInquiry && (
+    !isExistingInquiry || form?.canEdit === true
+  );
+  const formDisabled = submitting || isView || (isEdit && !canEditCurrentInquiry);
   const statusDisabled = formDisabled || (!isEdit && !canEditInquiry);
   const statusOptions = (
     canCommercialSubmit || form.status === 'Commercial BOM Submission'
@@ -1110,6 +1113,12 @@ useEffect(() => {
         const { data } = await API.get(`/inquiries/${id}`);
         const d = data.data;
 
+        if (isEdit && d?.canEdit === false) {
+          toast.error('Only the inquiry creator, Estimation, or Admin can edit this inquiry');
+          navigate(`/inquiries/${id}`, { replace: true });
+          return;
+        }
+
         // Normalise contacts: old single-contact records → array
         let contacts = d.contacts && d.contacts.length
           ? d.contacts.map(c => ({ ...c, id: c.id || Date.now() + Math.random() }))
@@ -1184,7 +1193,7 @@ useEffect(() => {
         setPageLoading(false);
       }
     })();
-  }, [id, inquiryReturnPath, isExistingInquiry, navigate, toast]);
+  }, [id, inquiryReturnPath, isEdit, isExistingInquiry, navigate, toast]);
 
   const buildContactsFromCustomer = useCallback((customer = {}) => {
     const contacts = Array.isArray(customer.contacts) ? customer.contacts : [];
@@ -1673,8 +1682,8 @@ const handleDrop = (e) => {
     e.preventDefault();
     if (isView) return;
 
-    if (isEdit && !canEditInquiry) {
-      toast.error('You do not have permission to edit inquiries');
+    if (isEdit && !canEditCurrentInquiry) {
+      toast.error('Only the inquiry creator, Estimation, or Admin can edit this inquiry');
       return;
     }
 
@@ -2201,7 +2210,7 @@ const handleDrop = (e) => {
                 {downloadingPdf ? 'Generating PDF...' : 'Download PDF'}
               </Button>
 
-              {isView && canEditInquiry && (
+              {isView && canEditCurrentInquiry && (
                 <Button
                   type="button"
                   variant="primary"

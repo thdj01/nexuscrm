@@ -686,7 +686,7 @@ const UserForm = ({
           />
         </FormField>
 
-        <FormField label="Role">
+        <FormField label="Designation / Role">
           <Select
             value={form.role}
             onChange={handleRoleChange}
@@ -975,7 +975,10 @@ const UsersPage = () => {
 
       setSelected(null);
 
-      fetchUsers();
+      await Promise.all([
+        fetchUsers(),
+        fetchDepartmentOptions(),
+      ]);
     } catch (err) {
       toast.error(
         err.response?.data
@@ -1031,7 +1034,7 @@ const UsersPage = () => {
 
     {
       key: 'role',
-      label: 'Role',
+      label: 'Designation',
       width: '130px',
 
       render: (v) => (

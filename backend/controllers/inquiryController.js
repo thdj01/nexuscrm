@@ -24,6 +24,7 @@
 const mongoose           = require('mongoose');
 const Inquiry            = require('../models/Inquiry');
 const Customer           = require('../models/Customer');
+const User               = require('../models/User');
 const {
   applyCustomerToPayload,
   findCustomerIdsForSearch,
@@ -41,6 +42,12 @@ const {
 } = require('../services/notificationTemplates');
 const { INQUIRY_PERMISSIONS, userHasPermission } = require('../utils/accessControl');
 const { buildInquiryPdf, buildInquiryPdfFileName } = require('../services/inquiryPdfService');
+const { notifyInquiryStakeholdersOfChange } = require('../services/inquiryChangeNotificationService');
+const {
+  resolveInquiryEditContext,
+  canUserEditInquiry,
+  assertUserCanEditInquiry,
+} = require('../services/inquiryAccessService');
 
 const FINAL_INQUIRY_STATUSES = [
   'New',
@@ -1039,7 +1046,7 @@ const getInquiries = async (req, res, next) => {
   try {
     const {
       page = 1, limit = 10,
-      search, status, productType, inquiryType, customerRef, financialYear,
+      search, status, productType, inquiryType, customerRef, createdBy, financialYear,
     } = req.query;
 
     const query = {};
@@ -1049,6 +1056,12 @@ const getInquiries = async (req, res, next) => {
     if (inquiryType) query.inquiryType = inquiryType;
     if (customerRef && mongoose.Types.ObjectId.isValid(customerRef)) {
       query.customerRef = customerRef;
+    }
+    if (createdBy) {
+      if (!mongoose.Types.ObjectId.isValid(createdBy)) {
+        return res.status(400).json({ success: false, message: 'Invalid inquiry creator filter' });
+      }
+      query.createdBy = createdBy;
     }
 
     if (search) {
@@ -1069,7 +1082,7 @@ const getInquiries = async (req, res, next) => {
 
     const skip = (Number(page) - 1) * Number(limit);
 
-    const [inquiries, total] = await Promise.all([
+    const [inquiries, total, creatorIds] = await Promise.all([
       Inquiry.find(query)
         .populate('createdBy', 'name')
         .populate('customerRef', 'customerId customerName companyType contacts contactPerson email mobileNumber city address gstNumber notes')
@@ -1080,16 +1093,41 @@ const getInquiries = async (req, res, next) => {
         .skip(skip)
         .limit(Number(limit)),
       Inquiry.countDocuments(query),
+      Inquiry.distinct('createdBy', { createdBy: { $ne: null } }),
     ]);
+
+    const creators = creatorIds.length
+      ? await User.find({ _id: { $in: creatorIds } })
+          .select('name email role department isActive')
+          .sort({ name: 1, email: 1 })
+          .lean()
+      : [];
+
+    const inquiryEditContext = await resolveInquiryEditContext(req.user);
 
     res.json({
       success: true,
-      data:    inquiries.map((item) => getLiveCustomerSnapshot(item.toObject ? item.toObject() : item)),
+      data: inquiries.map((item) => {
+        const rawInquiry = item.toObject ? item.toObject() : item;
+        const data = getLiveCustomerSnapshot(rawInquiry);
+        data.canEdit = canUserEditInquiry(req.user, rawInquiry, inquiryEditContext);
+        return data;
+      }),
       pagination: {
         total,
         page:  Number(page),
         pages: Math.ceil(total / Number(limit)),
         limit: Number(limit),
+      },
+      filters: {
+        creators: creators.map((creator) => ({
+          _id: creator._id,
+          name: creator.name || creator.email || 'Unknown User',
+          email: creator.email || '',
+          role: creator.role || '',
+          department: creator.department || '',
+          isActive: creator.isActive !== false,
+        })),
       },
     });
   } catch (error) {
@@ -1132,6 +1170,9 @@ const getInquiry = async (req, res, next) => {
 
     // Back-fill attachments from legacy single attachment string
     backFillAttachments(data);
+
+    const inquiryEditContext = await resolveInquiryEditContext(req.user);
+    data.canEdit = canUserEditInquiry(req.user, inquiry, inquiryEditContext);
 
     res.json({ success: true, data });
   } catch (error) {
@@ -1429,6 +1470,9 @@ const updateInquiry = async (req, res, next) => {
       return res.status(404).json({ success: false, message: 'Inquiry not found' });
     }
 
+    await assertUserCanEditInquiry(req.user, inquiry);
+    const beforeInquirySnapshot = inquiry.toObject({ depopulate: true, virtuals: false });
+
     const b = req.body;
     const requestedStatus = b.status ? normalizeInquiryStatus(b.status) : undefined;
     const statusChanged = requestedStatus && requestedStatus !== normalizeInquiryStatus(inquiry.status);
@@ -1720,35 +1764,14 @@ const updateInquiry = async (req, res, next) => {
     }
 
 
-    // 4. Notifications (non-fatal)
-    await createNotification({
-      title:          'Inquiry Updated',
-      message:        dashboardMessages.inquiryUpdated(updatedInquiry),
-      type:           'info',
-      recipient:      req.user._id,
-      relatedInquiry: updatedInquiry._id,
-      sendEmail:      true,
-      // emailTo:        'project.intern@nexusautomech.com',
-      emailTo:        'ravi.darji@nexusautomech.com',
-      inquiry:       updatedInquiry,
-      eventType:     'inquiry_updated',
+    // Notify the original inquiry creator and Estimation HOD/TL. The message
+    // contains the logged-in user who made the change and a concise summary of
+    // status, document, follow-up and general-detail updates.
+    await notifyInquiryStakeholdersOfChange({
+      beforeInquiry: beforeInquirySnapshot,
+      afterInquiry: updatedInquiry.toObject({ depopulate: true, virtuals: false }),
+      actor: req.user,
     });
-
-    if (statusChanged || finalStatusChanged) {
-      await createNotification({
-        title:          'Status Changed',
-        message:        dashboardMessages.inquiryStatusChanged(updatedInquiry),
-        type:           'status',
-        recipient:      req.user._id,
-        relatedInquiry: updatedInquiry._id,
-        sendEmail:      true,
-        emailTo:        'ravi.darji@nexusautomech.com',
-        // emailTo:        'project.intern@nexusautomech.com',
-        inquiry:       updatedInquiry,
-        eventType:     'inquiry_status_changed',
-        previousStatus: normalizeInquiryStatus(inquiry.status),
-      });
-    }
 
     // 5. Back-fill contacts on response for old records
     const data = getLiveCustomerSnapshot(updatedInquiry.toObject());
@@ -1784,6 +1807,9 @@ const updateInquiryStatus = async (req, res, next) => {
     if (!inquiry) {
       return res.status(404).json({ success: false, message: 'Inquiry not found' });
     }
+
+    await assertUserCanEditInquiry(req.user, inquiry);
+    const beforeInquirySnapshot = inquiry.toObject({ depopulate: true, virtuals: false });
 
     const b = req.body || {};
     const requestedStatus = normalizeInquiryStatus(b.status);
@@ -1871,20 +1897,11 @@ const updateInquiryStatus = async (req, res, next) => {
       return res.status(404).json({ success: false, message: 'Inquiry not found after status update' });
     }
 
-    if (finalStatusChanged) {
-      createNotification({
-        title:          'Status Changed',
-        message:        dashboardMessages.inquiryStatusChanged(updatedInquiry),
-        type:           'status',
-        recipient:      req.user._id,
-        relatedInquiry: updatedInquiry._id,
-        sendEmail:      true,
-        emailTo:        'ravi.darji@nexusautomech.com',
-        inquiry:       updatedInquiry,
-        eventType:     'inquiry_status_changed',
-        previousStatus: normalizeInquiryStatus(inquiry.status),
-      }).catch((error) => {
-        console.error('Inquiry status notification failed:', error.message || error);
+    if (finalStatusChanged || uploadedBomFiles.length > 0) {
+      await notifyInquiryStakeholdersOfChange({
+        beforeInquiry: beforeInquirySnapshot,
+        afterInquiry: updatedInquiry.toObject({ depopulate: true, virtuals: false }),
+        actor: req.user,
       });
     }
 
@@ -1985,6 +2002,9 @@ const updateInquiryFollowUp = async (req, res, next) => {
       return res.status(404).json({ success: false, message: 'Inquiry not found' });
     }
 
+    await assertUserCanEditInquiry(req.user, inquiry);
+    const beforeInquirySnapshot = inquiry.toObject({ depopulate: true, virtuals: false });
+
     const rawDate = req.body?.nextFollowUpDate;
     let nextFollowUpDate = null;
 
@@ -2011,6 +2031,13 @@ const updateInquiryFollowUp = async (req, res, next) => {
       .populate('projectReference', 'projectId projectName')
       .populate('kickoffMeeting.attendees', 'name email role')
       .populate('bomAttachments.uploadedBy', 'name email');
+
+    await notifyInquiryStakeholdersOfChange({
+      beforeInquiry: beforeInquirySnapshot,
+      afterInquiry: updatedInquiry.toObject({ depopulate: true, virtuals: false }),
+      actor: req.user,
+      actionLabel: nextFollowUpDate ? 'follow-up reminder updated' : 'follow-up reminder cleared',
+    });
 
     const data = getLiveCustomerSnapshot(updatedInquiry.toObject());
     backFillAttachments(data);

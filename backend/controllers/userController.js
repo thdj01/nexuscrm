@@ -8,6 +8,7 @@ const { ROLES } = require('../models/User');
 const { departmentMatchesUserTeam } = require('../utils/departmentUtils');
 const { buildUploadedAvatarPath, deleteLocalUploadByUrl } = require('../utils/avatarUpload');
 const { cleanPermissionList, resolveEffectiveEmployeeAccess } = require('../utils/accessControl');
+const { syncUserHierarchyToDepartments } = require('../services/userDepartmentHierarchyService');
 
 const ok = (res, data, status = 200) =>
   res.status(status).json({ success: true, ...data });
@@ -15,8 +16,27 @@ const ok = (res, data, status = 200) =>
 const fail = (res, message, status = 400) =>
   res.status(status).json({ success: false, message });
 
-const normalizeRole = (role = '') =>
-  String(role).trim().toLowerCase().replace(/\s+/g, '_');
+const ROLE_ALIASES = Object.freeze({
+  administrator: ROLES.ADMIN,
+  admin: ROLES.ADMIN,
+  hod: ROLES.HOD,
+  head_of_department: ROLES.HOD,
+  department_head: ROLES.HOD,
+  manager: ROLES.MANAGER,
+  team_lead: ROLES.TEAM_LEAD,
+  teamleader: ROLES.TEAM_LEAD,
+  tl: ROLES.TEAM_LEAD,
+  employee: ROLES.EMPLOYEE,
+  staff: ROLES.EMPLOYEE,
+});
+
+const normalizeRole = (role = '') => {
+  const normalized = String(role)
+    .trim()
+    .toLowerCase()
+    .replace(/[\s-]+/g, '_');
+  return ROLE_ALIASES[normalized] || normalized;
+};
 
 const effectiveRole = (role = '') => {
   const normalized = normalizeRole(role);
@@ -257,6 +277,9 @@ const enrichUsersWithDepartmentInfo = async (users = []) => {
       departmentCode: departmentInfo?.code || '',
       hodDepartmentInfo,
       hodDepartmentNames: (Array.isArray(user.hodDepartments) ? user.hodDepartments : []).map(displayDept),
+      // Backward-compatible designation alias for screens/integrations that use
+      // designation terminology while permissions continue using `role`.
+      designation: user.role,
     };
   });
 };
@@ -289,8 +312,14 @@ const buildUserPayload = (body = {}, { isCreate = false } = {}) => {
     payload.avatar = cleanString(body.avatar);
   }
 
-  if (Object.prototype.hasOwnProperty.call(body, 'role')) {
-    payload.role = normalizeRole(body.role);
+  if (
+    Object.prototype.hasOwnProperty.call(body, 'role') ||
+    Object.prototype.hasOwnProperty.call(body, 'designation')
+  ) {
+    const requestedRole = Object.prototype.hasOwnProperty.call(body, 'role')
+      ? body.role
+      : body.designation;
+    payload.role = normalizeRole(requestedRole);
   }
 
   if (Object.prototype.hasOwnProperty.call(body, 'department')) {
@@ -478,7 +507,7 @@ const createUser = async (req, res, next) => {
     applyRoleOwnershipRules(payload);
 
     const user = await User.create(payload);
-    await syncDepartmentHodOwnership(user);
+    await syncUserHierarchyToDepartments(user);
 
     const savedUser = await User.findById(user._id)
       .select(userPublicSelect)
@@ -525,7 +554,7 @@ const updateUser = async (req, res, next) => {
     });
 
     await user.save();
-    await syncDepartmentHodOwnership(user);
+    await syncUserHierarchyToDepartments(user);
 
     const savedUser = await User.findById(user._id)
       .select(userPublicSelect)

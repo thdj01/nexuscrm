@@ -3,6 +3,7 @@
 const mongoose = require('mongoose');
 const Department = require('../models/Department');
 const User = require('../models/User');
+const { syncDepartmentHierarchyToUsers, idString } = require('../services/userDepartmentHierarchyService');
 
 const ok = (res, data, status = 200) => res.status(status).json({ success: true, ...data });
 const fail = (res, message, status = 400) => res.status(status).json({ success: false, message });
@@ -200,11 +201,18 @@ const createDepartment = async (req, res, next) => {
     );
     if (teamLeadValidationError) return fail(res, teamLeadValidationError, 400);
 
+    if (payload.teamLead && normalizeHodArray(payload.hods).includes(idString(payload.teamLead))) {
+      return fail(res, 'The same user cannot be both HOD and Team Lead of one department', 400);
+    }
+
     const department = await Department.create(payload);
-    await syncDepartmentHodUserOwnership({
+    await syncDepartmentHierarchyToUsers({
       departmentId: department._id,
       previousHods: [],
       nextHods: department.hods || [],
+      previousTeamLead: null,
+      nextTeamLead: department.teamLead,
+      isActive: department.isActive !== false,
     });
     const saved = await Department.findById(department._id)
       .populate('hod', 'name email role avatar isActive')
@@ -232,6 +240,7 @@ const updateDepartment = async (req, res, next) => {
     const previousHods = Array.isArray(department.hods) && department.hods.length > 0
       ? department.hods.map((hodId) => hodId.toString())
       : (department.hod ? [department.hod.toString()] : []);
+    const previousTeamLead = department.teamLead ? department.teamLead.toString() : null;
     const payload = buildDepartmentPayload(req.body, req.user);
 
     if (payload.isActive === false) {
@@ -264,15 +273,28 @@ const updateDepartment = async (req, res, next) => {
     );
     if (teamLeadValidationError) return fail(res, teamLeadValidationError, 400);
 
+    const candidateHods = Object.prototype.hasOwnProperty.call(payload, 'hods')
+      ? normalizeHodArray(payload.hods)
+      : previousHods;
+    const candidateTeamLead = Object.prototype.hasOwnProperty.call(payload, 'teamLead')
+      ? idString(payload.teamLead)
+      : previousTeamLead;
+    if (candidateTeamLead && candidateHods.includes(candidateTeamLead)) {
+      return fail(res, 'The same user cannot be both HOD and Team Lead of one department', 400);
+    }
+
     Object.entries(payload).forEach(([key, value]) => {
       if (key !== 'createdBy') department[key] = value;
     });
 
     await department.save();
-    await syncDepartmentHodUserOwnership({
+    await syncDepartmentHierarchyToUsers({
       departmentId: department._id,
       previousHods,
       nextHods: department.hods || [],
+      previousTeamLead,
+      nextTeamLead: department.teamLead,
+      isActive: department.isActive !== false,
     });
 
     const saved = await Department.findById(department._id)

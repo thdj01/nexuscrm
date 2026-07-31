@@ -17,8 +17,9 @@ import {
 import { CSS } from '@dnd-kit/utilities';
 import { Activity, GripVertical, Plus, Trash2, Users } from 'lucide-react';
 import { Input, Select } from '../common/FormComponents';
-import { fetchPlanningUsers, updatePlanningTaskStatus } from '../../api/projectService';
+import { fetchPlanningUsers, getProjectId, updatePlanningTaskStatus } from '../../api/projectService';
 import { useAuth } from '../../context/AuthContext';
+import { useToast } from '../../context/ToastContext';
 import { useNavigate } from 'react-router-dom';
 
 const TASK_STATUSES = ['Pending', 'In Progress', 'Delay', 'Completed', 'On Hold'];
@@ -104,7 +105,9 @@ const workingDaysBetween = (fromValue, toValue) => {
   return days;
 };
 
-const userId = (value) => String(value?._id || value?.id || value || '');
+// getProjectId also normalizes Mongo ObjectId JSON/buffer shapes. Using it
+// here prevents an assigned user from being compared as "[object Object]".
+const userId = (value) => getProjectId(value).toLowerCase();
 const userLabel = (user = {}) => user.name || user.email || 'User';
 
 const normalizeStatus = (value) => {
@@ -291,6 +294,7 @@ const ProjectPlanningGrid = ({
   const [errors, setErrors] = useState({});
   const [updatingStatuses, setUpdatingStatuses] = useState({});
   const auth = useAuth();
+  const toast = useToast();
   const navigate = useNavigate();
 
   const sensors = useSensors(
@@ -430,11 +434,14 @@ const ProjectPlanningGrid = ({
         status,
         actualCompletedDate: status === 'Completed' ? (task.actualCompletedDate || new Date().toISOString()) : task.actualCompletedDate,
       });
+      toast.success(`Task status updated to ${status}`);
     } catch (error) {
+      const message = error.response?.data?.message || error.message || 'Failed to update task status.';
       setErrors((prev) => ({
         ...prev,
-        [key]: error.response?.data?.message || error.message || 'Failed to update task status.',
+        [key]: message,
       }));
+      toast.error(message);
     } finally {
       setUpdatingStatuses((prev) => ({ ...prev, [key]: false }));
     }

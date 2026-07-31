@@ -5,6 +5,7 @@ const {
   sendWhatsAppGroupNotification,
   sendWhatsAppNotification,
 } = require('../services/whatsappService');
+const createNotification = require('../services/notificationService');
 
 const Project            = require('../models/Project');
 const ProjectActivityLog = require('../models/ProjectActivityLog');
@@ -693,7 +694,28 @@ function diffProject(oldDoc, newBody) {
   return changes;
 }
 
-// ─── Helper: send WhatsApp messages when any role/task is newly assigned ──────
+function buildTaskAssignmentInAppMessage({
+  actingUserName,
+  projectId,
+  projectName,
+  tasks = [],
+}) {
+  const taskText = tasks.map((task) => {
+    const context = [task.department, task.gridName].filter(Boolean).join(' / ');
+    const dateRange = [fmtDate(task.startDate), fmtDate(task.endDate)]
+      .filter((value) => value && value !== '-')
+      .join(' to ');
+    return [
+      task.taskName || 'Task',
+      context ? `(${context})` : '',
+      dateRange ? `[${dateRange}]` : '',
+    ].filter(Boolean).join(' ');
+  }).join('; ');
+
+  return `${actingUserName || 'A project planner'} assigned you ${tasks.length} task${tasks.length === 1 ? '' : 's'} in project ${projectId || '-'} - ${projectName || '-'}${taskText ? `: ${taskText}` : ''}.`;
+}
+
+// ─── Helper: notify users when any project-planning task is newly assigned ────
 async function notifyAssignments(oldProject, newBody, projectDbId, projectId, projectName, actingUserId, actingUserName) {
   const newTasks = flattenPlanningTasks(newBody);
   if (!Array.isArray(newTasks) || newTasks.length === 0) return;
@@ -757,6 +779,26 @@ async function notifyAssignments(oldProject, newBody, projectDbId, projectId, pr
           tasks,
         })
       : null;
+
+    const inAppMessage = buildTaskAssignmentInAppMessage({
+      actingUserName,
+      projectId,
+      projectName,
+      tasks,
+    });
+
+    // Dashboard notification is independent from WhatsApp. A user must still
+    // receive the assignment notification even when WhatsApp is disabled,
+    // disconnected, or the user's phone number is missing.
+    promises.push(
+      createNotification({
+        title: `New task assignment - ${projectId || 'Project'}`,
+        message: inAppMessage,
+        type: 'info',
+        recipient: assigneeId,
+        relatedProject: projectDbId,
+      })
+    );
 
     promises.push(
       notifyAndLog({
@@ -1720,10 +1762,9 @@ function applyProjectRiskFilter(query, riskFilter) {
 // ── Get all projects ──────────────────────────────────────────────────────────
 const getProjects = async (req, res, next) => {
   try {
-    const { page = 1, limit = 10, search, projectStatus, paymentStatus, orderDate, financialYear, riskFilter } = req.query;
+    const { page = 1, limit = 10, search, paymentStatus, orderDate, financialYear, riskFilter } = req.query;
     const query = {};
     applyFinancialYearFilter(query, financialYear);
-    if (projectStatus) query.projectStatus = projectStatus;
     if (paymentStatus) query.paymentStatus = paymentStatus;
     if (orderDate) {
       const selectedDate = new Date(orderDate);
@@ -2351,7 +2392,7 @@ const assertTaskStartDateRole = (user = {}, oldProject = {}, body = {}) => {
 const assertTaskStatusOwnership = (user = {}, oldProject = {}, body = {}) => {
   if (!Array.isArray(body.planningGrids) && !Array.isArray(body.planningTasks)) return;
 
-  const currentUserId = toId(user._id || user.id);
+  const currentUserId = String(toId(user._id || user.id) || '').toLowerCase();
   const oldTaskMap = planningTaskPermissionMap(oldProject);
 
   flattenPlanningTasks(body).forEach((task, index) => {
@@ -2364,7 +2405,7 @@ const assertTaskStatusOwnership = (user = {}, oldProject = {}, body = {}) => {
 
     if (!statusChanged) return;
 
-    const assignedUserId = toId(previous?.assignedTo || task.assignedTo);
+    const assignedUserId = String(toId(previous?.assignedTo || task.assignedTo) || '').toLowerCase();
     if (assignedUserId && currentUserId && assignedUserId === currentUserId) return;
 
     const error = new Error(`Only the user assigned to task "${task.taskName || 'Task'}" can change its status.`);
@@ -2478,7 +2519,14 @@ const getRequiredProjectUpdatePermissions = (oldProject = {}, body = {}) => {
 const assertProjectUpdatePermissions = (user, oldProject, body, options = {}) => {
   let required = getRequiredProjectUpdatePermissions(oldProject, body);
   if (options.allowAssignedTaskStatusUpdate) {
-    required = required.filter((permission) => permission !== PROJECT_PERMISSIONS.UPDATE_COMPLETION);
+    // The dedicated task-status endpoint has already verified that the logged-in
+    // user owns the target task. Completion percentage and a possible automatic
+    // project completion are derived side effects of that one allowed status
+    // change, so they must not require separate management permissions.
+    required = required.filter((permission) => ![
+      PROJECT_PERMISSIONS.UPDATE_COMPLETION,
+      PROJECT_PERMISSIONS.MARK_COMPLETED,
+    ].includes(permission));
   }
   const missing = required.filter((permission) => !userHasPermission(user, permission));
 
@@ -2678,7 +2726,9 @@ const updateProject = async (req, res, next) => {
       'sourceInquirySnapshot',
     ].forEach((field) => delete body[field]);
     assertTaskStartDateRole(req.user, oldProject, body);
-    assertTaskStatusOwnership(req.user, oldProject, body);
+    if (req.assignedTaskStatusUpdate !== true) {
+      assertTaskStatusOwnership(req.user, oldProject, body);
+    }
     await attachInquiryNumber(body);
     applyActualCompletedDates(body, oldProject);
     if (Array.isArray(body.planningTasks) && body.completionPercentage === 100) {
@@ -2689,7 +2739,9 @@ const updateProject = async (req, res, next) => {
     assertProjectUpdatePermissions(req.user, oldProject, body, {
       allowAssignedTaskStatusUpdate: req.assignedTaskStatusUpdate === true,
     });
-    await assertPlanningDepartmentScope(req.user, oldProject, body);
+    if (req.assignedTaskStatusUpdate !== true) {
+      await assertPlanningDepartmentScope(req.user, oldProject, body);
+    }
     await attachUniversalCustomer(body, req.user._id, oldProject);
     await validatePlanningAssignments(body.planningGrids, oldProject);
 
@@ -2716,7 +2768,7 @@ const updateProject = async (req, res, next) => {
         const oldTask = oldTaskMap.get(key);
         const taskTitle = task.taskName || task.taskTitle || key;
         const taskStatus = normalizeTaskStatus(task);
-        const assignedUserId = toId(task.assignedTo);
+        const assignedUserId = String(toId(task.assignedTo) || '').toLowerCase();
         const assignedUserName = userNameMap[assignedUserId] || task.assignedTo?.name || '';
 
         const baseLog = {
@@ -2993,7 +3045,7 @@ const updatePlanningTaskStatus = async (req, res, next) => {
       throw makeHttpError(`Invalid task status. Allowed values: ${TASK_STATUSES.join(', ')}.`, 400);
     }
     const requestedStatus = normalizePlanningTaskStatus(rawRequestedStatus);
-    const currentUserId = toId(req.user?._id || req.user?.id);
+    const currentUserId = String(toId(req.user?._id || req.user?.id) || '').toLowerCase();
     let found = false;
 
     const grids = (project.planningGrids || []).map((grid) => ({

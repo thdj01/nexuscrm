@@ -20,6 +20,7 @@ const {
   requireAnyPermission,
 } = require('../middleware/permissionMiddleware');
 const { INQUIRY_PERMISSIONS } = require('../constants/permissions');
+const { requireInquiryEditAccess } = require('../middleware/inquiryAccessMiddleware');
 
 router.use(protect);
 
@@ -49,6 +50,7 @@ router.get(
 router.patch(
   '/:id/status',
   requirePermission(INQUIRY_PERMISSIONS.EDIT),
+  requireInquiryEditAccess('id'),
   uploadMiddleware,
   updateInquiryStatus
 );
@@ -56,6 +58,7 @@ router.patch(
 router.patch(
   '/:id/follow-up',
   requirePermission(INQUIRY_PERMISSIONS.FOLLOW_UP),
+  requireInquiryEditAccess('id'),
   updateInquiryFollowUp
 );
 
@@ -69,6 +72,7 @@ router.route('/:id')
   )
   .put(
     requirePermission(INQUIRY_PERMISSIONS.EDIT),
+    requireInquiryEditAccess('id'),
     uploadMiddleware,
     updateInquiry
   );

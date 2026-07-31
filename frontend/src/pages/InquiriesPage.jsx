@@ -315,16 +315,36 @@ const buildKickoffFormFromInquiry = (inquiry) => {
   };
 };
 
+const getEntityId = (value) => {
+  if (!value) return '';
+  if (typeof value === 'object') return String(value._id || value.id || value.value || '');
+  return String(value);
+};
+
+const getCreatedByName = (inquiry = {}) => {
+  const createdBy = inquiry.createdBy;
+  if (!createdBy || typeof createdBy === 'string') return '—';
+  return createdBy.name || createdBy.email || '—';
+};
+
 const InquiriesPage = () => {
   const toast = useToast();
   const navigate = useNavigate();
-  const { hasPermission } = useAuth();
+  const { hasPermission, user } = useAuth();
   const [searchParams, setSearchParams] = useSearchParams();
 
   const canCreateInquiry = hasPermission(INQUIRY_PERMISSIONS.CREATE);
   const canEditInquiry = hasPermission(INQUIRY_PERMISSIONS.EDIT);
   const canManageFollowUp = hasPermission(INQUIRY_PERMISSIONS.FOLLOW_UP);
   const canCommercialSubmit = hasPermission(INQUIRY_PERMISSIONS.COMMERCIAL_SUBMIT);
+  const canEditInquiryRecord = useCallback((inquiry = {}) => {
+    if (!canEditInquiry) return false;
+    if (typeof inquiry.canEdit === 'boolean') return inquiry.canEdit;
+
+    const currentUserId = getEntityId(user?._id || user?.id);
+    const creatorId = getEntityId(inquiry.createdBy);
+    return user?.role === 'admin' || Boolean(currentUserId && creatorId && currentUserId === creatorId);
+  }, [canEditInquiry, user]);
 
   const [inquiries, setInquiries] = useState([]);
   const [pagination, setPagination] = useState({
@@ -339,6 +359,8 @@ const InquiriesPage = () => {
   const [search, setSearch] = useState('');
   const [filterStatus, setFilterStatus] = useState(() => searchParams.get('status') || '');
   const [filterProduct, setFilterProduct] = useState('');
+  const [filterCreatedBy, setFilterCreatedBy] = useState(() => searchParams.get('createdBy') || '');
+  const [creatorOptions, setCreatorOptions] = useState([]);
   const [financialYear, setFinancialYear] = useState(() => searchParams.get('financialYear') || getStoredFinancialYear() || getCurrentFinancialYear());
   const financialYearOptions = [ALL_YEARS_VALUE, ...generateFinancialYearOptions()];
   const [page, setPage] = useState(1);
@@ -371,10 +393,12 @@ const InquiriesPage = () => {
       if (search) params.search = search;
       if (filterStatus) params.status = filterStatus;
       if (filterProduct) params.productType = filterProduct;
+      if (filterCreatedBy) params.createdBy = filterCreatedBy;
       if (financialYear) params.financialYear = financialYear;
 
       const { data } = await API.get('/inquiries', { params });
       setInquiries(data.data || []);
+      setCreatorOptions(Array.isArray(data.filters?.creators) ? data.filters.creators : []);
       setPagination({
         total: data.pagination?.total || 0,
         page: data.pagination?.page || page,
@@ -386,7 +410,7 @@ const InquiriesPage = () => {
     } finally {
       setLoading(false);
     }
-  }, [page, limit, search, filterStatus, filterProduct, financialYear, toast]);
+  }, [page, limit, search, filterStatus, filterProduct, filterCreatedBy, financialYear, toast]);
 
   useEffect(() => { fetchInquiries(); }, [fetchInquiries]);
   useEffect(() => {
@@ -406,7 +430,7 @@ const InquiriesPage = () => {
     setSearchParams(nextParams, { replace: true });
   };
 
-  useEffect(() => { setPage(1); }, [search, filterStatus, filterProduct, financialYear, limit]);
+  useEffect(() => { setPage(1); }, [search, filterStatus, filterProduct, filterCreatedBy, financialYear, limit]);
 
   const fetchMeetingUsers = useCallback(async () => {
     try {
@@ -517,8 +541,8 @@ const InquiriesPage = () => {
   };
 
   const handleStatusChange = (inquiry, nextStatus) => {
-    if (!canEditInquiry) {
-      toast.error('You do not have permission to edit inquiries');
+    if (!canEditInquiryRecord(inquiry)) {
+      toast.error('Only the inquiry creator, Estimation, or Admin can change this inquiry');
       return;
     }
 
@@ -757,11 +781,15 @@ const InquiriesPage = () => {
   };
 
   const handleConvert = (inquiry) => {
+    if (!canEditInquiryRecord(inquiry)) {
+      toast.error('Only the inquiry creator, Estimation, or Admin can change this inquiry');
+      return;
+    }
     openKickoffModal(inquiry);
   };
 
   const openFollowUpModal = (inquiry) => {
-    if (!canManageFollowUp) return;
+    if (!canManageFollowUp || !canEditInquiryRecord(inquiry)) return;
     setFollowUpModal({
       isOpen: true,
       inquiry,
@@ -819,6 +847,7 @@ const InquiriesPage = () => {
     setSearch('');
     setFilterStatus('');
     setFilterProduct('');
+    setFilterCreatedBy('');
   };
 
   // ── Table columns ─────────────────────────────────────────────────────────
@@ -838,6 +867,14 @@ const InquiriesPage = () => {
           <p className="font-medium text-gray-800 text-sm">{getLiveCustomerName(row) || '—'}</p>
           <p className="text-xs text-gray-400">{row.contactPerson || '—'}</p>
         </div>
+      ),
+    },
+    {
+      key: 'createdBy',
+      label: 'Created By',
+      width: '150px',
+      render: (_value, row) => (
+        <span className="text-sm font-medium text-gray-700">{getCreatedByName(row)}</span>
       ),
     },
     { key: 'mobileNumber', label: 'Mobile', width: '120px' },
@@ -863,7 +900,7 @@ const InquiriesPage = () => {
         const currentStatus = normalizeInquiryStatus(v);
         const selectValue = currentStatus === 'Revision' ? 'Revision_CURRENT' : currentStatus;
 
-        if (!canEditInquiry) {
+        if (!canEditInquiryRecord(row)) {
           return <StatusBadge status={getStatusLabel(currentStatus)} />;
         }
 
@@ -903,10 +940,11 @@ const InquiriesPage = () => {
       key: '_id', label: 'Actions', width: '220px',
       render: (_, row) => {
         const latestBomRevisionLabel = getLatestBomRevisionLabel(row.bomAttachments);
+        const canEditRow = canEditInquiryRecord(row);
 
         return (
           <div className="flex flex-wrap items-center gap-1" onClick={(e) => e.stopPropagation()}>
-          {canEditInquiry && (
+          {canEditRow && (
             <button
               type="button"
               onClick={(e) => {
@@ -920,7 +958,7 @@ const InquiriesPage = () => {
             </button>
           )}
 
-          {canManageFollowUp && (
+          {canManageFollowUp && canEditRow && (
             <button
               type="button"
               onClick={(e) => {
@@ -944,7 +982,7 @@ const InquiriesPage = () => {
           )}
 
 
-          {canEditInquiry && isOrderWonStatus(row.status) && !row.convertedToProject && row.kickoffMeeting?.status !== 'Scheduled' && (
+          {canEditRow && isOrderWonStatus(row.status) && !row.convertedToProject && row.kickoffMeeting?.status !== 'Scheduled' && (
             <button
               type="button"
               onClick={(e) => {
@@ -958,7 +996,7 @@ const InquiriesPage = () => {
             </button>
           )}
 
-          {canEditInquiry && isOrderWonStatus(row.status) && !row.convertedToProject && isKickoffScheduledOrReady(row) && (
+          {canEditRow && isOrderWonStatus(row.status) && !row.convertedToProject && isKickoffScheduledOrReady(row) && (
             <button
               type="button"
               onClick={(e) => {
@@ -987,7 +1025,7 @@ const InquiriesPage = () => {
   ];
 
   const limitOptions = getPageSizeOptions(pagination?.total || 0, limit);
-  const hasFilters = search || filterStatus || filterProduct;
+  const hasFilters = search || filterStatus || filterProduct || filterCreatedBy;
   const existingKickoffUsers = Array.isArray(pendingConversion?.kickoffMeeting?.attendees)
     ? pendingConversion.kickoffMeeting.attendees.filter(user => typeof user === 'object' && user?._id)
     : [];
@@ -1057,6 +1095,20 @@ const InquiriesPage = () => {
             <Select value={filterProduct} onChange={e => setFilterProduct(e.target.value)} className="h-9 w-full lg:w-[145px] lg:shrink-0">
               <option value="">All Products</option>
               {PRODUCTS.map((product) => <option key={product.value} value={product.value}>{product.label}</option>)}
+            </Select>
+
+            <Select
+              value={filterCreatedBy}
+              onChange={(e) => setFilterCreatedBy(e.target.value)}
+              className="h-9 w-full lg:w-[170px] lg:shrink-0"
+              aria-label="Filter inquiries by creator"
+            >
+              <option value="">All Created By</option>
+              {creatorOptions.map((creator) => (
+                <option key={creator._id} value={creator._id}>
+                  {creator.name || creator.email || 'Unknown User'}
+                </option>
+              ))}
             </Select>
 
             <Select

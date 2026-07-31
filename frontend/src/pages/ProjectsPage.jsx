@@ -20,11 +20,6 @@ import {
   getProjectId,
 } from '../api/projectService';
 
-const PROJECT_STATUSES = [
-  'Planning', 'Design', 'Production', 'Testing',
-  'Delivered', 'Installation', 'Completed', 'won',
-];
-
 const PAGE_SIZE_BASE_OPTIONS = [50, 100, 250];
 const ALL_YEARS_VALUE = 'all';
 const FINANCIAL_YEAR_STORAGE_KEY = 'dashboardFinancialYear';
@@ -134,7 +129,6 @@ const ProjectsPage = () => {
   const [loading, setLoading] = useState(true);
   const [submitting, setSubmitting] = useState(false);
   const [search, setSearch] = useState('');
-  const [filterStatus, setFilterStatus] = useState(() => searchParams.get('projectStatus') || '');
   const [filterOrderDate, setFilterOrderDate] = useState(() => searchParams.get('orderDate') || '');
   const [financialYear, setFinancialYear] = useState(() => searchParams.get('financialYear') || getStoredFinancialYear() || getCurrentFinancialYear());
   const riskFilter = searchParams.get('riskFilter') || '';
@@ -152,7 +146,6 @@ const ProjectsPage = () => {
     try {
       const params = { page, limit };
       if (search) params.search = search;
-      if (filterStatus) params.projectStatus = filterStatus;
       if (filterOrderDate) params.orderDate = filterOrderDate;
       if (financialYear) params.financialYear = financialYear;
       if (riskFilter) params.riskFilter = riskFilter;
@@ -184,9 +177,15 @@ const ProjectsPage = () => {
     } finally {
       setLoading(false);
     }
-  }, [page, limit, search, filterStatus, filterOrderDate, financialYear, riskFilter, toast]);
+  }, [page, limit, search, filterOrderDate, financialYear, riskFilter, toast]);
 
   useEffect(() => { fetchProjects(); }, [fetchProjects]);
+  useEffect(() => {
+    if (!searchParams.has('projectStatus')) return;
+    const nextParams = new URLSearchParams(searchParams);
+    nextParams.delete('projectStatus');
+    setSearchParams(nextParams, { replace: true });
+  }, [searchParams, setSearchParams]);
   useEffect(() => {
     const urlFinancialYear = searchParams.get('financialYear');
     if (urlFinancialYear && urlFinancialYear !== financialYear) {
@@ -204,7 +203,7 @@ const ProjectsPage = () => {
     setSearchParams(nextParams, { replace: true });
   };
 
-  useEffect(() => { setPage(1); }, [search, filterStatus, filterOrderDate, financialYear, riskFilter, limit]);
+  useEffect(() => { setPage(1); }, [search, filterOrderDate, financialYear, riskFilter, limit]);
 
   const handleEdit = async (formData) => {
     setSubmitting(true);
@@ -235,7 +234,6 @@ const ProjectsPage = () => {
 
   const clearFilters = () => {
     setSearch('');
-    setFilterStatus('');
     setFilterOrderDate('');
     if (riskFilter) {
       const nextParams = new URLSearchParams(searchParams);
@@ -386,7 +384,7 @@ const ProjectsPage = () => {
   ];
 
   const limitOptions = getPageSizeOptions(pagination?.total || 0, limit);
-  const hasFilters = search || filterStatus || filterOrderDate || riskFilter;
+  const hasFilters = search || filterOrderDate || riskFilter;
 
   return (
     <div className="fade-in w-full min-w-0 max-w-full space-y-4 overflow-x-hidden">
@@ -428,11 +426,6 @@ const ProjectsPage = () => {
           </div>
 
           <div className="grid min-w-0 grid-cols-1 gap-2 min-[420px]:grid-cols-2 sm:flex sm:flex-wrap sm:items-center">
-            <Select value={filterStatus} onChange={(e) => setFilterStatus(e.target.value)} className="h-9 w-full sm:w-[150px] sm:shrink-0">
-              <option value="">All Statuses</option>
-              {PROJECT_STATUSES.map((s) => <option key={s} value={s}>{s}</option>)}
-            </Select>
-
             <input
               type="date"
               value={filterOrderDate}

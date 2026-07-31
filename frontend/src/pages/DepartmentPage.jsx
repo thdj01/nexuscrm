@@ -100,7 +100,7 @@ const DepartmentPage = () => {
       await createDepartment(payload);
       toast.success('Department created successfully');
       setAddModal(false);
-      loadDepartments();
+      await Promise.all([loadDepartments(), loadUsers()]);
     } catch (err) {
       toast.error(err.response?.data?.message || 'Failed to create department');
     } finally {
@@ -117,7 +117,7 @@ const DepartmentPage = () => {
       toast.success('Department updated successfully');
       setEditModal(false);
       setSelected(null);
-      loadDepartments();
+      await Promise.all([loadDepartments(), loadUsers()]);
     } catch (err) {
       toast.error(err.response?.data?.message || 'Failed to update department');
     } finally {
@@ -129,7 +129,7 @@ const DepartmentPage = () => {
     try {
       await updateDepartment(department._id, { isActive: !department.isActive });
       toast.success(department.isActive ? 'Department deactivated' : 'Department activated');
-      loadDepartments();
+      await Promise.all([loadDepartments(), loadUsers()]);
     } catch (err) {
       toast.error(err.response?.data?.message || 'Failed to update department status');
     }

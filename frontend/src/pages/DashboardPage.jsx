@@ -109,8 +109,8 @@ const INQUIRY_PATHS = {
 
 const PROJECT_PATHS = {
   all: '/projects',
-  won: buildQueryPath('/projects', { projectStatus: 'won' }),
-  completed: buildQueryPath('/projects', { projectStatus: 'Completed' }),
+  won: '/projects',
+  completed: '/projects',
   delayed: buildQueryPath('/projects', { riskFilter: 'delayed' }),
   delayedTasks: buildQueryPath('/projects', { riskFilter: 'delayedTasks' }),
   dueToday: buildQueryPath('/projects', { riskFilter: 'dueToday' }),
@@ -133,23 +133,24 @@ const TICKET_PATHS = {
 const StatCard = ({ label, value, icon: Icon, color, onClick }) => {
   const clickableProps = onClick
     ? {
-      role: 'button',
-      tabIndex: 0,
-      onClick,
-      onKeyDown: (event) => {
-        if (event.key === 'Enter' || event.key === ' ') {
-          event.preventDefault();
-          onClick();
-        }
-      },
-    }
+        role: 'button',
+        tabIndex: 0,
+        onClick,
+        onKeyDown: (event) => {
+          if (event.key === 'Enter' || event.key === ' ') {
+            event.preventDefault();
+            onClick();
+          }
+        },
+      }
     : {};
 
   return (
     <div
       {...clickableProps}
-      className={`flex min-w-0 items-center justify-between rounded-lg border border-gray-100 bg-white px-3 py-2.5 shadow-sm transition-all duration-150 sm:p-3 lg:rounded-xl lg:p-4 ${onClick ? 'cursor-pointer hover:shadow-md hover:border-blue-200 hover:-translate-y-0.5 focus:outline-none focus:ring-2 focus:ring-blue-500/30' : ''
-        }`}
+      className={`flex min-w-0 items-center justify-between rounded-lg border border-gray-100 bg-white px-3 py-2.5 shadow-sm transition-all duration-150 sm:p-3 lg:rounded-xl lg:p-4 ${
+        onClick ? 'cursor-pointer hover:shadow-md hover:border-blue-200 hover:-translate-y-0.5 focus:outline-none focus:ring-2 focus:ring-blue-500/30' : ''
+      }`}
     >
       <div className="min-w-0 flex-1">
         <p className="mb-0.5 text-[10px] font-medium uppercase leading-tight tracking-wide text-gray-500 sm:text-[11px] lg:mb-1 lg:text-xs">{label}</p>
@@ -529,10 +530,11 @@ const TaskReminderWidget = ({ taskReminders, navigate, className = '' }) => {
                 key={filter.key}
                 type="button"
                 onClick={() => setActiveFilter(filter.key)}
-                className={`shrink-0 rounded-full border px-3 py-1.5 text-xs font-semibold transition ${active
+                className={`shrink-0 rounded-full border px-3 py-1.5 text-xs font-semibold transition ${
+                  active
                     ? 'border-blue-600 bg-blue-600 text-white shadow-sm'
                     : 'border-gray-200 bg-white text-gray-600 hover:border-blue-200 hover:text-blue-700'
-                  }`}
+                }`}
               >
                 {filter.label}
                 <span className={`ml-1 ${active ? 'text-blue-100' : 'text-gray-400'}`}>{count}</span>
@@ -655,64 +657,64 @@ const InfoPill = ({ children, tone = 'gray' }) => {
 
 const RecentInquiryRows = ({ recent, navigate }) => (
   recent?.recentInquiries?.length > 0 &&
-  recent.recentInquiries.map((inq) => (
-    <div
-      key={inq._id}
-      onClick={() => navigate(`/inquiries/${inq._id}`)}
-      className="flex w-full min-w-0 cursor-pointer flex-col items-start gap-2 px-3 py-3 transition-colors hover:bg-gray-50 sm:flex-row sm:flex-wrap sm:items-center sm:px-5"
-    >
-      <div className="w-full min-w-0 sm:min-w-[150px] sm:flex-1">
-        <p className="break-words text-sm font-semibold text-gray-800">{inq.customerName || inq.companyName || 'Untitled Inquiry'}</p>
-      </div>
+    recent.recentInquiries.map((inq) => (
+      <div
+        key={inq._id}
+        onClick={() => navigate(`/inquiries/${inq._id}`)}
+        className="flex w-full min-w-0 cursor-pointer flex-col items-start gap-2 px-3 py-3 transition-colors hover:bg-gray-50 sm:flex-row sm:flex-wrap sm:items-center sm:px-5"
+      >
+        <div className="w-full min-w-0 sm:min-w-[150px] sm:flex-1">
+          <p className="break-words text-sm font-semibold text-gray-800">{inq.customerName || inq.companyName || 'Untitled Inquiry'}</p>
+        </div>
 
-      <div className="flex w-full min-w-0 flex-wrap items-center gap-1.5 sm:flex-1">
-        <InfoPill tone="blue">Inquiry No: {inq.inquiryId || '—'}</InfoPill>
-        <InfoPill tone="violet">Panel: {getInquiryPanelLabel(inq)}</InfoPill>
-      </div>
+        <div className="flex w-full min-w-0 flex-wrap items-center gap-1.5 sm:flex-1">
+          <InfoPill tone="blue">Inquiry No: {inq.inquiryId || '—'}</InfoPill>
+          <InfoPill tone="violet">Panel: {getInquiryPanelLabel(inq)}</InfoPill>
+        </div>
 
-      <div className="flex w-full min-w-0 flex-wrap items-center gap-1.5 sm:ml-auto sm:w-auto sm:justify-end">
-        <StatusBadge status={inq.status} size="xs" />
+        <div className="flex w-full min-w-0 flex-wrap items-center gap-1.5 sm:ml-auto sm:w-auto sm:justify-end">
+          <StatusBadge status={inq.status} size="xs" />
+        </div>
       </div>
-    </div>
-  ))
+    ))
 );
 
 const RecentProjectRows = ({ recent, navigate }) => (
   recent?.recentProjects?.length > 0 &&
-  recent.recentProjects.map((proj) => {
-    const inquiryNo = getProjectInquiryNumber(proj);
+    recent.recentProjects.map((proj) => {
+      const inquiryNo = getProjectInquiryNumber(proj);
 
-    return (
-      <div
-        key={proj._id}
-        onClick={() => navigate(`/projects/${proj._id}`)}
-        className="flex w-full min-w-0 cursor-pointer flex-col items-start gap-2 px-3 py-3 transition-colors hover:bg-gray-50 sm:flex-row sm:flex-wrap sm:items-center sm:px-5"
-      >
-        <div className="w-full min-w-0 sm:min-w-[150px] sm:flex-1">
-          <p className="break-words text-sm font-semibold text-gray-800">{proj.projectName || 'Untitled Project'}</p>
-        </div>
+      return (
+        <div
+          key={proj._id}
+          onClick={() => navigate(`/projects/${proj._id}`)}
+          className="flex w-full min-w-0 cursor-pointer flex-col items-start gap-2 px-3 py-3 transition-colors hover:bg-gray-50 sm:flex-row sm:flex-wrap sm:items-center sm:px-5"
+        >
+          <div className="w-full min-w-0 sm:min-w-[150px] sm:flex-1">
+            <p className="break-words text-sm font-semibold text-gray-800">{proj.projectName || 'Untitled Project'}</p>
+          </div>
 
-        <div className="flex w-full min-w-0 flex-wrap items-center gap-1.5 sm:flex-1">
-          <InfoPill tone="blue">Project No: {proj.projectId || '—'}</InfoPill>
-          <InfoPill tone="emerald">Inquiry No: {inquiryNo || '—'}</InfoPill>
-        </div>
+          <div className="flex w-full min-w-0 flex-wrap items-center gap-1.5 sm:flex-1">
+            <InfoPill tone="blue">Project No: {proj.projectId || '—'}</InfoPill>
+            <InfoPill tone="emerald">Inquiry No: {inquiryNo || '—'}</InfoPill>
+          </div>
 
-        <div className="flex w-full min-w-0 flex-wrap items-center gap-1.5 sm:ml-auto sm:w-auto sm:justify-end">
-          <StatusBadge status={proj.projectStatus} size="xs" />
-          <button
-            type="button"
-            onClick={(e) => {
-              e.stopPropagation();
-              navigate(`/projects/${proj._id}/activity`);
-            }}
-            className="rounded-lg border border-blue-100 bg-blue-50 px-2.5 py-1 text-xs font-semibold text-blue-700 transition-colors hover:border-blue-200 hover:bg-blue-100"
-          >
-            Activity
-          </button>
+          <div className="flex w-full min-w-0 flex-wrap items-center gap-1.5 sm:ml-auto sm:w-auto sm:justify-end">
+            <StatusBadge status={proj.projectStatus} size="xs" />
+            <button
+              type="button"
+              onClick={(e) => {
+                e.stopPropagation();
+                navigate(`/projects/${proj._id}/activity`);
+              }}
+              className="rounded-lg border border-blue-100 bg-blue-50 px-2.5 py-1 text-xs font-semibold text-blue-700 transition-colors hover:border-blue-200 hover:bg-blue-100"
+            >
+              Activity
+            </button>
+          </div>
         </div>
-      </div>
-    );
-  })
+      );
+    })
 );
 
 const RecentListCard = ({ title, emptyMessage, children, className = '' }) => (
