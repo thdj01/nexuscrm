@@ -60,6 +60,11 @@ const notificationSchema = new mongoose.Schema(
       type: mongoose.Schema.Types.ObjectId,
       ref:  'Project',
     },
+    relatedTicket: {
+  type: mongoose.Schema.Types.ObjectId,
+  ref: 'Ticket',
+  default: null,
+},
   },
   { timestamps: true }
 );
