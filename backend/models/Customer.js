@@ -4,7 +4,14 @@ const Counter = require('./Counter');
 const customerContactSchema = new mongoose.Schema(
   {
     name: { type: String, trim: true },
-    phone: { type: String, trim: true },
+    phone: {
+      type: String,
+      trim: true,
+      validate: {
+        validator: (value) => !value || /^\d{10}$/.test(String(value)),
+        message: 'Contact mobile number must contain exactly 10 digits',
+      },
+    },
     email: { type: String, lowercase: true, trim: true },
     designation: { type: String, trim: true },
   },
@@ -42,6 +49,10 @@ const customerSchema = new mongoose.Schema(
     mobileNumber: {
       type: String,
       trim: true,
+      validate: {
+        validator: (value) => !value || /^\d{10}$/.test(String(value)),
+        message: 'Mobile number must contain exactly 10 digits',
+      },
     },
     contacts: {
       type: [customerContactSchema],

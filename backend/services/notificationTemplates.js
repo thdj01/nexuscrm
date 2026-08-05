@@ -150,6 +150,7 @@ function buildInquiryEmailHtml(inquiry = {}, options = {}) {
       ['Site Location', escapeHtml(resolveSiteLocation(inquiry))],
       ['Panel Type', escapeHtml(resolvePanelType(inquiry))],
       ['Status', statusValue],
+      ...(options.actorName ? [['Changed By', escapeHtml(options.actorName)]] : []),
       [copy.createdLabel, escapeHtml(formatDateTime(inquiry.updatedAt || inquiry.createdAt || new Date()))],
       ['Uploaded Documents', attachmentsHtml],
     ],
@@ -307,12 +308,13 @@ function buildKickoffAssignedWhatsAppMessage(inquiry = {}, workflow = {}, user =
   return lines.join('\n');
 }
 
-function buildKickoffEmailHtml(inquiry = {}, workflow = {}, recipientName = '', attendees = []) {
+function buildKickoffEmailHtml(inquiry = {}, workflow = {}, recipientName = '', attendees = [], inquiryMadeByName = '') {
   return buildBaseEmail({
     heading: 'Kick-off Meeting Scheduled',
     intro: `Hello ${escapeHtml(recipientName || inquiry.contactPerson || resolveCustomerName(inquiry) || 'Team')},<br/>The Kick-off Meeting has been scheduled with the below details.`,
     rows: [
       ['Inquiry ID', escapeHtml(inquiry.inquiryId || '-')],
+      ['Inquiry Made By', escapeHtml(inquiryMadeByName || resolveCreatedByName(inquiry))],
       ['Customer / Company', escapeHtml(resolveCustomerName(inquiry))],
       ['Project / Requirement', escapeHtml(resolveInquiryProjectName(inquiry))],
       ['Meeting Date & Time', escapeHtml(formatDateTime(workflow.scheduledAt))],
@@ -349,6 +351,126 @@ function buildProjectCreatedAfterKickoffEmailHtml(project = {}, inquiry = {}, wo
   });
 }
 
+
+function buildInquiryChangedWhatsAppMessage(inquiry = {}, { eventType = 'inquiry_updated', previousStatus = '', actorName = '' } = {}) {
+  const isStatusChange = eventType === 'inquiry_status_changed';
+  const lines = [
+    isStatusChange ? '🔄 *Inquiry Status Changed*' : '📝 *Inquiry Updated*',
+    '',
+    `*Inquiry No:* ${inquiry.inquiryId || '-'}`,
+    `*Customer:* ${resolveCustomerName(inquiry)}`,
+    `*Project:* ${resolveInquiryProjectName(inquiry)}`,
+  ];
+
+  if (isStatusChange) {
+    lines.push(`*Status:* ${previousStatus || '-'} → ${inquiry.status || '-'}`);
+  } else {
+    lines.push(`*Status:* ${inquiry.status || '-'}`);
+  }
+
+  if (actorName) lines.push(`*Changed By:* ${actorName}`);
+  return lines.join('\n');
+}
+
+function buildProjectCreatedEmailHtml(project = {}, userName = '') {
+  const departments = Array.isArray(project.selectedDepartments) && project.selectedDepartments.length
+    ? project.selectedDepartments.join(', ')
+    : '-';
+  const panels = Array.isArray(project.panelSelections) && project.panelSelections.length
+    ? project.panelSelections.map((item) => `${item.department}: ${item.panelType} × ${item.quantity}`).join('; ')
+    : '-';
+
+  return buildBaseEmail({
+    heading: 'New Project Created',
+    intro: `Hello ${escapeHtml(userName || 'Team Member')},<br/>A project has been created in Nexus Dashboard.`,
+    rows: [
+      ['Project ID', escapeHtml(project.projectId || '-')],
+      ['Project Name', escapeHtml(project.projectName || '-')],
+      ['Customer', escapeHtml(project.customerName || '-')],
+      ['Departments', escapeHtml(departments)],
+      ['Panels', escapeHtml(panels)],
+      ['Status', escapeHtml(project.projectStatus || 'Planning')],
+      ['Created On', escapeHtml(formatDateTime(project.createdAt || new Date()))],
+    ],
+  });
+}
+
+function buildTaskAssignmentEmailHtml({ userName = '', assignedToName = '', isAssignee = true, projectName = '', projectId = '', tasks = [] } = {}) {
+  const taskRows = tasks.length
+    ? `<ol style="margin:0; padding-left:20px;">${tasks.map((task) => (
+        `<li style="margin-bottom:8px;"><strong>${escapeHtml(task.taskName || 'Task')}</strong>` +
+        `${task.department || task.gridName ? ` (${escapeHtml([task.department, task.gridName].filter(Boolean).join(' / '))})` : ''}<br/>` +
+        `Start: ${escapeHtml(formatDate(task.startDate || task.plannedStartDate))}<br/>` +
+        `End: ${escapeHtml(formatDate(task.endDate || task.plannedEndDate))}</li>`
+      )).join('')}</ol>`
+    : '-';
+
+  return buildBaseEmail({
+    heading: 'New Task Assignment',
+    intro: `Hello ${escapeHtml(userName || 'Team Member')},<br/>${isAssignee ? 'You have been assigned project-planning task(s).' : `${escapeHtml(assignedToName || 'A team member')} has been assigned project-planning task(s).`}`,
+    rows: [
+      ['Project ID', escapeHtml(projectId || '-')],
+      ['Project Name', escapeHtml(projectName || '-')],
+      ['Assigned Tasks', taskRows],
+    ],
+  });
+}
+
+function resolveTicketCustomerName(ticket = {}) {
+  return ticket.customer?.customerName || ticket.customerName || '-';
+}
+
+function resolveTicketAssigneeName(ticket = {}) {
+  return ticket.assignedTo?.name || ticket.assignedToName || '-';
+}
+
+function buildTicketCreatedWhatsAppMessage(ticket = {}) {
+  return [
+    '🎫 *New Ticket Created*',
+    '',
+    `*Ticket ID:* ${ticket.ticketId || '-'}`,
+    `*Title:* ${ticket.title || '-'}`,
+    `*Customer:* ${resolveTicketCustomerName(ticket)}`,
+    `*Department:* ${ticket.department || '-'}`,
+    `*Priority:* ${ticket.priority || 'Medium'}`,
+    `*Assigned To:* ${resolveTicketAssigneeName(ticket)}`,
+    `*Status:* ${ticket.status || 'New'}`,
+  ].join('\n');
+}
+
+function buildTicketAssignedWhatsAppMessage(ticket = {}, userName = '') {
+  return [
+    `Hello *${userName || resolveTicketAssigneeName(ticket) || 'Team Member'}*`,
+    '',
+    'A ticket has been assigned to you.',
+    `*Ticket ID:* ${ticket.ticketId || '-'}`,
+    `*Title:* ${ticket.title || '-'}`,
+    `*Customer:* ${resolveTicketCustomerName(ticket)}`,
+    `*Priority:* ${ticket.priority || 'Medium'}`,
+    `*Status:* ${ticket.status || 'Assigned'}`,
+    '',
+    'Please check the Nexus dashboard for details.',
+  ].join('\n');
+}
+
+function buildTicketEmailHtml(ticket = {}, { userName = '', eventType = 'ticket_created', isAssignee = true, assignedToName = '' } = {}) {
+  const isAssignment = eventType === 'ticket_assigned';
+  return buildBaseEmail({
+    heading: isAssignment ? 'Ticket Assigned' : 'New Ticket Created',
+    intro: `Hello ${escapeHtml(userName || 'Team Member')},<br/>${isAssignment ? (isAssignee ? 'A ticket has been assigned to you.' : `A ticket has been assigned to ${escapeHtml(assignedToName || resolveTicketAssigneeName(ticket))}.`) : 'A ticket has been created in Nexus Dashboard.'}`,
+    rows: [
+      ['Ticket ID', escapeHtml(ticket.ticketId || '-')],
+      ['Title', escapeHtml(ticket.title || '-')],
+      ['Customer', escapeHtml(resolveTicketCustomerName(ticket))],
+      ['Department', escapeHtml(ticket.department || '-')],
+      ['Priority', escapeHtml(ticket.priority || 'Medium')],
+      ['Assigned To', escapeHtml(resolveTicketAssigneeName(ticket))],
+      ['Status', escapeHtml(ticket.status || 'New')],
+      ['Created By', escapeHtml(ticket.createdBy?.name || '-')],
+    ],
+  });
+}
+
 const dashboardMessages = {
   inquiryCreated: (inquiry = {}) => `Inquiry ${inquiry.inquiryId || '-'} created by ${resolveCreatedByName(inquiry)} for ${resolveCustomerName(inquiry)}`,
   inquiryUpdated: (inquiry = {}) => `Inquiry ${inquiry.inquiryId || '-'} updated successfully`,
@@ -365,9 +487,12 @@ module.exports = {
   resolvePanelType,
   buildInquiryEmailHtml,
   buildNewInquiryWhatsAppMessage,
+  buildInquiryChangedWhatsAppMessage,
   buildProjectCreatedWhatsAppMessage,
+  buildProjectCreatedEmailHtml,
   buildTaskAssignmentGroupWhatsAppMessage,
   buildTaskAssignmentPersonalWhatsAppMessage,
+  buildTaskAssignmentEmailHtml,
   buildProjectFieldChangedWhatsAppMessage,
   buildProjectDelayedWhatsAppMessage,
   buildKickoffSummaryWhatsAppMessage,
@@ -375,5 +500,8 @@ module.exports = {
   buildKickoffEmailHtml,
   buildProjectCreatedAfterKickoffWhatsAppMessage,
   buildProjectCreatedAfterKickoffEmailHtml,
+  buildTicketCreatedWhatsAppMessage,
+  buildTicketAssignedWhatsAppMessage,
+  buildTicketEmailHtml,
   dashboardMessages,
 };

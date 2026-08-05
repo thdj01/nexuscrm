@@ -26,7 +26,12 @@
 const mongoose      = require('mongoose');
 const TimesheetTask = require('../models/TimesheetTask');
 const { ROLES }     = require('../models/User');
+const {
+  getDepartmentEmployeeIds,
+  resolveDepartmentHierarchyScope,
+} = require('../services/timesheetDepartmentScopeService');
 const Team          = require('../models/Team');
+const User          = require('../models/User');
 const {
   updateLinkedProjectTaskStatusFromTimesheet,
 } = require('../services/timesheetProjectReverseSyncService');
@@ -275,34 +280,49 @@ function buildAggregateEmployeeMatch(req, overrideIds) {
  */
 async function resolveEmployeeScope(req) {
   const { allowedEmployeeIds } = req;
-  const { teamId } = req.query;
+  const { teamId, departmentId } = req.query;
 
-  // No team filter — return hierarchy scope as-is
-  if (!teamId) return allowedEmployeeIds;
+  let resolvedIds = allowedEmployeeIds;
 
-  // Invalid teamId — treat as "no match" to avoid 500
+  // Department Master filter. Non-admin users may select only departments
+  // already present in their hierarchy scope; Admin may select any active one.
+  if (departmentId) {
+    if (!isValidId(departmentId)) return [];
+
+    const allowedDepartmentIds = req.teamContext?.departmentIds || [];
+    if (resolvedIds !== null && resolvedIds !== undefined) {
+      const allowedDepartment = allowedDepartmentIds.some(
+        (id) => id.toString() === departmentId.toString()
+      );
+      if (!allowedDepartment) return [];
+    }
+
+    const departmentEmployeeIds = await getDepartmentEmployeeIds(departmentId);
+    const departmentSet = new Set(departmentEmployeeIds.map((id) => id.toString()));
+
+    resolvedIds = resolvedIds === null || resolvedIds === undefined
+      ? departmentEmployeeIds
+      : resolvedIds.filter((id) => departmentSet.has(id.toString()));
+  }
+
+  // No team filter — return the current hierarchy/department scope.
+  if (!teamId) return resolvedIds;
+
+  // Invalid teamId — treat as "no match" to avoid 500.
   if (!isValidId(teamId)) return [];
 
-  // Load the requested team
   const team = await Team.findById(teamId).select('members teamLead').lean();
   if (!team) return [];
 
-  // Collect team member IDs into a Set of strings for O(1) lookup
   const teamMemberSet = new Set();
   if (team.teamLead) teamMemberSet.add(team.teamLead.toString());
-  for (const m of team.members ?? []) teamMemberSet.add(m.toString());
+  for (const member of team.members ?? []) teamMemberSet.add(member.toString());
 
-  if (allowedEmployeeIds === null || allowedEmployeeIds === undefined) {
-    // Admin with teamId filter — show all members of that team
+  if (resolvedIds === null || resolvedIds === undefined) {
     return [...teamMemberSet].map((id) => new mongoose.Types.ObjectId(id));
   }
 
-  // Non-admin: intersect team members with hierarchy-allowed IDs
-  const intersection = allowedEmployeeIds.filter((id) =>
-    teamMemberSet.has(id.toString())
-  );
-
-  return intersection;
+  return resolvedIds.filter((id) => teamMemberSet.has(id.toString()));
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -902,6 +922,52 @@ const restoreTask = async (req, res) => {
 // ─────────────────────────────────────────────────────────────────────────────
 
 /**
+ * @route GET /api/timesheet/admin/scope
+ * Returns the exact department/employee scope used by the analytics endpoints.
+ * Admin receives company-wide scope, HOD receives every assigned department,
+ * and Team Lead receives only their single assigned department.
+ */
+const getAnalyticsScope = async (req, res) => {
+  try {
+    const scope = await resolveDepartmentHierarchyScope(req.user);
+    const isAdmin = scope.role === ROLES.ADMIN;
+
+    const employeeCount = isAdmin
+      ? await User.countDocuments({
+          isActive: { $ne: false },
+          role: { $ne: ROLES.ADMIN },
+        })
+      : (scope.employeeIds || []).length;
+
+    const departments = (scope.departments || []).map((department) => ({
+      _id: department._id,
+      name: department.name,
+      code: department.code,
+    }));
+
+    const scopeLabel = isAdmin
+      ? 'All departments'
+      : departments.length
+        ? departments.map((department) => department.name).join(', ')
+        : 'No department assigned';
+
+    return ok(res, {
+      scope: {
+        role: scope.role,
+        scopeLabel,
+        departments,
+        employeeCount,
+        isCompanyWide: isAdmin,
+        isSelfOnly: Boolean(scope.isSelfOnly),
+      },
+    });
+  } catch (err) {
+    console.error('getAnalyticsScope:', err);
+    return fail(res, 'Server error fetching timesheet scope', 500);
+  }
+};
+
+/**
  * @route GET /api/timesheet/admin/all
  * Also accessible to HOD (scoped to managed teams) and
  * team_lead (scoped to own team). scopeToHierarchy runs before this handler.
@@ -1146,6 +1212,7 @@ module.exports = {
   getKanbanTasks,
   getCalendarTasks,
   // Admin / elevated
+  getAnalyticsScope,
   getAllTasks,
   getSummary,
   getWorkload,

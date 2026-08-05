@@ -23,6 +23,7 @@ import nexusXLogo from '../../assets/nexus-logo-x.png';
 import { useAuth } from '../../context/AuthContext';
 import { CUSTOMER_PERMISSIONS, INQUIRY_PERMISSIONS } from '../../constants/permissions';
 import Avatar from './Avatar';
+import { getUserRoleDepartmentLabel } from '../../utils/userRoleLabel';
 
 const navItems = [
   { to: '/',             icon: LayoutDashboard, label: 'Dashboard' },
@@ -67,6 +68,7 @@ const Sidebar = ({
 }) => {
   const [collapsedInternal, setCollapsedInternal] = useState(false);
   const { user, logout, isAdmin, isHod, isTeamLead, hasPermission } = useAuth();
+  const userRoleDepartmentLabel = getUserRoleDepartmentLabel(user);
   const canAccessTimesheetAdmin =
     isAdmin ||
     isHod ||
@@ -213,7 +215,9 @@ const Sidebar = ({
 
           <div className={collapsed ? 'min-w-0 lg:hidden' : 'min-w-0'}>
             <p className="truncate text-sm font-medium text-white">{user?.name}</p>
-            <p className="text-xs capitalize text-slate-400">{user?.role}</p>
+            <p className="truncate text-xs text-slate-400" title={userRoleDepartmentLabel}>
+              {userRoleDepartmentLabel}
+            </p>
           </div>
         </div>
 

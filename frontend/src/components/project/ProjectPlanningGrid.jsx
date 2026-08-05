@@ -302,11 +302,20 @@ const ProjectPlanningGrid = ({
     useSensor(KeyboardSensor, { coordinateGetter: sortableKeyboardCoordinates })
   );
 
-  const canEditStructure = !readOnly && canManagePlanning;
-  const planningLeadershipRole = ['admin', 'hod', 'team_lead'].includes(auth?.user?.role);
+  const planningLeadershipRole = ['admin', 'hod', 'manager', 'team_lead'].includes(auth?.user?.role);
+  const canEditStructure = !readOnly && canManagePlanning && planningLeadershipRole;
   const canEditTaskDates = canEditStructure && planningLeadershipRole;
   const canReorderTasks = canEditStructure && planningLeadershipRole;
   const currentUserId = userId(auth?.user);
+
+  const canLeadDepartment = (department) => {
+    if (!planningLeadershipRole) return false;
+    if (auth?.user?.role === 'admin') return true;
+
+    return (usersByDepartment[department] || []).some(
+      (departmentUser) => userId(departmentUser) === currentUserId
+    );
+  };
 
   const departments = useMemo(() => [...new Set(planningGrids.map((grid) => grid.department).filter(Boolean))], [planningGrids]);
 
@@ -467,6 +476,11 @@ const ProjectPlanningGrid = ({
       {planningGrids.map((rawGrid, gridIndex) => {
         const grid = recalculateGrid(rawGrid);
         const users = usersByDepartment[grid.department] || [];
+        const canManageGridDepartment = canLeadDepartment(grid.department);
+        const canEditGridStructure = canEditStructure && canManageGridDepartment;
+        const canEditGridTaskDates = canEditTaskDates && canManageGridDepartment;
+        const canReorderGridTasks = canReorderTasks && canManageGridDepartment;
+        const canManageGridStatus = planningLeadershipRole && canManageGridDepartment;
         const statusCounts = TASK_STATUSES.reduce((counts, status) => ({
           ...counts,
           [status]: (grid.planningTasks || []).filter((task) => effectiveStatus(task) === status).length,
@@ -519,7 +533,7 @@ const ProjectPlanningGrid = ({
                       <Activity size={13} /> Activity Graph
                     </button>
                   )}
-                  {canEditStructure && (
+                  {canEditGridStructure && (
                     <button
                       type="button"
                       onClick={() => addRow(gridIndex)}
@@ -534,7 +548,7 @@ const ProjectPlanningGrid = ({
               <DndContext
                 sensors={sensors}
                 collisionDetection={closestCenter}
-                onDragEnd={(event) => handleDragEnd(gridIndex, grid, event)}
+                onDragEnd={(event) => canReorderGridTasks && handleDragEnd(gridIndex, grid, event)}
               >
                 <SortableContext items={sortableTaskIds} strategy={verticalListSortingStrategy}>
                   <div className="hidden overflow-hidden rounded-lg border border-slate-200 xl:block">
@@ -570,14 +584,16 @@ const ProjectPlanningGrid = ({
                           const statusError = errors[`${gridIndex}-${taskIndex}-status`];
                           const status = effectiveStatus(task);
                           const taskSortableId = sortableTaskId(grid, task, taskIndex);
-                          const canChangeStatus = Boolean(projectId && currentAssigneeId && currentAssigneeId === currentUserId);
+                          const canChangeStatus = Boolean(projectId && (
+                            (currentAssigneeId && currentAssigneeId === currentUserId) || canManageGridStatus
+                          ));
                           const statusUpdating = Boolean(updatingStatuses[`${gridIndex}-${taskIndex}-status`]);
 
                           return (
                             <SortableTableRow
                               key={taskSortableId}
                               id={taskSortableId}
-                              disabled={!canReorderTasks}
+                              disabled={!canReorderGridTasks}
                               className={`border-t border-slate-200 align-middle transition-colors ${STATUS_STYLES[status].row}`}
                             >
                               {({ attributes, listeners, setActivatorNodeRef }) => (
@@ -586,14 +602,14 @@ const ProjectPlanningGrid = ({
                                   <td className="px-1 py-1">
                                     <AutoSizeTaskInput
                                       value={task.taskName || ''}
-                                      disabled={!canEditStructure}
+                                      disabled={!canEditGridStructure}
                                       onChange={(event) => updateTask(gridIndex, taskIndex, { taskName: event.target.value })}
                                     />
                                   </td>
                                   <td className="px-1 py-1">
                                     <Input
                                       value={task.remark || ''}
-                                      disabled={!canEditStructure}
+                                      disabled={!canEditGridStructure}
                                       title={task.remark || ''}
                                       placeholder="Remark..."
                                       onChange={(event) => updateTask(gridIndex, taskIndex, { remark: event.target.value })}
@@ -603,7 +619,7 @@ const ProjectPlanningGrid = ({
                                   <td className="px-1 py-1">
                                     <Select
                                       value={currentAssigneeId}
-                                      disabled={!canEditStructure || loadingDepartments[grid.department]}
+                                      disabled={!canEditGridStructure || loadingDepartments[grid.department]}
                                       onChange={(event) => updateTask(gridIndex, taskIndex, { assignedTo: event.target.value || null })}
                                       className={`${COMPACT_SELECT} !px-1.5 !pr-5 !text-[10px]`}
                                       title={currentAssignee ? userLabel(currentAssignee) : ''}
@@ -618,7 +634,7 @@ const ProjectPlanningGrid = ({
                                       min="1"
                                       step="1"
                                       value={task.totalDays ?? task.duration ?? 1}
-                                      disabled={!canEditStructure}
+                                      disabled={!canEditGridStructure}
                                       onChange={(event) => setDays(gridIndex, taskIndex, event.target.value)}
                                       className={`${COMPACT_INPUT} !text-center`}
                                     />
@@ -629,10 +645,10 @@ const ProjectPlanningGrid = ({
                                       type="date"
                                       value={toDateInput(task.plannedStartDate || task.startDate)}
                                       min={todayDateInput()}
-                                      disabled={!canEditTaskDates}
+                                      disabled={!canEditGridTaskDates}
                                       onChange={(event) => setTaskStartDate(gridIndex, taskIndex, event.target.value)}
-                                      className={canEditTaskDates ? COMPACT_INPUT : `${COMPACT_INPUT} !bg-slate-100 !text-slate-400`}
-                                      title={canEditTaskDates ? 'Admin, HOD, and Team Lead can set this task start date. Previous dates and Sundays are blocked.' : 'Only Admin, HOD, and Team Lead can set task start dates.'}
+                                      className={canEditGridTaskDates ? COMPACT_INPUT : `${COMPACT_INPUT} !bg-slate-100 !text-slate-400`}
+                                      title={canEditGridTaskDates ? 'Admin, HOD, and Team Lead can set this task start date within their department. Previous dates and Sundays are blocked.' : 'Only Admin or the HOD/Team Lead of this department can set task start dates.'}
                                     />
                                     {startDateError && <p className="mt-0.5 text-[9px] font-medium leading-3 text-red-600" title={startDateError}>Invalid</p>}
                                   </td>
@@ -645,7 +661,7 @@ const ProjectPlanningGrid = ({
                                       disabled={!canChangeStatus || statusUpdating}
                                       onChange={(event) => changeStatus(gridIndex, taskIndex, event.target.value)}
                                       className={`${COMPACT_SELECT} ${STATUS_STYLES[status].select}`}
-                                      title={canChangeStatus ? 'You are assigned to this task and can change its status.' : 'Only the assigned user can change this task status.'}
+                                      title={canChangeStatus ? 'Assigned user, Admin, or this department’s HOD/Team Lead can change status.' : 'Only the assigned user or this department’s planning leadership can change status.'}
                                     >
                                       {TASK_STATUSES.map((statusOption) => <option key={statusOption} value={statusOption}>{statusOption}</option>)}
                                     </Select>
@@ -655,12 +671,12 @@ const ProjectPlanningGrid = ({
                                   <td className="px-0.5 py-1">
                                     <div className="flex items-center justify-center gap-0.5">
                                       <DragHandle
-                                        enabled={canReorderTasks}
+                                        enabled={canReorderGridTasks}
                                         attributes={attributes}
                                         listeners={listeners}
                                         setActivatorNodeRef={setActivatorNodeRef}
                                       />
-                                      <button type="button" disabled={!canEditStructure} onClick={() => removeRow(gridIndex, taskIndex)} className="rounded p-1 text-red-600 hover:bg-white/80 disabled:opacity-25" title="Remove task"><Trash2 size={13} /></button>
+                                      <button type="button" disabled={!canEditGridStructure} onClick={() => removeRow(gridIndex, taskIndex)} className="rounded p-1 text-red-600 hover:bg-white/80 disabled:opacity-25" title="Remove task"><Trash2 size={13} /></button>
                                     </div>
                                   </td>
                                 </>
@@ -677,7 +693,7 @@ const ProjectPlanningGrid = ({
               <DndContext
                 sensors={sensors}
                 collisionDetection={closestCenter}
-                onDragEnd={(event) => handleDragEnd(gridIndex, grid, event)}
+                onDragEnd={(event) => canReorderGridTasks && handleDragEnd(gridIndex, grid, event)}
               >
                 <SortableContext items={sortableTaskIds} strategy={verticalListSortingStrategy}>
                   <div className="space-y-2 xl:hidden">
@@ -692,14 +708,16 @@ const ProjectPlanningGrid = ({
                       const statusError = errors[`${gridIndex}-${taskIndex}-status`];
                       const status = effectiveStatus(task);
                       const taskSortableId = sortableTaskId(grid, task, taskIndex);
-                      const canChangeStatus = Boolean(projectId && currentAssigneeId && currentAssigneeId === currentUserId);
+                      const canChangeStatus = Boolean(projectId && (
+                        (currentAssigneeId && currentAssigneeId === currentUserId) || canManageGridStatus
+                      ));
                       const statusUpdating = Boolean(updatingStatuses[`${gridIndex}-${taskIndex}-status`]);
 
                       return (
                         <SortableMobileCard
                           key={taskSortableId}
                           id={taskSortableId}
-                          disabled={!canReorderTasks}
+                          disabled={!canReorderGridTasks}
                           className={`rounded-lg border border-slate-200 p-2 ${STATUS_STYLES[status].row}`}
                         >
                           {({ attributes, listeners, setActivatorNodeRef }) => (
@@ -707,7 +725,7 @@ const ProjectPlanningGrid = ({
                               <div className="mb-2 flex items-center justify-between gap-2">
                                 <div className="flex min-w-0 items-center gap-1.5">
                                   <DragHandle
-                                    enabled={canReorderTasks}
+                                    enabled={canReorderGridTasks}
                                     attributes={attributes}
                                     listeners={listeners}
                                     setActivatorNodeRef={setActivatorNodeRef}
@@ -722,7 +740,7 @@ const ProjectPlanningGrid = ({
                                 <FieldLabel>Task Name</FieldLabel>
                                 <AutoSizeTaskInput
                                   value={task.taskName || ''}
-                                  disabled={!canEditStructure}
+                                  disabled={!canEditGridStructure}
                                   onChange={(event) => updateTask(gridIndex, taskIndex, { taskName: event.target.value })}
                                 />
                               </div>
@@ -730,13 +748,13 @@ const ProjectPlanningGrid = ({
                               <div className="grid grid-cols-1 gap-2 sm:grid-cols-2 lg:grid-cols-3">
                                 <label>
                                   <FieldLabel>Remark</FieldLabel>
-                                  <Input value={task.remark || ''} disabled={!canEditStructure} placeholder="Remark..." onChange={(event) => updateTask(gridIndex, taskIndex, { remark: event.target.value })} className={COMPACT_INPUT} />
+                                  <Input value={task.remark || ''} disabled={!canEditGridStructure} placeholder="Remark..." onChange={(event) => updateTask(gridIndex, taskIndex, { remark: event.target.value })} className={COMPACT_INPUT} />
                                 </label>
                                 <label>
                                   <FieldLabel>Assigned To</FieldLabel>
                                   <Select
                                     value={currentAssigneeId}
-                                    disabled={!canEditStructure || loadingDepartments[grid.department]}
+                                    disabled={!canEditGridStructure || loadingDepartments[grid.department]}
                                     onChange={(event) => updateTask(gridIndex, taskIndex, { assignedTo: event.target.value || null })}
                                     className={COMPACT_SELECT}
                                   >
@@ -746,12 +764,12 @@ const ProjectPlanningGrid = ({
                                 </label>
                                 <label>
                                   <FieldLabel>Days</FieldLabel>
-                                  <Input type="number" min="1" step="1" value={task.totalDays ?? task.duration ?? 1} disabled={!canEditStructure} onChange={(event) => setDays(gridIndex, taskIndex, event.target.value)} className={COMPACT_INPUT} />
+                                  <Input type="number" min="1" step="1" value={task.totalDays ?? task.duration ?? 1} disabled={!canEditGridStructure} onChange={(event) => setDays(gridIndex, taskIndex, event.target.value)} className={COMPACT_INPUT} />
                                   {daysError && <p className="mt-1 text-[10px] font-medium text-red-600">{daysError}</p>}
                                 </label>
                                 <label>
                                   <FieldLabel>Start Date</FieldLabel>
-                                  <Input type="date" value={toDateInput(task.plannedStartDate || task.startDate)} min={todayDateInput()} disabled={!canEditTaskDates} onChange={(event) => setTaskStartDate(gridIndex, taskIndex, event.target.value)} className={canEditTaskDates ? COMPACT_INPUT : `${COMPACT_INPUT} !bg-slate-100 !text-slate-400`} title={canEditTaskDates ? 'Admin, HOD, and Team Lead can set this task start date. Previous dates and Sundays are blocked.' : 'Only Admin, HOD, and Team Lead can set task start dates.'} />
+                                  <Input type="date" value={toDateInput(task.plannedStartDate || task.startDate)} min={todayDateInput()} disabled={!canEditGridTaskDates} onChange={(event) => setTaskStartDate(gridIndex, taskIndex, event.target.value)} className={canEditGridTaskDates ? COMPACT_INPUT : `${COMPACT_INPUT} !bg-slate-100 !text-slate-400`} title={canEditGridTaskDates ? 'Admin, HOD, and Team Lead can set this task start date within their department. Previous dates and Sundays are blocked.' : 'Only Admin or the HOD/Team Lead of this department can set task start dates.'} />
                                   {startDateError && <p className="mt-1 text-[10px] font-medium text-red-600">{startDateError}</p>}
                                 </label>
                                 <label>
@@ -760,7 +778,7 @@ const ProjectPlanningGrid = ({
                                 </label>
                                 <label>
                                   <FieldLabel>Status</FieldLabel>
-                                  <Select value={status} disabled={!canChangeStatus || statusUpdating} onChange={(event) => changeStatus(gridIndex, taskIndex, event.target.value)} className={`${COMPACT_SELECT} ${STATUS_STYLES[status].select}`} title={canChangeStatus ? 'You are assigned to this task and can change its status.' : 'Only the assigned user can change this task status.'}>
+                                  <Select value={status} disabled={!canChangeStatus || statusUpdating} onChange={(event) => changeStatus(gridIndex, taskIndex, event.target.value)} className={`${COMPACT_SELECT} ${STATUS_STYLES[status].select}`} title={canChangeStatus ? 'Assigned user, Admin, or this department’s HOD/Team Lead can change status.' : 'Only the assigned user or this department’s planning leadership can change status.'}>
                                     {TASK_STATUSES.map((statusOption) => <option key={statusOption} value={statusOption}>{statusOption}</option>)}
                                   </Select>
                                   {statusError && <p className="mt-1 text-[10px] font-medium text-red-600">{statusError}</p>}
@@ -769,7 +787,7 @@ const ProjectPlanningGrid = ({
 
                               <div className="mt-2 flex items-center justify-between border-t border-slate-200/80 pt-2">
                                 <span className={`text-[10px] font-bold ${delayedDays(task) > 0 ? 'text-red-600' : 'text-slate-500'}`}>Delayed Days: {delayedDays(task)}</span>
-                                <button type="button" disabled={!canEditStructure} onClick={() => removeRow(gridIndex, taskIndex)} className="rounded-md border border-red-200 bg-white/80 p-1.5 text-red-600 disabled:opacity-25" title="Remove task"><Trash2 size={14} /></button>
+                                <button type="button" disabled={!canEditGridStructure} onClick={() => removeRow(gridIndex, taskIndex)} className="rounded-md border border-red-200 bg-white/80 p-1.5 text-red-600 disabled:opacity-25" title="Remove task"><Trash2 size={14} /></button>
                               </div>
                             </>
                           )}

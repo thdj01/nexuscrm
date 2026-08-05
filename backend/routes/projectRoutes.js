@@ -38,7 +38,7 @@ const PROJECT_UPDATE_PERMISSIONS = [
 ];
 
 const requirePlanningReorderRole = (req, res, next) => {
-  const allowedRoles = new Set(['admin', 'hod', 'team_lead']);
+  const allowedRoles = new Set(['admin', 'hod', 'manager', 'team_lead']);
   if (allowedRoles.has(String(req.user?.role || ''))) return next();
 
   return res.status(403).json({

@@ -108,7 +108,7 @@ const App = () => (
               <Route path="/notifications" element={<NotificationsPage />} />
 
               <Route path="/timesheet" element={<TimesheetPage />}>
-                <Route path="/timesheet/admin" element={<TimesheetAdminPage />} />
+                <Route path="admin" element={<TimesheetAdminPage />} />
                 <Route index element={<Navigate to="kanban" replace />} />
                 <Route
                   path="list"

@@ -22,6 +22,7 @@ import {
 import { RefreshCw, ShieldAlert, Archive, RotateCcw } from 'lucide-react';
 
 import {
+  fetchAnalyticsScope,
   fetchSummary,
   fetchWorkload,
   fetchAllTasks,
@@ -93,6 +94,7 @@ const TimesheetAdminPage = () => {
   const {
     filterStatus = '',
     filterTaskType = '',
+    filterDepartment = '',
     filterTeam = '',
     filterProject = '',
     filterArchived = 'active',
@@ -119,10 +121,17 @@ const TimesheetAdminPage = () => {
   }
 
   // ── Remote data ───────────────────────────────────────────────────────────
+  const [scope,     setScope]     = React.useState({
+    scopeLabel: '',
+    departments: [],
+    employeeCount: 0,
+    isCompanyWide: false,
+  });
   const [summary,   setSummary]   = React.useState({});
   const [workload,  setWorkload]  = React.useState([]);
   const [allTasks,  setAllTasks]  = React.useState([]);
 
+  const [loadingScope,    setLoadingScope]    = React.useState(true);
   const [loadingSummary,  setLoadingSummary]  = React.useState(true);
   const [loadingWorkload, setLoadingWorkload] = React.useState(true);
   const [loadingTasks,    setLoadingTasks]    = React.useState(true);
@@ -132,6 +141,7 @@ const TimesheetAdminPage = () => {
     const p = {};
     if (filterStatus)   p.status   = filterStatus;
     if (filterTaskType) p.taskType = filterTaskType;
+    if (filterDepartment) p.departmentId = filterDepartment;
     if (filterTeam)     p.teamId   = filterTeam;
     if (filterProject)  p.project  = filterProject;
     if (filterArchived && filterArchived !== 'active') p.archived = filterArchived;
@@ -139,7 +149,20 @@ const TimesheetAdminPage = () => {
     if (filterFrom)     p.from     = filterFrom;
     if (filterTo)       p.to       = filterTo;
     return p;
-  }, [filterStatus, filterTaskType, filterTeam, filterProject, filterArchived, filterTaskSource, filterFrom, filterTo]);
+  }, [filterStatus, filterTaskType, filterDepartment, filterTeam, filterProject, filterArchived, filterTaskSource, filterFrom, filterTo]);
+
+  // ── Fetch the exact role/department scope used by the backend ─────────────
+  const loadScope = useCallback(async () => {
+    setLoadingScope(true);
+    try {
+      const res = await fetchAnalyticsScope();
+      setScope(res.scope ?? {});
+    } catch {
+      toast.error('Failed to load department scope');
+    } finally {
+      setLoadingScope(false);
+    }
+  }, []);
 
   // ── Fetch summary ─────────────────────────────────────────────────────────
   const loadSummary = useCallback(async () => {
@@ -182,12 +205,14 @@ const TimesheetAdminPage = () => {
 
   // ── Trigger all fetches when filters change ───────────────────────────────
   React.useEffect(() => {
+    loadScope();
     loadSummary();
     loadWorkload();
     loadTasks();
-  }, [loadSummary, loadWorkload, loadTasks]);
+  }, [loadScope, loadSummary, loadWorkload, loadTasks]);
 
   const handleRefresh = () => {
+    loadScope();
     loadSummary();
     loadWorkload();
     loadTasks();
@@ -204,7 +229,7 @@ const TimesheetAdminPage = () => {
     }
   };
 
-  const isLoading = loadingSummary || loadingWorkload;
+  const isLoading = loadingScope || loadingSummary || loadingWorkload;
 
   const filterSummaryText = useMemo(() => {
     const labels = [];
@@ -213,10 +238,11 @@ const TimesheetAdminPage = () => {
     if (filterTaskType) labels.push(filterTaskType);
     if (filterArchived && filterArchived !== 'active') labels.push(filterArchived === 'only' ? 'Archived only' : 'Including archived');
     if (filterTaskSource) labels.push(`${filterTaskSource} source`);
+    if (filterDepartment) labels.push('Selected department');
     if (filterTeam) labels.push('Selected team');
     if (filterProject) labels.push('Selected project');
     return labels.length ? labels.join(' · ') : 'Using main timesheet filters';
-  }, [filterFrom, filterTo, filterStatus, filterTaskType, filterArchived, filterTaskSource, filterTeam, filterProject]);
+  }, [filterFrom, filterTo, filterStatus, filterTaskType, filterArchived, filterTaskSource, filterDepartment, filterTeam, filterProject]);
 
   // ── Chart data — Hours by Employee ────────────────────────────────────────
   const employeeChartData = useMemo(() =>
@@ -251,9 +277,20 @@ const TimesheetAdminPage = () => {
       {/* ── Header ── */}
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div>
-          <h2 className="text-lg font-semibold text-gray-900">Timesheet Admin</h2>
+          <h2 className="text-lg font-semibold text-gray-900">
+            {isAdmin
+              ? 'Company Timesheet Analytics'
+              : (isHod || user?.role === 'manager')
+                ? 'HOD Department Analytics'
+                : 'Team Lead Department Analytics'}
+          </h2>
           <p className="text-sm text-gray-500">
-            {workload.length} employee{workload.length !== 1 ? 's' : ''} · {filterSummaryText}
+            {loadingScope
+              ? 'Loading department scope…'
+              : `${scope.scopeLabel || 'No department assigned'} · ${scope.employeeCount ?? workload.length} user${(scope.employeeCount ?? workload.length) !== 1 ? 's' : ''}`}
+          </p>
+          <p className="mt-0.5 text-xs text-gray-400">
+            {workload.length} employee{workload.length !== 1 ? 's' : ''} with timesheet activity · {filterSummaryText}
           </p>
         </div>
         <button

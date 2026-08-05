@@ -60,6 +60,11 @@ const getNotifications = async (
           'projectId projectName'
         )
 
+        .populate(
+          'relatedTicket',
+          'ticketId title'
+        )
+
         .sort({
           createdAt: -1,
         })

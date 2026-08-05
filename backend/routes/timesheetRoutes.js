@@ -36,6 +36,7 @@ const {
   getListTasks,
   getKanbanTasks,
   getCalendarTasks,
+  getAnalyticsScope,
   getAllTasks,
   getSummary,
   getWorkload,
@@ -122,10 +123,21 @@ router.patch('/tasks/:id/kanban', scopeToHierarchy(), updateKanbanPosition);
 // ─────────────────────────────────────────────────────────────────────────────
 
 /**
+ * GET /api/timesheet/admin/scope
+ *   Returns the department names and employee count applied to analytics.
+ */
+router.get(
+  '/admin/scope',
+  authorizeHierarchy('team_lead'),
+  scopeToHierarchy(),
+  getAnalyticsScope
+);
+
+/**
  * GET /api/timesheet/admin/all
- *   admin  → all employees
- *   hod    → managed teams only
- *   team_lead → own team only
+ *   admin     → all employees
+ *   hod       → users in all assigned departments
+ *   team_lead → users in the single assigned department
  */
 router.get(
   '/admin/all',

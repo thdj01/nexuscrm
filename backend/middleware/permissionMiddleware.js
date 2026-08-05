@@ -4,6 +4,7 @@ const mongoose = require('mongoose');
 const Team     = require('../models/Team');
 const { ROLES } = require('../models/User');
 const { userHasPermission, userHasAnyPermission } = require('../utils/accessControl');
+const { resolveDepartmentHierarchyScope } = require('../services/timesheetDepartmentScopeService');
 
 const effectiveRole = (role) => (role === ROLES.MANAGER ? ROLES.HOD : role);
 
@@ -84,6 +85,8 @@ const attachTeamContext = async (req, _res, next) => {
         teamId:     null,
         memberIds:  null,
         isSelfOnly: false,
+        departments: [],
+        departmentIds: [],
       };
       return next();
     }
@@ -91,36 +94,24 @@ const attachTeamContext = async (req, _res, next) => {
     let team       = null;
     let memberIds  = [];
     let isSelfOnly = false;
+    let departments = [];
 
-    if (role === ROLES.HOD) {
-      const teams = await Team.find({ hod: _id, isActive: true })
-        .select('members teamLead')
-        .lean();
+    if (role === ROLES.HOD || role === ROLES.TEAM_LEAD) {
+      // Department Master is the primary source of truth:
+      //   HOD       -> all departments in hodDepartments / Department.hod(s)
+      //   Team Lead -> the single User.department / Department.teamLead
+      // Legacy Team members are merged by the service for backward compatibility.
+      const hierarchyScope = await resolveDepartmentHierarchyScope(req.user);
+      memberIds = hierarchyScope.employeeIds || [];
+      departments = hierarchyScope.departments || [];
+      isSelfOnly = hierarchyScope.isSelfOnly;
 
-      const idSet = new Set();
-      for (const t of teams) {
-        if (t.teamLead) idSet.add(t.teamLead.toString());
-        for (const m of t.members ?? []) idSet.add(m.toString());
-      }
-      idSet.add(_id.toString());
-
-      memberIds = [...idSet].map((id) => new mongoose.Types.ObjectId(id));
-      team = teams[0] ?? null;
-
-    } else if (role === ROLES.TEAM_LEAD) {
-      team = await Team.findOne({ teamLead: _id, isActive: true })
+      const legacyTeamFilter = role === ROLES.HOD
+        ? { hod: _id, isActive: true }
+        : { teamLead: _id, isActive: true };
+      team = await Team.findOne(legacyTeamFilter)
         .select('members teamLead hod')
         .lean();
-
-      if (team) {
-        const idSet = new Set();
-        idSet.add(_id.toString());
-        for (const m of team.members ?? []) idSet.add(m.toString());
-        memberIds = [...idSet].map((id) => new mongoose.Types.ObjectId(id));
-      } else {
-        memberIds  = [new mongoose.Types.ObjectId(_id)];
-        isSelfOnly = true;
-      }
 
     } else {
       // EMPLOYEE — can view all team tasks, edit only own
@@ -149,6 +140,8 @@ const attachTeamContext = async (req, _res, next) => {
       teamId:    team?._id ?? null,
       memberIds,
       isSelfOnly,
+      departments,
+      departmentIds: departments.map((department) => department._id),
     };
 
     next();

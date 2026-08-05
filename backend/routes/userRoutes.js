@@ -22,15 +22,29 @@ const {
   createUser,
   updateUser,
   updateUserAvatar,
+  getKickoffAttendeeUsers,
   getAssignableUsers,
 } = require('../controllers/userController');
 
 const { protect, authorize }           = require('../middleware/authMiddleware');
 const { avatarUpload }                 = require('../utils/avatarUpload');
-const { attachTeamContext, scopeToHierarchy } = require('../middleware/permissionMiddleware');
+const { attachTeamContext, scopeToHierarchy, requirePermission } = require('../middleware/permissionMiddleware');
+const { INQUIRY_PERMISSIONS } = require('../constants/permissions');
 
 // ── Every route requires authentication ──────────────────────────────────────
 router.use(protect);
+
+// ─────────────────────────────────────────────────────────────────────────────
+// GET /api/users/kickoff-attendees
+//
+// Returns every active User Management account for the inquiry kick-off
+// multi-select. Access is limited to users allowed to edit inquiries.
+// ─────────────────────────────────────────────────────────────────────────────
+router.get(
+  '/kickoff-attendees',
+  requirePermission(INQUIRY_PERMISSIONS.EDIT),
+  getKickoffAttendeeUsers
+);
 
 // ─────────────────────────────────────────────────────────────────────────────
 // GET /api/users/assignable

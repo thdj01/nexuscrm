@@ -4,10 +4,22 @@ const mongoose = require('mongoose');
 const Department = require('../models/Department');
 const Team = require('../models/Team');
 const User = require('../models/User');
-const createNotification = require('./notificationService');
 const { departmentTokens } = require('../utils/departmentUtils');
+const {
+  buildInquiryEmailHtml,
+  buildInquiryChangedWhatsAppMessage,
+} = require('./notificationTemplates');
+const { dispatchNotificationsToUsers } = require('./userNotificationDispatchService');
+const {
+  combineUsers,
+  getAdminUsers,
+  getDepartmentLeadershipUsers,
+  getEstimationUsers,
+  idString,
+} = require('./notificationRecipientService');
 
 const ESTIMATION_TOKEN = 'estimation';
+const INQUIRY_OWNER_DEPARTMENTS = ['sales'];
 
 const CHANGE_IGNORED_FIELDS = new Set([
   '_id',
@@ -189,68 +201,39 @@ function valueMatchesEstimation(value, estimationDepartmentIds = new Set()) {
 }
 
 async function resolveEstimationLeadershipIds() {
-  const recipientIds = new Set();
-
-  const departments = await Department.find({ isActive: { $ne: false } })
-    .select('_id name code hod hods teamLead')
-    .lean();
-
-  const estimationDepartments = departments.filter((department) => (
-    valueMatchesEstimation(department.name) || valueMatchesEstimation(department.code)
-  ));
-  const estimationDepartmentIds = new Set(estimationDepartments.map((department) => extractId(department._id)));
-
-  for (const department of estimationDepartments) {
-    [department.hod, ...(department.hods || []), department.teamLead]
-      .map(extractId)
-      .filter(Boolean)
-      .forEach((id) => recipientIds.add(id));
-  }
-
-  const teams = await Team.find({ isActive: { $ne: false } })
-    .select('_id name description hod teamLead')
-    .lean();
-
-  const estimationTeams = teams.filter((team) => (
-    valueMatchesEstimation(team.name) || valueMatchesEstimation(team.description)
-  ));
-  const estimationTeamIds = new Set(estimationTeams.map((team) => extractId(team._id)));
-
-  for (const team of estimationTeams) {
-    [team.hod, team.teamLead]
-      .map(extractId)
-      .filter(Boolean)
-      .forEach((id) => recipientIds.add(id));
-  }
-
-  // Backward-compatible fallback for databases where hierarchy is saved on
-  // User records but Department/Team masters are incomplete.
-  const leaders = await User.find({
-    isActive: { $ne: false },
-    role: { $in: ['hod', 'team_lead'] },
-  })
-    .select('_id role department hodDepartments teamId')
-    .lean();
-
-  for (const leader of leaders) {
-    const matchesDepartment = valueMatchesEstimation(leader.department, estimationDepartmentIds) ||
-      valueMatchesEstimation(leader.hodDepartments, estimationDepartmentIds);
-    const matchesTeam = estimationTeamIds.has(extractId(leader.teamId));
-    if (matchesDepartment || matchesTeam) recipientIds.add(extractId(leader._id));
-  }
-
-  return [...recipientIds].filter((id) => mongoose.Types.ObjectId.isValid(id));
+  // Kept for compatibility with older callers. The new rule intentionally
+  // includes every active Estimation user, not only HOD/TL.
+  const users = await getEstimationUsers();
+  return users.map((user) => idString(user)).filter(Boolean);
 }
 
-async function resolveInquiryChangeRecipientIds(inquiry = {}) {
-  const recipientIds = new Set();
+async function resolveInquiryChangeRecipientUsers(inquiry = {}, { includeEstimation = false } = {}) {
   const creatorId = extractId(inquiry.createdBy);
-  if (creatorId && mongoose.Types.ObjectId.isValid(creatorId)) recipientIds.add(creatorId);
+  const [admins, inquiryLeadership, estimationUsers, creator] = await Promise.all([
+    getAdminUsers(),
+    getDepartmentLeadershipUsers(INQUIRY_OWNER_DEPARTMENTS),
+    includeEstimation ? getEstimationUsers() : Promise.resolve([]),
+    creatorId && mongoose.Types.ObjectId.isValid(creatorId)
+      ? User.findOne({ _id: creatorId, isActive: { $ne: false } })
+          .select('_id name email phone mobileNumber whatsappNumber mobile role department hodDepartments teamId')
+          .lean()
+      : Promise.resolve(null),
+  ]);
 
-  const estimationLeaders = await resolveEstimationLeadershipIds();
-  estimationLeaders.forEach((id) => recipientIds.add(id));
+  // Employees receive notifications only for their own inquiry. Sales HOD/TL
+  // receive every inquiry update because Sales owns the inquiry workflow.
+  // Estimation receives status changes as required by the inquiry hand-off.
+  return combineUsers(
+    admins,
+    inquiryLeadership,
+    estimationUsers,
+    creator ? [creator] : []
+  );
+}
 
-  return [...recipientIds];
+async function resolveInquiryChangeRecipientIds(inquiry = {}, options = {}) {
+  const users = await resolveInquiryChangeRecipientUsers(inquiry, options);
+  return users.map((user) => idString(user)).filter(Boolean);
 }
 
 async function notifyInquiryStakeholdersOfChange({
@@ -260,28 +243,55 @@ async function notifyInquiryStakeholdersOfChange({
   actionLabel = '',
 }) {
   try {
+    const before = toPlain(beforeInquiry) || {};
     const after = toPlain(afterInquiry) || {};
     const inquiryId = after.inquiryId || '-';
     const actorName = actor?.name || actor?.email || 'A user';
-    const items = buildInquiryChangeItems(beforeInquiry, afterInquiry, { actionLabel });
-    const recipientIds = await resolveInquiryChangeRecipientIds(after);
+    const items = buildInquiryChangeItems(before, after, { actionLabel });
+    const previousStatus = String(before.status || 'New');
+    const currentStatus = String(after.status || 'New');
+    const statusChanged = previousStatus !== currentStatus;
+    const recipientUsers = await resolveInquiryChangeRecipientUsers(after, {
+      includeEstimation: statusChanged,
+    });
+    const recipientIds = recipientUsers.map((user) => idString(user)).filter(Boolean);
 
-    if (recipientIds.length === 0) {
+    if (recipientUsers.length === 0) {
       console.warn(`[inquiryChangeNotification] No recipients found for inquiry ${inquiryId}`);
       return { recipientIds: [], items };
     }
 
+    const creatorId = extractId(after.createdBy);
+    const creator = recipientUsers.find((user) => idString(user) === creatorId);
+    const notificationInquiry = {
+      ...after,
+      createdBy: after.createdBy?.name ? after.createdBy : (creator || after.createdBy),
+    };
     const message = `${actorName} changed inquiry ${inquiryId}: ${items.join('; ')}.`;
-    const isOnlyStatusChange = items.length === 1 && items[0].startsWith('status changed');
+    const eventType = statusChanged ? 'inquiry_status_changed' : 'inquiry_updated';
 
-    await Promise.all(recipientIds.map((recipient) => createNotification({
+    await dispatchNotificationsToUsers({
+      users: recipientUsers,
       title: `Inquiry ${inquiryId} Updated`,
       message,
-      type: isOnlyStatusChange ? 'status' : 'info',
+      type: statusChanged ? 'status' : 'info',
       priority: 'Medium',
-      recipient,
       relatedInquiry: after._id,
-    })));
+      emailSubject: statusChanged
+        ? `Inquiry Status Changed - ${inquiryId}`
+        : `Inquiry Updated - ${inquiryId}`,
+      emailHtml: (user) => buildInquiryEmailHtml(notificationInquiry, {
+        eventType,
+        previousStatus,
+        actorName,
+        recipientName: user?.name,
+      }),
+      whatsappMessage: buildInquiryChangedWhatsAppMessage(notificationInquiry, {
+        eventType,
+        previousStatus,
+        actorName,
+      }),
+    });
 
     return { recipientIds, items, message };
   } catch (error) {
@@ -294,6 +304,7 @@ module.exports = {
   buildInquiryChangeItems,
   hasGeneralDetailsChanged,
   resolveEstimationLeadershipIds,
+  resolveInquiryChangeRecipientUsers,
   resolveInquiryChangeRecipientIds,
   notifyInquiryStakeholdersOfChange,
 };

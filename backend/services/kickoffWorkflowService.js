@@ -5,7 +5,6 @@ const Inquiry = require('../models/Inquiry');
 const Project = require('../models/Project');
 const Customer = require('../models/Customer');
 const User = require('../models/User');
-const Notification = require('../models/Notification');
 const ProjectActivityLog = require('../models/ProjectActivityLog');
 const KickoffWorkflow = require('../models/KickoffWorkflow');
 const sendOutlookNotification = require('./outlookService');
@@ -14,6 +13,14 @@ const {
   sendWhatsAppGroupNotification,
 } = require('./whatsappService');
 const { getActiveWhatsAppConfig } = require('./whatsappSettingsService');
+const { dispatchNotificationsToUsers } = require('./userNotificationDispatchService');
+const {
+  combineUsers,
+  getAdminUsers,
+  getSalesLeadershipUsers,
+  getProjectDepartmentUsers,
+  idString,
+} = require('./notificationRecipientService');
 const { SUPPORTED_PROJECT_DEPARTMENTS, isDepartmentAllowedForPanel } = require('../config/projectPlanningCatalog');
 const { initialTasksForDepartment } = require('../utils/projectPlanning');
 
@@ -150,8 +157,7 @@ function buildCustomerWhatsAppMessage(inquiry, workflow, attendees = [], inquiry
   }
 
   lines.push('', 'The project will be created after Kickoff Meeting Done.');
-  // lines.push('', 'Regards,', 'Nexus Team');
-  // return lines.join('\n');
+  return lines.join('\n');
 }
 
 function buildAssignedWhatsAppMessage(inquiry, workflow, user, attendees = [], inquiryMadeByName = 'System') {
@@ -160,8 +166,8 @@ function buildAssignedWhatsAppMessage(inquiry, workflow, user, attendees = [], i
 function buildKickoffSummaryWhatsAppMessage(inquiry, workflow, attendees = [], inquiryMadeByName = 'System') {
   return buildKickoffSummaryWhatsAppTemplate(inquiry, workflow, attendees, inquiryMadeByName);
 }
-function buildKickoffEmailHtml(inquiry, workflow, recipientName = '', attendees = []) {
-  return buildKickoffEmailTemplate(inquiry, workflow, recipientName, attendees);
+function buildKickoffEmailHtml(inquiry, workflow, recipientName = '', attendees = [], inquiryMadeByName = '') {
+  return buildKickoffEmailTemplate(inquiry, workflow, recipientName, attendees, inquiryMadeByName);
 }
 function buildProjectCreatedMessage(project, inquiry, workflow) {
   return buildProjectCreatedAfterKickoffWhatsAppMessage(project, inquiry, workflow);
@@ -261,6 +267,22 @@ async function sendKickoffNotifications({ inquiry, workflow, attendees }) {
   const inquiryMadeByName = await getInquiryMadeByName(inquiry);
   const summaryWhatsAppMessage = buildKickoffSummaryWhatsAppMessage(inquiry, workflow, attendees, inquiryMadeByName);
   const whatsappConfig = getActiveWhatsAppConfig();
+  const [adminUsers, salesLeadershipUsers] = await Promise.all([
+    getAdminUsers(),
+    getSalesLeadershipUsers(),
+  ]);
+  const internalRecipients = combineUsers(attendees, adminUsers, salesLeadershipUsers);
+  const attendeeIdSet = new Set(attendees.map((user) => idString(user)).filter(Boolean));
+
+  await dispatchNotificationsToUsers({
+    users: internalRecipients,
+    title: `Kick-off Meeting Scheduled - ${inquiry.inquiryId || 'Inquiry'}`,
+    message: `Kick-off Meeting for inquiry ${inquiry.inquiryId || '-'} was scheduled by ${inquiryMadeByName}.`,
+    type: 'kickoff_scheduled',
+    relatedInquiry: inquiry._id,
+    sendEmail: false,
+    sendWhatsApp: false,
+  });
 
   // Send one clear kickoff summary message to the configured WhatsApp group, if configured.
   // This message contains assigned persons, date/time, meeting link, and agenda.
@@ -343,14 +365,14 @@ async function sendKickoffNotifications({ inquiry, workflow, attendees }) {
     });
   }
 
-  for (const user of attendees) {
+  for (const user of internalRecipients) {
     const phone = getUserWhatsAppNumber(user);
 
     if (!phone) {
       whatsappSkipped = true;
       await appendWorkflowLog(workflow, {
         channel: 'WhatsApp',
-        recipientType: 'Assigned User',
+        recipientType: attendeeIdSet.has(idString(user)) ? 'Assigned User' : 'Internal Stakeholder',
         recipientName: user.name || '',
         recipientContact: user.email || '',
         status: 'Skipped',
@@ -359,8 +381,11 @@ async function sendKickoffNotifications({ inquiry, workflow, attendees }) {
       continue;
     }
 
+    const isAssignedAttendee = attendeeIdSet.has(idString(user));
     const result = await sendWhatsAppNotification(
-      buildAssignedWhatsAppMessage(inquiry, workflow, user, attendees, inquiryMadeByName),
+      isAssignedAttendee
+        ? buildAssignedWhatsAppMessage(inquiry, workflow, user, attendees, inquiryMadeByName)
+        : summaryWhatsAppMessage,
       phone
     );
     const status = normaliseNotificationResult(result);
@@ -372,7 +397,7 @@ async function sendKickoffNotifications({ inquiry, workflow, attendees }) {
 
     await appendWorkflowLog(workflow, {
       channel: 'WhatsApp',
-      recipientType: 'Assigned User',
+      recipientType: attendeeIdSet.has(idString(user)) ? 'Assigned User' : 'Internal Stakeholder',
       recipientName: user.name || '',
       recipientContact: phone,
       status,
@@ -383,7 +408,7 @@ async function sendKickoffNotifications({ inquiry, workflow, attendees }) {
     });
   }
 
-  const emailRecipients = [customerEmail, ...attendees.map(user => user.email)].filter(Boolean);
+  const emailRecipients = [customerEmail, ...internalRecipients.map(user => user.email)].filter(Boolean);
   const uniqueEmailRecipients = [...new Set(emailRecipients)];
 
   if (!uniqueEmailRecipients.length) {
@@ -396,11 +421,11 @@ async function sendKickoffNotifications({ inquiry, workflow, attendees }) {
     });
   } else {
     for (const to of uniqueEmailRecipients) {
-      const recipientUser = attendees.find(user => user.email === to);
+      const recipientUser = internalRecipients.find(user => user.email === to);
       const result = await sendOutlookNotification({
         to,
         subject: `Kick-off Meeting Scheduled - ${inquiry.projectName || inquiry.inquiryId || 'Inquiry'}`,
-        html: buildKickoffEmailHtml(inquiry, workflow, recipientUser?.name || inquiry.contactPerson || inquiry.customerName, attendees),
+        html: buildKickoffEmailHtml(inquiry, workflow, recipientUser?.name || inquiry.contactPerson || inquiry.customerName, attendees, inquiryMadeByName),
       });
       const status = normaliseNotificationResult(result);
 
@@ -411,7 +436,9 @@ async function sendKickoffNotifications({ inquiry, workflow, attendees }) {
 
       await appendWorkflowLog(workflow, {
         channel: 'Outlook',
-        recipientType: recipientUser ? 'Assigned User' : 'Customer',
+        recipientType: recipientUser
+          ? (attendeeIdSet.has(idString(recipientUser)) ? 'Assigned User' : 'Internal Stakeholder')
+          : 'Customer',
         recipientName: recipientUser?.name || inquiry.contactPerson || inquiry.customerName || '',
         recipientContact: to,
         status,
@@ -676,40 +703,40 @@ async function notifyProjectCreated({ project, inquiry, workflow }) {
 
   await sendWhatsAppGroupNotification(message);
 
-  const attendeeIds = (workflow.attendees || []).map(item => item?._id || item);
-  const attendeeDocs = await User.find({ _id: { $in: attendeeIds } })
-    .select('name email')
-    .lean();
+  const attendeeIds = (workflow.attendees || []).map((item) => item?._id || item);
+  const [attendeeDocs, adminUsers, salesLeadershipUsers, departmentUsers] = await Promise.all([
+    User.find({ _id: { $in: attendeeIds }, isActive: { $ne: false } })
+      .select('_id name email phone mobileNumber whatsappNumber mobile role department hodDepartments teamId')
+      .lean(),
+    getAdminUsers(),
+    getSalesLeadershipUsers(),
+    getProjectDepartmentUsers(project),
+  ]);
+  const recipients = combineUsers(attendeeDocs, adminUsers, salesLeadershipUsers, departmentUsers);
 
-  for (const user of attendeeDocs) {
-    try {
-      await Notification.create({
-        title: 'Project Created After Kick-off Meeting',
-        message: dashboardMessages.projectCreatedAfterKickoff(project),
-        type: 'project_created',
-        recipient: user._id,
-        relatedInquiry: inquiry._id,
-        relatedProject: project._id,
-      });
-    } catch (err) {
-      console.error('[kickoffWorkflowService] Internal notification failed:', err.message);
-    }
-
-    if (user.email) {
-      await sendOutlookNotification({
-        to: user.email,
-        subject: `Project Created - ${project.projectId}`,
-        html: buildProjectCreatedAfterKickoffEmailHtml(project, inquiry, workflow, user.name || 'Team Member'),
-      });
-    }
-  }
+  await dispatchNotificationsToUsers({
+    users: recipients,
+    title: 'Project Created After Kick-off Meeting',
+    message: dashboardMessages.projectCreatedAfterKickoff(project),
+    type: 'project_created',
+    relatedInquiry: inquiry._id,
+    relatedProject: project._id,
+    emailSubject: `Project Created - ${project.projectId}`,
+    emailHtml: (user) => buildProjectCreatedAfterKickoffEmailHtml(
+      project,
+      inquiry,
+      workflow,
+      user?.name || 'Team Member'
+    ),
+    whatsappMessage: message,
+  });
 
   workflow.notificationStatus.internal = 'Sent';
   workflow.notificationLogs.push({
     channel: 'System',
     recipientType: 'Internal Team',
     status: 'Sent',
-    message: 'Internal team notified about automatic project creation',
+    message: `Admin, Sales leadership, selected departments and assigned attendees notified (${recipients.length} users)`,
   });
   await workflow.save();
 }

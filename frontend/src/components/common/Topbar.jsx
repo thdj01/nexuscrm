@@ -14,6 +14,7 @@ import {
   LogOut,
   Mail,
   Menu,
+  Phone,
   Shield,
   Users,
   X,
@@ -21,6 +22,7 @@ import {
 import API from '../../api/axios';
 import { useAuth } from '../../context/AuthContext';
 import Avatar from './Avatar';
+import { getUserDepartmentNames, getUserRoleDepartmentLabel } from '../../utils/userRoleLabel';
 
 const routeTitles = {
   '/': 'Dashboard',
@@ -61,18 +63,6 @@ const dashboardTabs = [
   { key: 'project', label: 'Project', icon: FolderKanban },
   { key: 'ticket', label: 'Ticket', icon: LifeBuoy },
 ];
-
-const roleLabel = (role) => {
-  const map = {
-    admin: 'Admin',
-    hod: 'HOD',
-    manager: 'Manager',
-    team_lead: 'Team Lead',
-    employee: 'Employee',
-  };
-
-  return map[role] || role || 'User';
-};
 
 const ProfileModalShell = ({ title, children, onClose }) => (
   <div className="fixed inset-0 z-50 flex items-center justify-center bg-gray-900/40 px-4 py-4 backdrop-blur-sm sm:py-6">
@@ -198,8 +188,8 @@ const EditProfileModal = ({ user, onClose, onSaved }) => {
     }
   };
 
-  const userRole = roleLabel(user?.role);
-  const userDepartment = user?.department || user?.teamName || user?.team?.name || '';
+  const userRole = getUserRoleDepartmentLabel(user);
+  const userDepartment = getUserDepartmentNames(user).join(', ');
 
   return (
     <ProfileModalShell title="Edit Profile" onClose={onClose}>
@@ -527,9 +517,10 @@ const Topbar = ({ onMenuClick = () => {} }) => {
     : 'all';
 
   const userName = user?.name || user?.fullName || 'User';
-  const userRole = roleLabel(user?.role);
-  const userDepartment = user?.department || user?.teamName || user?.team?.name || '';
+  const userRole = getUserRoleDepartmentLabel(user);
+  const userDepartment = getUserDepartmentNames(user).join(', ');
   const userEmail = user?.email || '';
+  const userPhone = user?.phone || '';
 
   const currentDate = useMemo(
     () =>
@@ -543,16 +534,31 @@ const Topbar = ({ onMenuClick = () => {} }) => {
   );
 
   useEffect(() => {
+    let active = true;
+
     const fetchUnread = async () => {
       try {
         const { data } = await API.get('/notifications?isRead=false&limit=1');
-        setUnreadCount(data.unreadCount || 0);
+        if (active) setUnreadCount(data.unreadCount || 0);
       } catch {
-        setUnreadCount(0);
+        // Keep the last known count during a temporary network failure instead
+        // of incorrectly clearing the badge to zero.
       }
     };
 
     fetchUnread();
+
+    // Notifications can be created by another logged-in user while this user
+    // stays on the same page. Polling makes the bell update without requiring a
+    // route change or a manual browser refresh.
+    const intervalId = window.setInterval(fetchUnread, 15000);
+    window.addEventListener('focus', fetchUnread);
+
+    return () => {
+      active = false;
+      window.clearInterval(intervalId);
+      window.removeEventListener('focus', fetchUnread);
+    };
   }, [location.pathname]);
 
   useEffect(() => {
@@ -700,11 +706,12 @@ const Topbar = ({ onMenuClick = () => {} }) => {
               <button
                 type="button"
                 onClick={() => setProfileOpen((value) => !value)}
-                className="flex h-10 w-10 items-center justify-center rounded-full p-0.5 shadow-sm ring-1 ring-blue-100 transition-all hover:shadow-md"
+                className="flex h-10 w-10 items-center justify-center rounded-full p-0 shadow-sm ring-1 ring-blue-100 transition-all hover:shadow-md focus:outline-none focus:ring-2 focus:ring-blue-300"
                 aria-expanded={profileOpen}
                 aria-label="Open profile menu"
+                title="Open profile menu"
               >
-                <Avatar user={user} name={userName} size="md" />
+                <Avatar user={user} name={userName} src="" size="md" />
               </button>
 
               {profileOpen && (
@@ -743,6 +750,13 @@ const Topbar = ({ onMenuClick = () => {} }) => {
                       <div className="flex items-start gap-3 text-gray-600">
                         <Mail size={16} className="mt-0.5 text-gray-400" />
                         <span className="break-all">{userEmail}</span>
+                      </div>
+                    )}
+
+                    {userPhone && (
+                      <div className="flex items-start gap-3 text-gray-600">
+                        <Phone size={16} className="mt-0.5 text-gray-400" />
+                        <span>{userPhone}</span>
                       </div>
                     )}
                   </div>

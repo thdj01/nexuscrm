@@ -61,6 +61,8 @@ const sanitizeCustomerPayload = (body = {}) => {
   return payload;
 };
 
+const CUSTOMER_MOBILE_PATTERN = /^\d{10}$/;
+
 const validateRequiredCustomerContact = (source = {}) => {
   const contacts = normalizeContacts(source);
   const primary = contacts[0] || {};
@@ -76,6 +78,15 @@ const validateRequiredCustomerContact = (source = {}) => {
     error.statusCode = 400;
     throw error;
   }
+
+  contacts.forEach((contact, index) => {
+    const phone = String(contact?.phone || '').trim();
+    if (phone && !CUSTOMER_MOBILE_PATTERN.test(phone)) {
+      const error = new Error(`${index === 0 ? 'Primary contact' : `Contact ${index + 1}`} mobile number must contain exactly 10 digits`);
+      error.statusCode = 400;
+      throw error;
+    }
+  });
 };
 
 const propagateCustomerMaster = async (customer) => {

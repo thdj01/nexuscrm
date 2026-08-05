@@ -13,6 +13,17 @@ const Customer = require('../models/Customer');
 const Project = require('../models/Project');
 const Inquiry = require('../models/Inquiry');
 const Department = require('../models/Department');
+const { dispatchNotificationsToUsers } = require('../services/userNotificationDispatchService');
+const {
+  combineUsers,
+  getAdminUsers,
+  getDepartmentLeadershipUsers,
+} = require('../services/notificationRecipientService');
+const {
+  buildTicketCreatedWhatsAppMessage,
+  buildTicketAssignedWhatsAppMessage,
+  buildTicketEmailHtml,
+} = require('../services/notificationTemplates');
 
 const ok = (res, data, statusCode = 200) =>
   res.status(statusCode).json({ success: true, ...data });
@@ -88,7 +99,7 @@ const TICKET_POPULATE = [
   },
   {
     path: 'assignedTo',
-    select: 'name email avatar role teamId',
+    select: 'name email phone mobileNumber whatsappNumber mobile avatar role teamId department hodDepartments',
   },
   {
     path: 'assignedBy',
@@ -400,6 +411,96 @@ const buildTicketAttachmentDocs = (files = [], uploadedBy) =>
 
 const COMMENT_POPULATE = { path: 'author', select: 'name email avatar role' };
 
+async function getTicketCreatorNotificationUser(ticket = {}) {
+  const creatorId = ticket.createdBy?._id || ticket.createdBy;
+  if (!creatorId || !isValidId(creatorId)) return null;
+
+  return User.findOne({ _id: creatorId, isActive: { $ne: false } })
+    .select('_id name email phone mobileNumber whatsappNumber mobile role department hodDepartments teamId')
+    .lean();
+}
+
+async function notifyTicketCreated(ticket, actor = {}) {
+  const [admins, departmentLeadership, creator] = await Promise.all([
+    getAdminUsers(),
+    getDepartmentLeadershipUsers([ticket.department]),
+    getTicketCreatorNotificationUser(ticket),
+  ]);
+  const recipients = combineUsers(
+    admins,
+    departmentLeadership,
+    creator ? [creator] : []
+  );
+  const createdMessage = buildTicketCreatedWhatsAppMessage(ticket);
+
+  await dispatchNotificationsToUsers({
+    users: recipients,
+    title: `New Ticket Created - ${ticket.ticketId || 'Ticket'}`,
+    message: `${actor?.name || 'A user'} created ticket ${ticket.ticketId || '-'} - ${ticket.title || '-'}.`,
+    type: 'ticket_created',
+    priority: ticket.priority === 'Critical' ? 'High' : 'Medium',
+    relatedTicket: ticket._id,
+    relatedInquiry: ticket.inquiry?._id || ticket.inquiry || null,
+    relatedProject: ticket.project?._id || ticket.project || null,
+    emailSubject: `New Ticket Created - ${ticket.ticketId || 'Ticket'}`,
+    emailHtml: (user) => buildTicketEmailHtml(ticket, {
+      userName: user?.name || 'Team Member',
+      eventType: 'ticket_created',
+    }),
+    whatsappMessage: createdMessage,
+  });
+}
+
+async function notifyTicketAssigned(ticket, actor = {}) {
+  const assignee = ticket.assignedTo && typeof ticket.assignedTo === 'object'
+    ? ticket.assignedTo
+    : null;
+  if (!assignee?._id) return;
+
+  const [admins, departmentLeadership, creator] = await Promise.all([
+    getAdminUsers(),
+    getDepartmentLeadershipUsers([ticket.department, assignee.department]),
+    getTicketCreatorNotificationUser(ticket),
+  ]);
+  const recipients = combineUsers(
+    [assignee],
+    admins,
+    departmentLeadership,
+    creator ? [creator] : []
+  );
+  const assigneeId = String(assignee._id);
+
+  await dispatchNotificationsToUsers({
+    users: recipients,
+    title: (user) => String(user?._id) === assigneeId
+      ? `Ticket Assigned - ${ticket.ticketId || 'Ticket'}`
+      : `Ticket Assignment Updated - ${ticket.ticketId || 'Ticket'}`,
+    message: (user) => String(user?._id) === assigneeId
+      ? `${actor?.name || 'A user'} assigned ticket ${ticket.ticketId || '-'} - ${ticket.title || '-'} to you.`
+      : `${actor?.name || 'A user'} assigned ticket ${ticket.ticketId || '-'} - ${ticket.title || '-'} to ${assignee.name || 'an employee'}.`,
+    type: 'ticket_assigned',
+    priority: ticket.priority === 'Critical' ? 'High' : 'Medium',
+    relatedTicket: ticket._id,
+    relatedInquiry: ticket.inquiry?._id || ticket.inquiry || null,
+    relatedProject: ticket.project?._id || ticket.project || null,
+    emailSubject: (user) => String(user?._id) === assigneeId
+      ? `Ticket Assigned - ${ticket.ticketId || 'Ticket'}`
+      : `Ticket Assignment Updated - ${ticket.ticketId || 'Ticket'}`,
+    emailHtml: (user) => {
+      const isAssignee = String(user?._id) === assigneeId;
+      return buildTicketEmailHtml(ticket, {
+        userName: user?.name || 'Team Member',
+        eventType: 'ticket_assigned',
+        isAssignee,
+        assignedToName: assignee.name || 'an employee',
+      });
+    },
+    whatsappMessage: (user) => String(user?._id) === assigneeId
+      ? buildTicketAssignedWhatsAppMessage(ticket, assignee.name)
+      : buildTicketCreatedWhatsAppMessage(ticket),
+  });
+}
+
 // ─────────────────────────────────────────────────────────────────────────────
 // POST /api/tickets
 // ─────────────────────────────────────────────────────────────────────────────
@@ -495,7 +596,18 @@ const createTicket = async (req, res) => {
       });
     }
 
-    return ok(res, { ticket }, 201);
+    ok(res, { ticket }, 201);
+
+    const actor = { _id: req.user._id, name: req.user.name };
+    setImmediate(async () => {
+      try {
+        await notifyTicketCreated(ticket, actor);
+        if (ticket.assignedTo?._id) await notifyTicketAssigned(ticket, actor);
+      } catch (notificationError) {
+        console.error('[ticketController] Ticket creation notification failed:', notificationError?.message || notificationError);
+      }
+    });
+    return;
   } catch (err) {
     console.error('createTicket:', err);
 
@@ -933,7 +1045,14 @@ const assignTicket = async (req, res) => {
       });
     }
 
-    return ok(res, { ticket });
+    ok(res, { ticket });
+
+    const actor = { _id: req.user._id, name: req.user.name };
+    setImmediate(() => {
+      notifyTicketAssigned(ticket, actor)
+        .catch((notificationError) => console.error('[ticketController] Ticket assignment notification failed:', notificationError?.message || notificationError));
+    });
+    return;
   } catch (err) {
     console.error('assignTicket:', err);
 

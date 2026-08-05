@@ -136,6 +136,8 @@ const InquiryForm = ({
 
     if (!form.mobileNumber.trim()) {
       errs.mobileNumber = 'Required';
+    } else if (!/^\d{10}$/.test(form.mobileNumber)) {
+      errs.mobileNumber = 'Enter exactly 10 digits';
     }
 
     if (!form.productType) {
@@ -226,11 +228,16 @@ const InquiryForm = ({
           required
         >
           <Input
-            placeholder="Mobile number"
+            placeholder="10-digit mobile number"
             value={form.mobileNumber}
-            onChange={set(
-              'mobileNumber'
-            )}
+            onChange={(event) => {
+              const digits = event.target.value.replace(/\D/g, '').slice(0, 10);
+              setForm((prev) => ({ ...prev, mobileNumber: digits }));
+              setErrors((prev) => ({ ...prev, mobileNumber: '' }));
+            }}
+            inputMode="numeric"
+            maxLength={10}
+            pattern="[0-9]{10}"
           />
         </FormField>
 

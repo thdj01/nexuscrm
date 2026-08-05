@@ -22,12 +22,21 @@ const Department         = require('../models/Department');
 const mongoose           = require('mongoose');
 const {
   buildProjectCreatedWhatsAppMessage,
+  buildProjectCreatedEmailHtml,
   buildTaskAssignmentGroupWhatsAppMessage,
   buildTaskAssignmentPersonalWhatsAppMessage,
+  buildTaskAssignmentEmailHtml,
   buildProjectFieldChangedWhatsAppMessage,
   buildProjectDelayedWhatsAppMessage,
 } = require('../services/notificationTemplates');
 const { scheduleKickoffForInquiry } = require('../services/kickoffWorkflowService');
+const { dispatchNotificationsToUsers } = require('../services/userNotificationDispatchService');
+const {
+  combineUsers,
+  getAdminUsers,
+  getDepartmentLeadershipUsers,
+  getProjectDepartmentUsers,
+} = require('../services/notificationRecipientService');
 const {
   syncProjectTasksToTimesheet,
   archiveProjectTimesheetTasksForProject,
@@ -59,7 +68,8 @@ const {
   assertPlanningStartDateAllowed,
 } = require('../utils/projectPlanning');
 
-const PLANNING_REORDER_ROLES = new Set(['admin', 'hod', 'team_lead']);
+const PLANNING_LEADERSHIP_ROLES = new Set(['admin', 'hod', 'manager', 'team_lead']);
+const PLANNING_REORDER_ROLES = PLANNING_LEADERSHIP_ROLES;
 
 // ─── Helper: normalise any ObjectId-like value to a plain string ID ──────────
 function objectIdBytesToHex(bytes) {
@@ -547,6 +557,37 @@ async function notifyAndLog({ projectDbId, projectId, projectName, userId, userN
 }
 
 
+async function notifyProjectCreatedStakeholders(project = {}, actingUserName = 'User') {
+  const creatorId = project.createdBy?._id || project.createdBy;
+  const [adminUsers, departmentUsers, creatorUser] = await Promise.all([
+    getAdminUsers(),
+    getProjectDepartmentUsers(project),
+    creatorId && mongoose.Types.ObjectId.isValid(String(creatorId))
+      ? User.findOne({ _id: creatorId, isActive: { $ne: false } })
+          .select('_id name email phone mobileNumber whatsappNumber mobile role department hodDepartments teamId')
+          .lean()
+      : Promise.resolve(null),
+  ]);
+  const recipients = combineUsers(
+    adminUsers,
+    departmentUsers,
+    creatorUser ? [creatorUser] : []
+  );
+  const projectMessage = buildProjectCreatedWhatsAppMessage(project);
+
+  return dispatchNotificationsToUsers({
+    users: recipients,
+    title: `New Project Created - ${project.projectId || 'Project'}`,
+    message: `${actingUserName || 'A user'} created project ${project.projectId || '-'} - ${project.projectName || '-'} for ${project.customerName || '-'}.`,
+    type: 'project_created',
+    relatedProject: project._id,
+    emailSubject: `New Project Created - ${project.projectId || 'Project'}`,
+    emailHtml: (user) => buildProjectCreatedEmailHtml(project, user?.name || 'Team Member'),
+    whatsappMessage: projectMessage,
+  });
+}
+
+
 // ─── DIAGNOSTIC PROBE (read-only) ─────────────────────────────────────────────
 // Prints the planning data exactly as it exists immediately before the
 // Project → Timesheet sync runs, so we can confirm whether assignedTo survives
@@ -754,9 +795,10 @@ async function notifyAssignments(oldProject, newBody, projectDbId, projectId, pr
   if (taskAssignmentsByUser.size === 0) return;
 
   const users = await User.find({ _id: { $in: Array.from(taskAssignmentsByUser.keys()) } })
-    .select('name phone whatsappNumber mobileNumber mobile')
+    .select('name email phone whatsappNumber mobileNumber mobile')
     .lean();
   const userMap = new Map(users.map((user) => [String(user._id), user]));
+  const adminUsers = await getAdminUsers();
 
   const promises = [];
 
@@ -787,6 +829,12 @@ async function notifyAssignments(oldProject, newBody, projectDbId, projectId, pr
       tasks,
     });
 
+    const departmentLeadership = await getDepartmentLeadershipUsers(
+      tasks.map((task) => task.department).filter(Boolean)
+    );
+    const oversightUsers = combineUsers(adminUsers, departmentLeadership)
+      .filter((recipient) => String(recipient?._id || '') !== String(assigneeId));
+
     // Dashboard notification is independent from WhatsApp. A user must still
     // receive the assignment notification even when WhatsApp is disabled,
     // disconnected, or the user's phone number is missing.
@@ -799,6 +847,48 @@ async function notifyAssignments(oldProject, newBody, projectDbId, projectId, pr
         relatedProject: projectDbId,
       })
     );
+
+    if (user?.email) {
+      promises.push(
+        dispatchNotificationsToUsers({
+          users: [user],
+          title: `New task assignment - ${projectId || 'Project'}`,
+          message: inAppMessage,
+          relatedProject: projectDbId,
+          sendInApp: false,
+          sendWhatsApp: false,
+          emailSubject: `Task Assigned - ${projectId || 'Project'}`,
+          emailHtml: buildTaskAssignmentEmailHtml({
+            userName,
+            projectName,
+            projectId,
+            tasks,
+          }),
+        })
+      );
+    }
+
+    if (oversightUsers.length > 0) {
+      promises.push(
+        dispatchNotificationsToUsers({
+          users: oversightUsers,
+          title: `Task Assigned - ${projectId || 'Project'}`,
+          message: `${actingUserName || 'A project planner'} assigned ${userName} ${tasks.length} task${tasks.length === 1 ? '' : 's'} in project ${projectId || '-'} - ${projectName || '-'}.`,
+          type: 'info',
+          relatedProject: projectDbId,
+          emailSubject: `Task Assigned - ${projectId || 'Project'}`,
+          emailHtml: (leader) => buildTaskAssignmentEmailHtml({
+            userName: leader?.name || 'Department Lead',
+            assignedToName: userName,
+            isAssignee: false,
+            projectName,
+            projectId,
+            tasks,
+          }),
+          whatsappMessage: groupMsg,
+        })
+      );
+    }
 
     promises.push(
       notifyAndLog({
@@ -1445,6 +1535,18 @@ async function resolveUserDepartmentSet(user = {}) {
   return result;
 }
 
+async function canManagePlanningDepartment(user = {}, department = '') {
+  const role = String(user.role || '');
+  if (role === 'admin') return true;
+  if (!PLANNING_LEADERSHIP_ROLES.has(role)) return false;
+
+  const normalizedDepartment = normalizeSupportedDepartment(department);
+  if (!normalizedDepartment) return false;
+
+  const allowedDepartments = await resolveUserDepartmentSet(user);
+  return allowedDepartments.has(normalizedDepartment);
+}
+
 async function validatePlanningAssignments(planningGrids = [], oldProject = {}) {
   const tasks = Array.isArray(planningGrids)
     ? planningGrids.flatMap((grid) => (grid.planningTasks || []).map((task) => ({ ...task, department: grid.department || task.department })))
@@ -1479,6 +1581,116 @@ async function validatePlanningAssignments(planningGrids = [], oldProject = {}) 
   }
 }
 
+function planningScopeDepartment(value = '') {
+  return normalizeSupportedDepartment(value) || String(value || '').trim();
+}
+
+function planningScopeGridKey(grid = {}, index = 0) {
+  const department = planningScopeDepartment(grid.department);
+  const panelType = normalizeSupportedPanelType(grid.panelType) || String(grid.panelType || '').trim();
+  const planningMode = String(grid.planningMode || (grid.isCommon === false ? 'separate' : 'common'));
+  const unit = planningMode === 'separate'
+    ? String(grid.unitNumber ?? '')
+    : 'COMMON';
+  return `${department}::${panelType}::${planningMode}::${unit || index}`;
+}
+
+// Compare only fields that a user can intentionally edit in the planning UI.
+// Derived/generated fields (completion, delay, generated names, Mongo subdocument
+// IDs, etc.) are deliberately excluded because they can change during backend
+// normalization even when an unrelated department was not edited.
+function normalizePlanningScopeGrid(grid = {}) {
+  return {
+    department: planningScopeDepartment(grid.department),
+    panelType: normalizeSupportedPanelType(grid.panelType) || String(grid.panelType || '').trim(),
+    panelQuantity: Number(grid.panelQuantity || grid.quantity || 1),
+    planningMode: String(grid.planningMode || (grid.isCommon === false ? 'separate' : 'common')),
+    unitNumber: grid.unitNumber == null ? '' : Number(grid.unitNumber),
+    isCommon: grid.isCommon !== false,
+    planningTasks: (grid.planningTasks || []).map((task = {}) => ({
+      taskName: String(task.taskName || task.taskTitle || '').trim(),
+      remark: String(task.remark ?? task.taskRemark ?? task.comments ?? task.notes ?? '').trim(),
+      assignedTo: normalizePermissionId(task.assignedTo),
+      dependency: String(task.dependency || '').trim(),
+      milestone: Boolean(task.milestone),
+      plannedStartDate: normalizePermissionDate(task.plannedStartDate || task.startDate),
+      totalDays: Math.max(1, Number(task.totalDays ?? task.duration) || 1),
+    })),
+  };
+}
+
+function planningScopeGridMap(project = {}) {
+  const grids = Array.isArray(project.planningGrids) && project.planningGrids.length
+    ? project.planningGrids
+    : (Array.isArray(project.planningTasks) && project.planningTasks.length
+      ? [{
+          department: project.planningTasks[0]?.department || '',
+          panelType: '',
+          planningMode: 'common',
+          isCommon: true,
+          planningTasks: project.planningTasks,
+        }]
+      : []);
+
+  return new Map(grids.map((grid, index) => [
+    planningScopeGridKey(grid, index),
+    normalizePlanningScopeGrid(grid),
+  ]));
+}
+
+function planningScopeSelectionMap(project = {}) {
+  const selections = Array.isArray(project.panelSelections) && project.panelSelections.length
+    ? project.panelSelections
+    : (project.planningGrids || []).map((grid) => ({
+        department: grid.department,
+        panelType: grid.panelType,
+        quantity: grid.panelQuantity || grid.quantity || 1,
+        planningMode: grid.planningMode || (grid.isCommon === false ? 'separate' : 'common'),
+      }));
+
+  return new Map(selections.map((selection = {}) => {
+    const department = planningScopeDepartment(selection.department);
+    const panelType = normalizeSupportedPanelType(selection.panelType) || String(selection.panelType || '').trim();
+    const key = `${department}::${panelType}`;
+    return [key, {
+      department,
+      panelType,
+      quantity: Number(selection.quantity || 1),
+      planningMode: String(selection.planningMode || 'common'),
+    }];
+  }));
+}
+
+function collectChangedPlanningDepartments(oldProject = {}, body = {}) {
+  const changedDepartments = new Set();
+  const oldGridMap = planningScopeGridMap(oldProject);
+  const nextGridMap = planningScopeGridMap(body);
+
+  nextGridMap.forEach((nextGrid, key) => {
+    const previous = oldGridMap.get(key);
+    if (!previous || !permissionValuesEqual(previous, nextGrid)) {
+      if (nextGrid.department) changedDepartments.add(nextGrid.department);
+    }
+  });
+  oldGridMap.forEach((previous, key) => {
+    if (!nextGridMap.has(key) && previous.department) changedDepartments.add(previous.department);
+  });
+
+  const oldSelectionMap = planningScopeSelectionMap(oldProject);
+  const nextSelectionMap = planningScopeSelectionMap(body);
+  nextSelectionMap.forEach((nextSelection, key) => {
+    const previous = oldSelectionMap.get(key);
+    if (!previous || !permissionValuesEqual(previous, nextSelection)) {
+      if (nextSelection.department) changedDepartments.add(nextSelection.department);
+    }
+  });
+  oldSelectionMap.forEach((previous, key) => {
+    if (!nextSelectionMap.has(key) && previous.department) changedDepartments.add(previous.department);
+  });
+
+  return changedDepartments;
+}
+
 async function assertPlanningDepartmentScope(user = {}, oldProject = {}, body = {}) {
   const hasPlanningPayload = ['selectedDepartments', 'panelSelections', 'planningGrids', 'planningTasks']
     .some((key) => Object.prototype.hasOwnProperty.call(body, key));
@@ -1486,30 +1698,21 @@ async function assertPlanningDepartmentScope(user = {}, oldProject = {}, body = 
 
   const role = String(user.role || '');
   if (role === 'admin') return;
+
+  const changedDepartments = collectChangedPlanningDepartments(oldProject, body);
+
   if (!['hod', 'manager', 'team_lead'].includes(role)) {
-    const oldStructure = normalizePlanningStructure(oldProject);
-    const newStructure = normalizePlanningStructure(body);
-    if (!permissionValuesEqual(oldStructure, newStructure)) {
-      throw makeHttpError('Only Admin, HOD, and TL can change planning structure or task remarks.', 403);
+    if (changedDepartments.size > 0) {
+      throw makeHttpError('Only Admin, HOD, and TL can change planning structure, assignment, dates, duration, order, or task remarks.', 403);
     }
     return;
   }
 
   const allowedDepartments = await resolveUserDepartmentSet(user);
-  const oldGridMap = new Map((oldProject.planningGrids || []).map((grid) => [String(grid.gridId), normalizePermissionValue(grid)]));
-  const changedDepartments = new Set();
-  (body.planningGrids || []).forEach((grid) => {
-    const previous = oldGridMap.get(String(grid.gridId));
-    if (!previous || JSON.stringify(previous) !== JSON.stringify(normalizePermissionValue(grid))) {
-      changedDepartments.add(grid.department);
-    }
-  });
-  (oldProject.planningGrids || []).forEach((grid) => {
-    if (!(body.planningGrids || []).some((next) => String(next.gridId) === String(grid.gridId))) changedDepartments.add(grid.department);
-  });
   for (const department of changedDepartments) {
-    if (!allowedDepartments.has(department)) {
-      throw makeHttpError(`You are not authorized to manage the ${department} planning section.`, 403);
+    const normalizedDepartment = planningScopeDepartment(department);
+    if (!allowedDepartments.has(normalizedDepartment)) {
+      throw makeHttpError(`You are not authorized to manage the ${normalizedDepartment || department} planning section.`, 403);
     }
   }
 }
@@ -2389,13 +2592,15 @@ const assertTaskStartDateRole = (user = {}, oldProject = {}, body = {}) => {
   throw error;
 };
 
-const assertTaskStatusOwnership = (user = {}, oldProject = {}, body = {}) => {
+const assertTaskStatusOwnership = async (user = {}, oldProject = {}, body = {}) => {
   if (!Array.isArray(body.planningGrids) && !Array.isArray(body.planningTasks)) return;
 
   const currentUserId = String(toId(user._id || user.id) || '').toLowerCase();
   const oldTaskMap = planningTaskPermissionMap(oldProject);
 
-  flattenPlanningTasks(body).forEach((task, index) => {
+  const tasks = flattenPlanningTasks(body);
+  for (let index = 0; index < tasks.length; index += 1) {
+    const task = tasks[index];
     const previous = oldTaskMap.get(planningTaskPermissionKey(task, index));
     const previousStatus = normalizePlanningTaskStatus(previous?.status || 'Pending');
     const nextStatus = normalizePlanningTaskStatus(task.status || 'Pending');
@@ -2403,16 +2608,19 @@ const assertTaskStatusOwnership = (user = {}, oldProject = {}, body = {}) => {
       ? previousStatus !== nextStatus
       : nextStatus !== 'Pending';
 
-    if (!statusChanged) return;
+    if (!statusChanged) continue;
 
     const assignedUserId = String(toId(previous?.assignedTo || task.assignedTo) || '').toLowerCase();
-    if (assignedUserId && currentUserId && assignedUserId === currentUserId) return;
+    if (assignedUserId && currentUserId && assignedUserId === currentUserId) continue;
 
-    const error = new Error(`Only the user assigned to task "${task.taskName || 'Task'}" can change its status.`);
+    const taskDepartment = task.department || previous?.department || '';
+    if (await canManagePlanningDepartment(user, taskDepartment)) continue;
+
+    const error = new Error(`Only the assigned user, Admin, or the HOD/Team Lead of the ${taskDepartment || 'task'} department can change task "${task.taskName || 'Task'}" status.`);
     error.statusCode = 403;
     error.isOperational = true;
     throw error;
-  });
+  }
 };
 
 const normalizePlanningCompletion = (project = {}) => {
@@ -2544,7 +2752,7 @@ const createProject = async (req, res, next) => {
     validateIncomingPlanningStartDates(req.body, {});
     const body = sanitizeProjectPayload(req.body);
     assertTaskStartDateRole(req.user, {}, body);
-    assertTaskStatusOwnership(req.user, {}, body);
+    await assertTaskStatusOwnership(req.user, {}, body);
     await attachUniversalCustomer(body, req.user._id);
     applyActualCompletedDates(body);
     if (Array.isArray(body.planningTasks) && body.completionPercentage === 100) {
@@ -2606,6 +2814,7 @@ const createProject = async (req, res, next) => {
       try {
         const groupMsg = buildProjectCreatedWhatsAppMessage(project);
         await Promise.allSettled([
+          notifyProjectCreatedStakeholders(responseProject, actingUser.name),
           notifyAssignments(
             { assignedTo: null, planningTasks: [] },
             body,
@@ -2707,6 +2916,11 @@ const copyProject = async (req, res, next) => {
       data: responseProject,
       message: `Project copied successfully as ${copied.projectId}`,
     });
+
+    setImmediate(() => {
+      notifyProjectCreatedStakeholders(populated || copied, req.user?.name || 'User')
+        .catch((error) => console.error('[projectController] Copy notification failed:', error?.message || error));
+    });
   } catch (error) { next(error); }
 };
 
@@ -2727,7 +2941,7 @@ const updateProject = async (req, res, next) => {
     ].forEach((field) => delete body[field]);
     assertTaskStartDateRole(req.user, oldProject, body);
     if (req.assignedTaskStatusUpdate !== true) {
-      assertTaskStatusOwnership(req.user, oldProject, body);
+      await assertTaskStatusOwnership(req.user, oldProject, body);
     }
     await attachInquiryNumber(body);
     applyActualCompletedDates(body, oldProject);
@@ -3046,29 +3260,40 @@ const updatePlanningTaskStatus = async (req, res, next) => {
     }
     const requestedStatus = normalizePlanningTaskStatus(rawRequestedStatus);
     const currentUserId = String(toId(req.user?._id || req.user?.id) || '').toLowerCase();
-    let found = false;
+    const targetGrid = (project.planningGrids || []).find(
+      (grid) => String(grid.gridId) === String(req.params.gridId)
+    );
+    const targetTask = (targetGrid?.planningTasks || []).find(
+      (task) => String(task.taskId) === String(req.params.taskId)
+    );
+
+    if (!targetGrid || !targetTask) {
+      return res.status(404).json({ success: false, message: 'Planning task not found' });
+    }
+
+    const assignedUserId = String(toId(targetTask.assignedTo) || '').toLowerCase();
+    const isAssignedUser = Boolean(
+      assignedUserId && currentUserId && assignedUserId === currentUserId
+    );
+    const taskDepartment = targetGrid.department || targetTask.department || '';
+    const canManageDepartment = await canManagePlanningDepartment(req.user, taskDepartment);
+
+    if (!isAssignedUser && !canManageDepartment) {
+      throw makeHttpError(
+        `Only the assigned user, Admin, or the HOD/Team Lead of the ${taskDepartment || 'task'} department can change this task status.`,
+        403
+      );
+    }
 
     const grids = (project.planningGrids || []).map((grid) => ({
       ...grid,
-      planningTasks: (grid.planningTasks || []).map((task) => {
-        const isTarget = String(grid.gridId) === String(req.params.gridId)
-          && String(task.taskId) === String(req.params.taskId);
-        if (!isTarget) return task;
-
-        found = true;
-        const assignedUserId = toId(task.assignedTo);
-        if (!assignedUserId || assignedUserId !== currentUserId) {
-          throw makeHttpError('Only the user assigned to this task can change its status.', 403);
-        }
-
-        return {
-          ...task,
-          status: requestedStatus,
-        };
-      }),
+      planningTasks: (grid.planningTasks || []).map((task) => (
+        String(grid.gridId) === String(req.params.gridId)
+          && String(task.taskId) === String(req.params.taskId)
+          ? { ...task, status: requestedStatus }
+          : task
+      )),
     }));
-
-    if (!found) return res.status(404).json({ success: false, message: 'Planning task not found' });
 
     req.body = planningMutationPayload(project, grids);
     req.assignedTaskStatusUpdate = true;
@@ -3211,4 +3436,8 @@ module.exports = {
   uploadProjectDocuments,
   convertInquiryToProject,
   recalcAllDelays,
+  __test: {
+    collectChangedPlanningDepartments,
+    normalizePlanningScopeGrid,
+  },
 };

@@ -20,6 +20,32 @@ const mergeUniversalPermissions = (permissions = []) => {
   return ALL_EMPLOYEE_PERMISSIONS.filter((permission) => merged.has(permission));
 };
 
+// Project-planning ownership is role based. Admin can manage every department,
+// while HOD/Team Lead/legacy Manager users are later restricted to their own
+// department by projectController. Keeping these permissions effective here
+// prevents a manually cleared Employee Access checklist from breaking the
+// required leadership workflow.
+const PLANNING_LEADERSHIP_PERMISSIONS = Object.freeze([
+  PROJECT_PERMISSIONS.PLANNING_GRID,
+  PROJECT_PERMISSIONS.ADD_DUPLICATE_PLANNING_GRID,
+  PROJECT_PERMISSIONS.UPDATE_COMPLETION,
+]);
+
+const isPlanningLeadershipRole = (role) => [
+  ROLES.ADMIN,
+  ROLES.HOD,
+  ROLES.TEAM_LEAD,
+  ROLES.MANAGER,
+].includes(role);
+
+const mergeRoleRequiredPermissions = (user = {}, permissions = []) => {
+  const merged = new Set(permissions);
+  if (isPlanningLeadershipRole(user.role)) {
+    PLANNING_LEADERSHIP_PERMISSIONS.forEach((permission) => merged.add(permission));
+  }
+  return ALL_EMPLOYEE_PERMISSIONS.filter((permission) => merged.has(permission));
+};
+
 const cleanPermissionList = (value) => {
   const allowed = new Set(ALL_EMPLOYEE_PERMISSIONS);
   const cleaned = Array.isArray(value)
@@ -112,13 +138,19 @@ const hasConfiguredEmployeeAccess = (user = {}) => Array.isArray(user.employeeAc
 
 const resolveEffectiveEmployeeAccess = async (user = {}) => {
   if (user.role === ROLES.ADMIN) return [...ALL_EMPLOYEE_PERMISSIONS];
-  if (hasConfiguredEmployeeAccess(user)) return cleanPermissionList(user.employeeAccess);
-  return getSuggestedEmployeeAccess(user);
+  if (hasConfiguredEmployeeAccess(user)) {
+    return mergeRoleRequiredPermissions(user, cleanPermissionList(user.employeeAccess));
+  }
+  return mergeRoleRequiredPermissions(user, await getSuggestedEmployeeAccess(user));
 };
 
 const userHasPermission = (user, permission) => {
   if (!user || !permission) return false;
   if (user.role === ROLES.ADMIN) return true;
+  if (
+    isPlanningLeadershipRole(user.role) &&
+    PLANNING_LEADERSHIP_PERMISSIONS.includes(permission)
+  ) return true;
   if (UNIVERSAL_EMPLOYEE_PERMISSIONS.includes(permission)) return true;
   return Array.isArray(user.employeeAccess) && user.employeeAccess.includes(permission);
 };
@@ -143,4 +175,6 @@ module.exports = {
   resolveEffectiveEmployeeAccess,
   userHasPermission,
   userHasAnyPermission,
+  PLANNING_LEADERSHIP_PERMISSIONS,
+  isPlanningLeadershipRole,
 };

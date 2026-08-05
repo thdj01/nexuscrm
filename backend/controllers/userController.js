@@ -611,6 +611,26 @@ const updateUserAvatar = async (req, res, next) => {
   }
 };
 
+// Get all active users for inquiry kick-off attendee selection.
+// This deliberately does not use hierarchy scoping because a kick-off can
+// include participants from any department in User Management.
+const getKickoffAttendeeUsers = async (_req, res, next) => {
+  try {
+    let users = await User.find({ isActive: true })
+      .select('_id name email role teamId avatar department hodDepartments isActive')
+      .populate('teamId', 'name')
+      .sort({ name: 1, role: 1 })
+      .lean();
+
+    users = await enrichUsersWithTeamMembership(users);
+    users = await enrichUsersWithDepartmentInfo(users);
+
+    return ok(res, { users });
+  } catch (err) {
+    next(err);
+  }
+};
+
 // Get assignable users
 const getAssignableUsers = async (req, res, next) => {
   try {
@@ -672,5 +692,6 @@ module.exports = {
   createUser,
   updateUser,
   updateUserAvatar,
+  getKickoffAttendeeUsers,
   getAssignableUsers,
 };

@@ -74,4 +74,4 @@ createFirstAdmin()
   })
   .finally(async () => {
     await mongoose.disconnect();
-  });
+  }); 

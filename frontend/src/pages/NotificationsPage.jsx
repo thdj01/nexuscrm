@@ -84,8 +84,9 @@ const NotificationsPage = () => {
 
   // Fetch Notifications
   const fetchNotifications =
-    useCallback(async () => {
-      setLoading(true);
+    useCallback(async (options = {}) => {
+      const silent = options?.silent === true;
+      if (!silent) setLoading(true);
 
       try {
         const params = {
@@ -116,16 +117,27 @@ const NotificationsPage = () => {
           data.pagination
         );
       } catch {
-        toast.error(
-          'Failed to load notifications'
-        );
+        if (!silent) {
+          toast.error(
+            'Failed to load notifications'
+          );
+        }
       } finally {
-        setLoading(false);
+        if (!silent) setLoading(false);
       }
     }, [page, filterRead]);
 
   useEffect(() => {
     fetchNotifications();
+
+    const refresh = () => fetchNotifications({ silent: true });
+    const intervalId = window.setInterval(refresh, 15000);
+    window.addEventListener('focus', refresh);
+
+    return () => {
+      window.clearInterval(intervalId);
+      window.removeEventListener('focus', refresh);
+    };
   }, [fetchNotifications]);
 
   useEffect(() => {
@@ -439,6 +451,20 @@ const NotificationsPage = () => {
                               notif
                                 .relatedProject
                                 .projectId
+                            }
+                          </span>
+                        )}
+
+
+
+                        {/* Ticket */}
+                        {notif.relatedTicket && (
+                          <span className="rounded bg-purple-50 px-2 py-0.5 text-xs text-purple-600">
+                            Ticket:{' '}
+                            {
+                              notif
+                                .relatedTicket
+                                .ticketId
                             }
                           </span>
                         )}

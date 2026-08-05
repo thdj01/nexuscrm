@@ -226,7 +226,7 @@ const DepartmentChecklist = ({ value = [], onChange, departments = [] }) => {
             onClick={clearAll}
             className="font-medium text-red-500 hover:text-red-700"
           >
-            Clear
+            Deselect All
           </button>
         </div>
       </div>

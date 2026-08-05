@@ -1,12 +1,109 @@
+const mongoose = require('mongoose');
 const User = require('../models/User');
+const Department = require('../models/Department');
 const { generateToken } = require('../utils/generateToken');
 const { buildUploadedAvatarPath, deleteLocalUploadByUrl } = require('../utils/avatarUpload');
 const { resolveEffectiveEmployeeAccess } = require('../utils/accessControl');
+
+const getDepartmentKey = (value) => {
+  if (!value) return '';
+  if (typeof value === 'object') {
+    return String(value._id || value.id || value.value || value.name || value.code || '').trim();
+  }
+  return String(value).trim();
+};
+
+const resolveAuthDepartmentInfo = async (plainUser) => {
+  const primaryDepartment = plainUser.department || '';
+  const hodDepartments = Array.isArray(plainUser.hodDepartments)
+    ? plainUser.hodDepartments
+    : [];
+  const values = [primaryDepartment, ...hodDepartments].filter(Boolean);
+  const departmentIds = [];
+  const legacyValues = [];
+
+  values.forEach((value) => {
+    const key = getDepartmentKey(value);
+    if (!key) return;
+
+    if (mongoose.Types.ObjectId.isValid(key)) {
+      departmentIds.push(key);
+    } else {
+      legacyValues.push(key.toUpperCase());
+    }
+  });
+
+  const conditions = [];
+  if (departmentIds.length > 0) conditions.push({ _id: { $in: departmentIds } });
+  if (legacyValues.length > 0) {
+    conditions.push({ name: { $in: legacyValues } });
+    conditions.push({ code: { $in: legacyValues } });
+  }
+
+  const departments = conditions.length > 0
+    ? await Department.find({ $or: conditions })
+      .select('_id name code')
+      .lean()
+    : [];
+
+  const byId = new Map();
+  const byName = new Map();
+  const byCode = new Map();
+
+  departments.forEach((department) => {
+    byId.set(String(department._id), department);
+    byName.set(String(department.name || '').toUpperCase(), department);
+    byCode.set(String(department.code || '').toUpperCase(), department);
+  });
+
+  const resolveDepartment = (value) => {
+    if (!value) return null;
+
+    if (typeof value === 'object' && (value.name || value.code)) {
+      return {
+        _id: value._id || value.id || null,
+        name: value.name || value.code,
+        code: value.code || '',
+      };
+    }
+
+    const key = getDepartmentKey(value);
+    if (!key) return null;
+
+    return (
+      byId.get(key) ||
+      byName.get(key.toUpperCase()) ||
+      byCode.get(key.toUpperCase()) ||
+      null
+    );
+  };
+
+  const displayDepartment = (value) => {
+    const resolved = resolveDepartment(value);
+    return resolved?.name || getDepartmentKey(value);
+  };
+
+  const departmentInfo = resolveDepartment(primaryDepartment);
+  const hodDepartmentInfo = hodDepartments
+    .map(resolveDepartment)
+    .filter(Boolean);
+
+  return {
+    departmentInfo,
+    departmentName: departmentInfo?.name || displayDepartment(primaryDepartment),
+    departmentCode: departmentInfo?.code || '',
+    hodDepartmentInfo,
+    hodDepartmentNames: hodDepartments
+      .map(displayDepartment)
+      .filter(Boolean),
+  };
+};
 
 const buildAuthUser = async (user) => {
   if (!user) return null;
 
   const plainUser = typeof user.toObject === 'function' ? user.toObject() : user;
+  const departmentInfo = await resolveAuthDepartmentInfo(plainUser);
 
   return {
     _id: plainUser._id,
@@ -17,6 +114,7 @@ const buildAuthUser = async (user) => {
     avatar: plainUser.avatar || '',
     department: plainUser.department || '',
     hodDepartments: plainUser.hodDepartments || [],
+    ...departmentInfo,
     teamId: plainUser.teamId || null,
     reportsTo: plainUser.reportsTo || null,
     employeeAccess: await resolveEffectiveEmployeeAccess(plainUser),

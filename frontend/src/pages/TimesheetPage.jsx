@@ -23,6 +23,7 @@ import {
   TrendingUp,
   LayoutGrid,
   SlidersHorizontal,
+  BarChart2,
 } from 'lucide-react';
 
 import {
@@ -30,6 +31,7 @@ import {
   updateTask,
   archiveTask,
   restoreTask,
+  fetchAnalyticsScope,
   fetchListTasks,
 } from '../api/timesheetService';
 
@@ -88,11 +90,23 @@ const StatWidget = ({ icon: Icon, label, value, sub, colorClass = 'text-blue-600
   </div>
 );
 
-const VIEW_TABS = [
+const BASE_VIEW_TABS = [
   { path: '/timesheet/list',     icon: List,         label: 'List'     },
   { path: '/timesheet/kanban',   icon: Kanban,       label: 'Kanban'   },
   { path: '/timesheet/calendar', icon: CalendarDays, label: 'Calendar' },
 ];
+
+const ANALYTICS_TAB = { path: '/timesheet/admin', icon: BarChart2, label: 'Analytics' };
+
+// Roles that can access the analytics/admin dashboard
+const ELEVATED_ROLES = new Set(['admin', 'hod', 'team_lead', 'manager']);
+
+const getPageTitle = (role) => {
+  if (role === 'admin')                return 'Timesheet Admin';
+  if (role === 'hod' || role === 'manager') return 'HOD Timesheet';
+  if (role === 'team_lead')            return 'Team Timesheet';
+  return 'My Timesheet';
+};
 
 // Shared class for every filter control — h-11 ≈ 44px, w-44 ≈ 176px, text-sm
 const CTRL = 'h-11 w-full rounded-lg border border-gray-300 bg-white px-3 text-sm text-gray-700 focus:border-blue-400 focus:outline-none focus:ring-1 focus:ring-blue-400 lg:w-44 lg:shrink-0';
@@ -103,11 +117,19 @@ const TimesheetPage = () => {
   const navigate = useNavigate();
   const location = useLocation();
 
+  // Role-derived state
+  const isElevated = ELEVATED_ROLES.has(user?.role);
+  const VIEW_TABS  = isElevated
+    ? [...BASE_VIEW_TABS, ANALYTICS_TAB]
+    : BASE_VIEW_TABS;
+  const pageTitle  = getPageTitle(user?.role);
+
   // ── Filter state (UNCHANGED) ────────────────────────────────────────────
   const [filterStatus,   setFilterStatus]   = useState('');
   const [filterTaskType, setFilterTaskType] = useState('');
   const [filterFrom,     setFilterFrom]     = useState('');
   const [filterTo,       setFilterTo]       = useState('');
+  const [filterDepartment, setFilterDepartment] = useState('');
   const [filterTeam,     setFilterTeam]     = useState('');
   const [filterProject,  setFilterProject]  = useState('');
   const [filterArchived, setFilterArchived] = useState('active');
@@ -115,6 +137,11 @@ const TimesheetPage = () => {
 
   const [teams,    setTeams]    = useState([]);
   const [projects, setProjects] = useState([]);
+  const [analyticsScope, setAnalyticsScope] = useState({
+    departments: [],
+    employeeCount: 0,
+    scopeLabel: '',
+  });
 
   const [stats,        setStats]        = useState({ totalHours: 0, completed: 0, inProgress: 0, pending: 0 });
   const [total,        setTotal]        = useState(0);
@@ -149,6 +176,13 @@ const TimesheetPage = () => {
       .catch(() => {});
   }, []);
 
+  useEffect(() => {
+    if (!isElevated) return;
+    fetchAnalyticsScope()
+      .then((response) => setAnalyticsScope(response.scope ?? {}))
+      .catch(() => {});
+  }, [isElevated, refreshKey]);
+
   const loadStats = useCallback(async () => {
     setStatsLoading(true);
     try {
@@ -157,6 +191,7 @@ const TimesheetPage = () => {
       if (filterTaskType) params.taskType = filterTaskType;
       if (filterFrom)     params.from     = filterFrom;
       if (filterTo)       params.to       = filterTo;
+      if (filterDepartment) params.departmentId = filterDepartment;
       if (filterTeam)     params.teamId   = filterTeam;
       if (filterProject)  params.project  = filterProject;
       if (filterArchived && filterArchived !== 'active') params.archived = filterArchived;
@@ -177,7 +212,7 @@ const TimesheetPage = () => {
     } finally {
       setStatsLoading(false);
     }
-  }, [filterStatus, filterTaskType, filterFrom, filterTo, filterTeam, filterProject, filterArchived, filterTaskSource]);
+  }, [filterStatus, filterTaskType, filterFrom, filterTo, filterDepartment, filterTeam, filterProject, filterArchived, filterTaskSource]);
 
   useEffect(() => { loadStats(); }, [loadStats, refreshKey]);
 
@@ -239,6 +274,7 @@ const TimesheetPage = () => {
   const clearFilters = () => {
     setFilterStatus('');
     setFilterTaskType('');
+    setFilterDepartment('');
     setFilterTeam('');
     setFilterProject('');
     setFilterArchived('active');
@@ -248,13 +284,14 @@ const TimesheetPage = () => {
   };
 
   const hasActiveFilters =
-    filterStatus || filterTaskType || filterTeam || filterProject ||
+    filterStatus || filterTaskType || filterDepartment || filterTeam || filterProject ||
     filterArchived !== 'active' || filterTaskSource ||
     filterFrom || filterTo;
 
   const activeFilterCount = [
     filterStatus,
     filterTaskType,
+    filterDepartment,
     filterTeam,
     filterProject,
     filterTaskSource,
@@ -262,8 +299,12 @@ const TimesheetPage = () => {
     filterTo,
   ].filter(Boolean).length + (filterArchived !== 'active' ? 1 : 0);
 
-  const activeTab = VIEW_TABS.find((t) => location.pathname.startsWith(t.path))?.path
-    ?? '/timesheet/kanban';
+  const activeTab = VIEW_TABS.find((t) =>
+    // For Analytics tab, match exactly to avoid /timesheet/admin matching /timesheet
+    t.path === '/timesheet/admin'
+      ? location.pathname.startsWith('/timesheet/admin')
+      : location.pathname.startsWith(t.path)
+  )?.path ?? '/timesheet/kanban';
 
   const outletContext = useMemo(() => ({
     filters: {
@@ -271,6 +312,7 @@ const TimesheetPage = () => {
       filterTaskType,
       filterFrom,
       filterTo,
+      filterDepartment,
       filterTeam,
       filterProject,
       filterArchived,
@@ -282,7 +324,7 @@ const TimesheetPage = () => {
     onRestore:   handleRestore,
     currentUser: user,
   }), [
-    filterStatus, filterTaskType, filterFrom, filterTo, filterTeam, filterProject, filterArchived, filterTaskSource,
+    filterStatus, filterTaskType, filterFrom, filterTo, filterDepartment, filterTeam, filterProject, filterArchived, filterTaskSource,
     refreshKey, openEdit, user,
   ]);
 
@@ -299,7 +341,7 @@ const TimesheetPage = () => {
       {/* ── Page header row ─────────────────────────────────────────────── */}
       <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
         <div>
-          <h2 className="text-lg font-semibold text-gray-900">My Timesheet</h2>
+          <h2 className="text-lg font-semibold text-gray-900">{pageTitle}</h2>
           <p className="text-sm text-gray-500">
             {total} task{total !== 1 ? 's' : ''} · {fmtDate(filterFrom)} – {fmtDate(filterTo)}
           </p>
@@ -340,27 +382,21 @@ const TimesheetPage = () => {
       <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-4">
         <StatWidget
           icon={LayoutGrid}
-          label="Teams"
-          value={teams.length}
+          label={isElevated ? 'Departments' : 'Teams'}
+          value={isElevated ? (analyticsScope.departments?.length ?? 0) : teams.length}
           colorClass="text-indigo-600"
           bgClass="bg-indigo-50"
-          sub={filterTeam ? '1 selected' : 'all teams'}
+          sub={isElevated
+            ? (filterDepartment ? '1 selected' : (analyticsScope.scopeLabel || 'assigned scope'))
+            : (filterTeam ? '1 selected' : 'all teams')}
         />
         <StatWidget
           icon={Users}
           label="Employees"
-          value={
-            // Count unique employee IDs visible across tasks in current filter window.
-            // Falls back to '—' for employee role who sees only own tasks (count = 1).
-            user?.role === 'employee' ? '—' : (() => {
-              // teams list carries members indirectly; use tasks as proxy until
-              // a dedicated headcount endpoint exists.
-              return '—';
-            })()
-          }
+          value={isElevated ? (analyticsScope.employeeCount ?? 0) : '—'}
           colorClass="text-violet-600"
           bgClass="bg-violet-50"
-          sub="in scope"
+          sub={isElevated ? 'in department scope' : 'team visibility'}
         />
         <StatWidget
           icon={Briefcase}
@@ -473,6 +509,23 @@ const TimesheetPage = () => {
                 <option value="USER">USER</option>
                 <option value="PROJECT">PROJECT</option>
               </select>
+
+              {/* Department — Admin sees all; HOD sees assigned departments;
+                  Team Lead sees the single assigned department. */}
+              {isElevated && analyticsScope.departments?.length > 0 && (
+                <select
+                  value={filterDepartment}
+                  onChange={(e) => setFilterDepartment(e.target.value)}
+                  className={CTRL}
+                >
+                  <option value="">All Departments</option>
+                  {analyticsScope.departments.map((department) => (
+                    <option key={department._id} value={department._id}>
+                      {department.name}
+                    </option>
+                  ))}
+                </select>
+              )}
 
               {/* Team */}
               {user?.role !== 'employee' && teams.length > 0 && (

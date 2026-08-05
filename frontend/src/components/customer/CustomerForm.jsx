@@ -25,6 +25,13 @@ const DEFAULT_CONTACT = () => ({
   designation: '',
 });
 
+
+const MOBILE_NUMBER_LENGTH = 10;
+const MOBILE_NUMBER_PATTERN = /^\d{10}$/;
+const normalizeMobileInput = (value = '') => String(value || '')
+  .replace(/\D/g, '')
+  .slice(0, MOBILE_NUMBER_LENGTH);
+
 const defaultForm = {
   customerName: '',
   companyType: '',
@@ -213,10 +220,11 @@ const CustomerForm = ({
   };
 
   const setContact = (index, field, value) => {
+    const nextValue = field === 'phone' ? normalizeMobileInput(value) : value;
     setForm((prev) => ({
       ...prev,
       contacts: prev.contacts.map((contact, idx) => (
-        idx === index ? { ...contact, [field]: value } : contact
+        idx === index ? { ...contact, [field]: nextValue } : contact
       )),
     }));
     setErrors((prev) => ({ ...prev, [`contacts.${index}.${field}`]: undefined }));
@@ -250,7 +258,16 @@ const CustomerForm = ({
 
     if (!String(primaryContact.phone || '').trim()) {
       nextErrors['contacts.0.phone'] = 'Primary contact mobile number is required';
+    } else if (!MOBILE_NUMBER_PATTERN.test(String(primaryContact.phone || '').trim())) {
+      nextErrors['contacts.0.phone'] = 'Enter exactly 10 digits';
     }
+
+    form.contacts.forEach((contact, index) => {
+      const phone = String(contact?.phone || '').trim();
+      if (index > 0 && phone && !MOBILE_NUMBER_PATTERN.test(phone)) {
+        nextErrors[`contacts.${index}.phone`] = 'Enter exactly 10 digits';
+      }
+    });
 
     if (Object.keys(nextErrors).length > 0) {
       setErrors(nextErrors);
@@ -442,8 +459,11 @@ const CustomerForm = ({
                     <Input
                       value={contact.phone || ''}
                       onChange={(event) => setContact(index, 'phone', event.target.value)}
-                      placeholder="Mobile number"
-                      inputMode="tel"
+                      placeholder="10-digit mobile number"
+                      inputMode="numeric"
+                      maxLength={MOBILE_NUMBER_LENGTH}
+                      pattern="[0-9]{10}"
+                      title="Enter exactly 10 digits"
                       required={index === 0}
                     />
                   </FormField>

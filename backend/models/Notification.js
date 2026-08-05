@@ -37,6 +37,8 @@ const notificationSchema = new mongoose.Schema(
         'order_confirmed',
         'kickoff_scheduled',
         'project_created',
+        'ticket_created',
+        'ticket_assigned',
         'workflow_error',
         'info',
         'status',   // ← was missing: sent on status change in updateInquiry
@@ -64,6 +66,10 @@ const notificationSchema = new mongoose.Schema(
     relatedProject: {
       type: mongoose.Schema.Types.ObjectId,
       ref:  'Project',
+    },
+    relatedTicket: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref:  'Ticket',
     },
   },
   { timestamps: true }

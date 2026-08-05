@@ -40,6 +40,9 @@ export const fetchCalendarTasks = (params = {}) =>
 // Admin / Manager endpoints
 // ─────────────────────────────────────────────────────────────────────────────
 
+export const fetchAnalyticsScope = () =>
+  API.get('/timesheet/admin/scope').then((r) => r.data);
+
 export const fetchAllTasks = (params = {}) =>
   API.get('/timesheet/admin/all', { params }).then((r) => r.data);
 

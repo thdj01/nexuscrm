@@ -34,15 +34,21 @@ const {
 const path               = require('path');
 const fs                 = require('fs');
 const multer             = require('multer');
-const createNotification         = require('../services/notificationService');
-const { sendWhatsAppNotification, sendWhatsAppGroupNotification, sendWhatsAppGroupWithAttachments} = require('../services/whatsappService');
+const { sendWhatsAppNotification, sendWhatsAppGroupWithAttachments } = require('../services/whatsappService');
 const {
+  buildInquiryEmailHtml,
   buildNewInquiryWhatsAppMessage,
   dashboardMessages,
 } = require('../services/notificationTemplates');
 const { INQUIRY_PERMISSIONS, userHasPermission } = require('../utils/accessControl');
 const { buildInquiryPdf, buildInquiryPdfFileName } = require('../services/inquiryPdfService');
 const { notifyInquiryStakeholdersOfChange } = require('../services/inquiryChangeNotificationService');
+const sendOutlookNotification = require('../services/outlookService');
+const { dispatchNotificationsToUsers } = require('../services/userNotificationDispatchService');
+const {
+  combineUsers,
+  getAdminUsers,
+} = require('../services/notificationRecipientService');
 const {
   resolveInquiryEditContext,
   canUserEditInquiry,
@@ -1412,23 +1418,41 @@ const createInquiry = async (req, res, next) => {
       console.error('[createInquiry] Failed to build inquiry PDF attachment:', pdfError.message);
     }
 
-    // Notification and email are non-fatal side effects.
-    await createNotification({
-      title:          'New Inquiry Added',
-      message:        dashboardMessages.inquiryCreated(data),
-      type:           'info',
-      recipient:      req.user._id,
-      relatedInquiry: inquiry._id,
-      sendEmail:      true,
-      emailTo:        process.env.INQUIRY_NOTIFICATION_EMAIL || 'ravi.darji@nexusautomech.com',
-      inquiry:        data,
-      eventType:      'inquiry_created',
-      emailAttachments,
-    });
-
-    // WhatsApp notification also receives the populated creator name.
+    // Notify the creator and every active Admin through dashboard, Outlook,
+    // and their personal WhatsApp number. The configured integration mailbox /
+    // notification number below is retained for backward compatibility.
+    const adminUsers = await getAdminUsers();
+    const creatorUser = populatedInquiry.createdBy && typeof populatedInquiry.createdBy === 'object'
+      ? populatedInquiry.createdBy.toObject?.() || populatedInquiry.createdBy
+      : await User.findById(req.user._id)
+          .select('_id name email phone mobileNumber whatsappNumber mobile role department hodDepartments teamId')
+          .lean();
+    const inquiryRecipients = combineUsers(adminUsers, creatorUser ? [creatorUser] : []);
     const waCreatedBy = data.createdBy?.name || req.user?.name || 'System';
     const whatsappMessage = buildNewInquiryWhatsAppMessage(data, waCreatedBy);
+
+    await dispatchNotificationsToUsers({
+      users: inquiryRecipients,
+      title: 'New Inquiry Added',
+      message: dashboardMessages.inquiryCreated(data),
+      type: 'info',
+      relatedInquiry: inquiry._id,
+      emailSubject: `New Inquiry - ${data.inquiryId || 'Inquiry'}`,
+      emailHtml: buildInquiryEmailHtml(data, { eventType: 'inquiry_created' }),
+      emailAttachments,
+      whatsappMessage,
+    });
+
+    const legacyNotificationEmail = process.env.INQUIRY_NOTIFICATION_EMAIL || 'ravi.darji@nexusautomech.com';
+    const targetedEmails = new Set(inquiryRecipients.map((user) => String(user.email || '').trim().toLowerCase()).filter(Boolean));
+    if (legacyNotificationEmail && !targetedEmails.has(legacyNotificationEmail.toLowerCase())) {
+      await sendOutlookNotification({
+        to: legacyNotificationEmail,
+        subject: `New Inquiry - ${data.inquiryId || 'Inquiry'}`,
+        html: buildInquiryEmailHtml(data, { eventType: 'inquiry_created' }),
+        attachments: emailAttachments,
+      });
+    }
 
     await sendWhatsAppNotification(whatsappMessage);
 

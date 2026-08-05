@@ -1,6 +1,6 @@
 import React, { createContext, useContext, useEffect, useState } from 'react';
 import API from '../api/axios';
-import { UNIVERSAL_EMPLOYEE_PERMISSIONS } from '../constants/permissions';
+import { PROJECT_PERMISSIONS, UNIVERSAL_EMPLOYEE_PERMISSIONS } from '../constants/permissions';
 
 const AuthContext = createContext(null);
 
@@ -112,9 +112,16 @@ export const AuthProvider = ({ children }) => {
   const isManager = isAdmin || isHod || isManagerRole || isTeamLead;
   const isTicketAssignee = isEmployee;
 
+  const planningLeadershipPermissions = [
+    PROJECT_PERMISSIONS.PLANNING_GRID,
+    PROJECT_PERMISSIONS.ADD_DUPLICATE_PLANNING_GRID,
+    PROJECT_PERMISSIONS.UPDATE_COMPLETION,
+  ];
+
   const hasPermission = (permission) => {
     if (!permission || !user) return false;
     if (isAdmin) return true;
+    if (isManager && planningLeadershipPermissions.includes(permission)) return true;
     if (UNIVERSAL_EMPLOYEE_PERMISSIONS.includes(permission)) return true;
     return Array.isArray(user.employeeAccess) && user.employeeAccess.includes(permission);
   };

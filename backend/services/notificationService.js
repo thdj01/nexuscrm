@@ -34,6 +34,8 @@ const sendOutlookNotification  = require('./outlookService');
   recipient = null,
   relatedInquiry = null,
   relatedProject = null,
+  relatedTicket = null,
+  priority = 'Medium',
   sendEmail = false,
   emailTo = null,
   inquiry = null,
@@ -58,6 +60,8 @@ const sendOutlookNotification  = require('./outlookService');
       recipient,
       relatedInquiry,
       relatedProject,
+      relatedTicket,
+      priority,
     });
   } catch (error) {
     console.error('[notificationService] Failed to create notification:', error.message);

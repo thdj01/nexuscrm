@@ -435,7 +435,7 @@ const InquiriesPage = () => {
   const fetchMeetingUsers = useCallback(async () => {
     try {
       setUsersLoading(true);
-      const { data } = await API.get('/users/assignable');
+      const { data } = await API.get('/users/kickoff-attendees');
       setMeetingUsers(normalizeUserList(data));
     } catch {
       toast.error('Failed to load users from User Management');
@@ -1037,7 +1037,15 @@ const InquiriesPage = () => {
   const filteredMeetingUsers = meetingUsers.filter(user => {
     const keyword = userSearch.trim().toLowerCase();
     if (!keyword) return true;
-    return [user.name, user.email, user.role, user.teamId?.name]
+    return [
+      user.name,
+      user.email,
+      user.role,
+      user.teamId?.name,
+      user.departmentName,
+      user.departmentCode,
+      ...(Array.isArray(user.hodDepartmentNames) ? user.hodDepartmentNames : []),
+    ]
       .filter(Boolean)
       .some(value => String(value).toLowerCase().includes(keyword));
   });
@@ -1524,12 +1532,16 @@ const InquiriesPage = () => {
                       type="text"
                       value={userSearch}
                       onChange={(e) => setUserSearch(e.target.value)}
-                      placeholder="Search user..."
+                      placeholder="Search by name, email, role or department..."
                       className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
                     />
                   </div>
 
-                  <div className="max-h-56 overflow-y-auto py-1">
+                  <div className="border-b border-gray-100 px-3 py-1.5 text-xs text-gray-400">
+                    {filteredMeetingUsers.length} of {meetingUsers.length} active user(s)
+                  </div>
+
+                  <div className="max-h-64 overflow-y-auto py-1">
                     {filteredMeetingUsers.length === 0 ? (
                       <p className="px-3 py-3 text-sm text-gray-400">No users found</p>
                     ) : (
@@ -1549,7 +1561,7 @@ const InquiriesPage = () => {
                             <span className="min-w-0 flex-1">
                               <span className="block truncate font-medium text-gray-800">{user.name}</span>
                               <span className="block truncate text-xs text-gray-400">
-                                {[user.email, user.role, user.teamId?.name].filter(Boolean).join(' • ')}
+                                {[user.email, user.role, user.departmentName || user.teamId?.name].filter(Boolean).join(' • ')}
                               </span>
                             </span>
                           </button>
