@@ -21,8 +21,6 @@ const {
   getProjectDepartmentUsers,
   idString,
 } = require('./notificationRecipientService');
-const { SUPPORTED_PROJECT_DEPARTMENTS, isDepartmentAllowedForPanel } = require('../config/projectPlanningCatalog');
-const { initialTasksForDepartment } = require('../utils/projectPlanning');
 
 const {
   buildKickoffSummaryWhatsAppMessage: buildKickoffSummaryWhatsAppTemplate,
@@ -191,27 +189,6 @@ function buildProjectNotes(inquiry, workflow) {
     workflow.agenda ? `Kick-off Agenda: ${workflow.agenda}` : '',
     workflow.meetingLink ? `Kick-off Meeting Link: ${workflow.meetingLink}` : '',
   ].filter(Boolean).join('\n');
-}
-
-const PROJECT_PANEL_TYPES = ['PLC', 'MCC', 'VFD', 'MCC cum PLC', 'FLP', 'RIO Box'];
-
-function normalizeProjectPanelType(value) {
-  if (!value) return 'MCC';
-  const text = String(value).trim();
-  if (['PLC_MCC', 'MCC_CUM_PLC'].includes(text) || (/plc/i.test(text) && /mcc/i.test(text))) return 'MCC cum PLC';
-  if (/rio/i.test(text)) return 'RIO Box';
-  if (/flp/i.test(text)) return 'FLP';
-  if (/plc/i.test(text)) return 'PLC';
-  if (/vfd/i.test(text)) return 'VFD';
-  if (/mcc/i.test(text)) return 'MCC';
-  return PROJECT_PANEL_TYPES.includes(text) ? text : 'MCC';
-}
-
-function resolvePanelType(inquiry) {
-  if (Array.isArray(inquiry.panelTypes) && inquiry.panelTypes.length) {
-    return normalizeProjectPanelType(inquiry.panelTypes[0]);
-  }
-  return normalizeProjectPanelType(inquiry.productType || 'MCC');
 }
 
 async function validateAttendees(attendeeIds = []) {
@@ -589,40 +566,13 @@ async function createProjectFromWorkflow(workflow) {
 
   const attendees = (workflow.attendees || []).map(item => String(item?._id || item));
 
-  const selectedPanelType = resolvePanelType(inquiry);
-  const selectedDepartments = SUPPORTED_PROJECT_DEPARTMENTS.filter((department) =>
-    isDepartmentAllowedForPanel(department, selectedPanelType)
-  );
-  const panelSelections = selectedDepartments.map((department) => ({
-    department,
-    panelType: selectedPanelType,
-    quantity: 1,
-    planningMode: 'common',
-  }));
-  const planningGrids = panelSelections.map((selection, index) => {
-    const gridId = `${selection.department}-${selection.panelType}-COMMON`.replace(/\s+/g, '-').toUpperCase();
-    const gridName = `${selection.department} · ${selection.panelType} – Quantity 1`;
-    const planningTasks = initialTasksForDepartment(selection.department).map((task, taskIndex) => ({
-      ...task,
-      taskId: `${gridId}-${taskIndex + 1}`,
-      gridId,
-      gridName,
-      department: selection.department,
-      taskType: selection.department === 'Automation' ? 'Programming' : 'Production',
-      dependency: taskIndex === 0 ? '' : `${gridId}-${taskIndex}`,
-    }));
-    return {
-      gridId,
-      name: gridName,
-      gridName,
-      department: selection.department,
-      panelType: selection.panelType,
-      panelQuantity: 1,
-      planningMode: 'common',
-      isCommon: true,
-      planningTasks,
-    };
-  });
+  // An inquiry can contain panel-related information, but it must not decide
+  // the project's planning structure. The project is created with an empty
+  // planning setup so an authorized user explicitly selects the panel types
+  // and departments from the Project Planning screen.
+  const selectedDepartments = [];
+  const panelSelections = [];
+  const planningGrids = [];
 
   const projectData = {
     inquiryReference: inquiry._id,
@@ -736,7 +686,7 @@ async function notifyProjectCreated({ project, inquiry, workflow }) {
     channel: 'System',
     recipientType: 'Internal Team',
     status: 'Sent',
-    message: `Admin, Sales leadership, selected departments and assigned attendees notified (${recipients.length} users)`,
+    message: `Admin, Sales leadership, assigned attendees and selected planning departments, if any, notified (${recipients.length} users)`,
   });
   await workflow.save();
 }

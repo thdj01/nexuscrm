@@ -265,6 +265,33 @@ async function getEstimationUsers() {
   return getDepartmentAudienceUsers(['estimation']);
 }
 
+/**
+ * Inquiry-created routing rule.
+ *
+ * Every newly created inquiry must notify:
+ * - all active Admin users;
+ * - Sales HOD(s) and Sales Team Lead;
+ * - every active Estimation user (HOD, Team Lead and Employee);
+ * - the inquiry creator, so their own dashboard also records the event.
+ *
+ * combineUsers() removes duplicates when, for example, the creator is also a
+ * Sales Team Lead/HOD or an Admin.
+ */
+async function getInquiryCreatedRecipientUsers(creatorUser = null) {
+  const [admins, salesLeadership, estimationUsers] = await Promise.all([
+    getAdminUsers(),
+    getSalesLeadershipUsers(),
+    getEstimationUsers(),
+  ]);
+
+  return combineUsers(
+    admins,
+    salesLeadership,
+    estimationUsers,
+    creatorUser ? [creatorUser] : []
+  );
+}
+
 function getProjectDepartmentValues(project = {}) {
   const values = [];
 
@@ -299,6 +326,7 @@ module.exports = {
   getAdminUsers,
   getSalesLeadershipUsers,
   getEstimationUsers,
+  getInquiryCreatedRecipientUsers,
   getUsersByDepartments,
   getDepartmentLeadershipUsers,
   getDepartmentAudienceUsers,

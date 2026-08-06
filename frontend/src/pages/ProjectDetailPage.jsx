@@ -91,7 +91,7 @@ const ProjectDetailPage = () => {
   const [readOnly, setReadOnly] = useState(!startsEditable);
   const [activeSection, setActiveSection] = useState(0);
   const [planningGridNavigation, setPlanningGridNavigation] = useState([]);
-  const [selectedPlanningGridId, setSelectedPlanningGridId] = useState('A');
+  const [selectedPlanningGridId, setSelectedPlanningGridId] = useState('');
   const sectionRefs = useRef([]);
 
   const loadProject = useCallback(async () => {
@@ -133,7 +133,7 @@ const ProjectDetailPage = () => {
       return projectGrids.map(normalizePlanningGridStep);
     }
 
-    return [normalizePlanningGridStep({ gridId: 'A' }, 0)];
+    return [];
   }, [planningGridNavigation, project?.planningGrids]);
 
   const projectStepperSteps = useMemo(() => ([
@@ -147,16 +147,23 @@ const ProjectDetailPage = () => {
   }, [projectStepperSteps.length]);
 
   useEffect(() => {
-    if (!planningGridSteps.length) return;
+    if (!planningGridSteps.length) {
+      if (selectedPlanningGridId) setSelectedPlanningGridId('');
+      return;
+    }
     const selectedStillExists = planningGridSteps.some((gridStep) => String(gridStep.id).toUpperCase() === String(selectedPlanningGridId).toUpperCase());
     if (!selectedStillExists) {
-      setSelectedPlanningGridId(planningGridSteps[0]?.id || 'A');
+      setSelectedPlanningGridId(planningGridSteps[0]?.id || '');
     }
   }, [planningGridSteps, selectedPlanningGridId]);
 
-  const selectedPlanningGridIndex = Math.max(0, planningGridSteps.findIndex((gridStep) => String(gridStep.id).toUpperCase() === String(selectedPlanningGridId).toUpperCase()));
+  const selectedPlanningGridIndex = planningGridSteps.length
+    ? Math.max(0, planningGridSteps.findIndex((gridStep) => String(gridStep.id).toUpperCase() === String(selectedPlanningGridId).toUpperCase()))
+    : -1;
 
-  const activePlanningGridId = selectedPlanningGridId || planningGridSteps[0]?.id || 'A';
+  const activePlanningGridId = planningGridSteps.length
+    ? (selectedPlanningGridId || planningGridSteps[0]?.id || '')
+    : '';
 
   const setProjectSectionRef = useCallback((index, element) => {
     sectionRefs.current[index] = element;
@@ -315,10 +322,20 @@ const ProjectDetailPage = () => {
   };
 
   const handlePlanningGridSelect = (gridId) => {
+    if (!gridId) return;
     setSelectedPlanningGridId(gridId);
     setActiveSection(1);
     requestAnimationFrame(() => {
       const gridElement = document.getElementById(getPlanningGridElementId(gridId));
+
+      // Planning panels and departments are collapsed by default. Selecting a
+      // grid from the top navigator expands that grid and each parent section.
+      let expandable = gridElement;
+      while (expandable) {
+        if (expandable.tagName === 'DETAILS') expandable.open = true;
+        expandable = expandable.parentElement;
+      }
+
       const target = gridElement || sectionRefs.current[1] || document.getElementById('project-section-planning');
       if (!target) return;
       const main = document.querySelector('main');
@@ -455,7 +472,7 @@ const ProjectDetailPage = () => {
                 <button
                   type="button"
                   onClick={() => goToPlanningGrid(-1)}
-                  disabled={selectedPlanningGridIndex <= 0}
+                  disabled={!planningGridSteps.length || selectedPlanningGridIndex <= 0}
                   className="inline-flex h-7 items-center justify-center rounded-lg border border-gray-200 bg-white px-2.5 text-xs font-semibold text-gray-500 shadow-sm transition hover:bg-gray-50 disabled:cursor-not-allowed disabled:opacity-50"
                 >
                   ‹ Prev
@@ -463,10 +480,12 @@ const ProjectDetailPage = () => {
 
                 <select
                   value={activePlanningGridId}
+                  disabled={!planningGridSteps.length}
                   onChange={(event) => handlePlanningGridSelect(event.target.value)}
                   onFocus={() => setActiveSection(1)}
-                  className="h-7 min-w-0 flex-1 rounded-lg border border-indigo-200 bg-indigo-50 px-2.5 text-xs font-semibold text-indigo-700 outline-none transition focus:border-indigo-400 focus:ring-2 focus:ring-indigo-100 sm:max-w-xs"
+                  className="h-7 min-w-0 flex-1 rounded-lg border border-indigo-200 bg-indigo-50 px-2.5 text-xs font-semibold text-indigo-700 outline-none transition focus:border-indigo-400 focus:ring-2 focus:ring-indigo-100 disabled:cursor-not-allowed disabled:border-gray-200 disabled:bg-gray-50 disabled:text-gray-400 sm:max-w-xs"
                 >
+                  {!planningGridSteps.length && <option value="">Select panel and department</option>}
                   {planningGridSteps.map((gridStep, index) => (
                     <option key={gridStep.id || index} value={gridStep.id}>
                       {index + 1}. {gridStep.title || gridStep.label || `Project Planning Grid - ${gridStep.id}`}
@@ -477,7 +496,7 @@ const ProjectDetailPage = () => {
                 <button
                   type="button"
                   onClick={() => goToPlanningGrid(1)}
-                  disabled={selectedPlanningGridIndex >= planningGridSteps.length - 1}
+                  disabled={!planningGridSteps.length || selectedPlanningGridIndex >= planningGridSteps.length - 1}
                   className="inline-flex h-7 items-center justify-center rounded-lg border border-gray-200 bg-white px-2.5 text-xs font-semibold text-gray-700 shadow-sm transition hover:bg-gray-50 disabled:cursor-not-allowed disabled:opacity-50"
                 >
                   Next ›

@@ -25,7 +25,7 @@ const notificationLogSchema = new mongoose.Schema(
     },
     recipientType: {
       type: String,
-      enum: ['Customer', 'Assigned User', 'Internal Team', 'Internal WhatsApp Group', 'Configured Notify Number', 'System'],
+      enum: ['Customer', 'Assigned User', 'Internal Stakeholder', 'Internal Team', 'Internal WhatsApp Group', 'Configured Notify Number', 'System'],
       default: 'System',
     },
     recipientName: { type: String, trim: true, default: '' },

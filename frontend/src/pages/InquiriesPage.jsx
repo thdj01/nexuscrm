@@ -4,7 +4,6 @@ import {
   Plus,
   Search,
   Edit2,
-  ArrowRightCircle,
   RefreshCw,
   X,
   Calendar,
@@ -780,14 +779,6 @@ const InquiriesPage = () => {
     }
   };
 
-  const handleConvert = (inquiry) => {
-    if (!canEditInquiryRecord(inquiry)) {
-      toast.error('Only the inquiry creator, Estimation, or Admin can change this inquiry');
-      return;
-    }
-    openKickoffModal(inquiry);
-  };
-
   const openFollowUpModal = (inquiry) => {
     if (!canManageFollowUp || !canEditInquiryRecord(inquiry)) return;
     setFollowUpModal({
@@ -979,21 +970,6 @@ const InquiriesPage = () => {
             >
               {latestBomRevisionLabel}
             </span>
-          )}
-
-
-          {canEditRow && isOrderWonStatus(row.status) && !row.convertedToProject && row.kickoffMeeting?.status !== 'Scheduled' && (
-            <button
-              type="button"
-              onClick={(e) => {
-                e.stopPropagation();
-                handleConvert(row);
-              }}
-              className="rounded p-1.5 text-gray-400 hover:bg-green-50 hover:text-green-600 transition-colors"
-              title="Convert to Project"
-            >
-              <ArrowRightCircle size={14} />
-            </button>
           )}
 
           {canEditRow && isOrderWonStatus(row.status) && !row.convertedToProject && isKickoffScheduledOrReady(row) && (

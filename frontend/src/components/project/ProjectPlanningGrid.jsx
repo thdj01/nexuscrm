@@ -15,7 +15,7 @@ import {
   verticalListSortingStrategy,
 } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
-import { Activity, GripVertical, Plus, Trash2, Users } from 'lucide-react';
+import { Activity, ChevronDown, GripVertical, Plus, Trash2, Users } from 'lucide-react';
 import { Input, Select } from '../common/FormComponents';
 import { fetchPlanningUsers, getProjectId, updatePlanningTaskStatus } from '../../api/projectService';
 import { useAuth } from '../../context/AuthContext';
@@ -491,16 +491,18 @@ const ProjectPlanningGrid = ({
           <details
             key={grid.gridId || gridIndex}
             id={`project-planning-grid-${grid.gridId}`}
-            open={!activeGridId || String(activeGridId) === String(grid.gridId) || planningGrids.length <= 2}
-            className={`scroll-mt-44 overflow-hidden rounded-xl border bg-white shadow-sm ${String(activeGridId) === String(grid.gridId) ? 'border-indigo-300 ring-2 ring-indigo-100' : 'border-gray-200'}`}
+            className={`group/grid scroll-mt-44 overflow-hidden rounded-xl border bg-white shadow-sm ${String(activeGridId) === String(grid.gridId) ? 'border-indigo-300 ring-2 ring-indigo-100' : 'border-gray-200'}`}
           >
-            <summary className="cursor-pointer select-none bg-gradient-to-r from-slate-50 to-indigo-50 px-3 py-2 sm:px-4">
+            <summary className="cursor-pointer list-none select-none bg-gradient-to-r from-slate-50 to-indigo-50 px-3 py-2 sm:px-4 [&::-webkit-details-marker]:hidden">
               <div className="flex flex-wrap items-center justify-between gap-2">
-                <div className="min-w-0">
-                  <h4 className="truncate text-xs font-bold text-slate-800 sm:text-sm">{grid.gridName || grid.name}</h4>
-                  <p className="mt-0.5 truncate text-[10px] text-slate-500 sm:text-[11px]">
-                    {grid.panelType} · {grid.planningMode === 'separate' ? `Unit ${grid.unitNumber}` : grid.panelQuantity > 1 ? `Common for ${grid.panelQuantity} units` : 'Single unit'}
-                  </p>
+                <div className="flex min-w-0 items-start gap-2">
+                  <ChevronDown size={17} className="mt-0.5 shrink-0 transition-transform duration-200 group-open/grid:rotate-180" aria-hidden="true" />
+                  <div className="min-w-0">
+                    <h4 className="truncate text-xs font-bold text-slate-800 sm:text-sm">{grid.gridName || grid.name}</h4>
+                    <p className="mt-0.5 truncate text-[10px] text-slate-500 sm:text-[11px]">
+                      {grid.panelType} · {grid.planningMode === 'separate' ? `Unit ${grid.unitNumber}` : grid.panelQuantity > 1 ? `Common for ${grid.panelQuantity} units` : 'Single unit'}
+                    </p>
+                  </div>
                 </div>
                 <div className="flex items-center gap-1.5 whitespace-nowrap text-[10px] font-semibold text-slate-600 sm:text-xs">
                   <Users size={13} /> {grid.planningTasks?.length || 0} tasks · {grid.completionPercentage || 0}%

@@ -772,6 +772,7 @@ const CommonInquirySections = ({
     ? FLP_PANEL_STRUCTURE_OPTIONS
     : MCC_PANEL_STRUCTURE_OPTIONS;
   const showSharedTechnicalEngineering = hasInquiryPanelType(panelTypes, 'VFD');
+  const requiresCommonTechnicalFields = showPlcSection || showMccSection;
   const specializedSectionCount =
     Number(showPlcSection) +
     Number(showMccSection) +
@@ -1063,6 +1064,7 @@ const CommonInquirySections = ({
 
             <FormField
               label="Panel Area Classification"
+              required={requiresCommonTechnicalFields}
               error={getError(errors, 'panelAreaClassification')}
             >
               <SearchableSelect
@@ -1084,6 +1086,7 @@ const CommonInquirySections = ({
 
             <FormField
               label={showFlpSection ? "Installation" : "Installation Type"}
+              required={requiresCommonTechnicalFields}
               error={getError(errors, 'installationType')}
             >
               <SearchableSelect
@@ -1148,6 +1151,7 @@ const CommonInquirySections = ({
 
             <FormField
               label="Enclosure Type"
+              required={requiresCommonTechnicalFields}
               error={getError(errors, 'enclosureType')}
             >
               <SearchableSelect
@@ -1220,6 +1224,7 @@ const CommonInquirySections = ({
 
             <FormField
               label="Cable Entry"
+              required={requiresCommonTechnicalFields}
               error={getError(errors, 'cableEntry')}
             >
               <SearchableSelect

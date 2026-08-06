@@ -46,8 +46,8 @@ const { notifyInquiryStakeholdersOfChange } = require('../services/inquiryChange
 const sendOutlookNotification = require('../services/outlookService');
 const { dispatchNotificationsToUsers } = require('../services/userNotificationDispatchService');
 const {
-  combineUsers,
-  getAdminUsers,
+  getActiveUserById,
+  getInquiryCreatedRecipientUsers,
 } = require('../services/notificationRecipientService');
 const {
   resolveInquiryEditContext,
@@ -1418,16 +1418,24 @@ const createInquiry = async (req, res, next) => {
       console.error('[createInquiry] Failed to build inquiry PDF attachment:', pdfError.message);
     }
 
-    // Notify the creator and every active Admin through dashboard, Outlook,
-    // and their personal WhatsApp number. The configured integration mailbox /
-    // notification number below is retained for backward compatibility.
-    const adminUsers = await getAdminUsers();
-    const creatorUser = populatedInquiry.createdBy && typeof populatedInquiry.createdBy === 'object'
-      ? populatedInquiry.createdBy.toObject?.() || populatedInquiry.createdBy
-      : await User.findById(req.user._id)
-          .select('_id name email phone mobileNumber whatsappNumber mobile role department hodDepartments teamId')
-          .lean();
-    const inquiryRecipients = combineUsers(adminUsers, creatorUser ? [creatorUser] : []);
+    // Notify all inquiry-creation stakeholders through dashboard, Outlook and
+    // their personal WhatsApp number:
+    //   • Sales HOD(s) and Sales Team Lead
+    //   • Estimation HOD(s), Team Lead and all Estimation Employees
+    //   • Admins
+    //   • Creator (deduplicated when already included above)
+    // The configured integration mailbox / notification number below is kept
+    // for backward compatibility.
+    // Re-read the creator with notification contact fields. createdBy was only
+    // populated with name/email above, so using that partial object would skip
+    // the creator's personal WhatsApp delivery when they are not otherwise in
+    // the Sales-leadership or Estimation audiences.
+    const creatorUser = await getActiveUserById(req.user._id) || (
+      populatedInquiry.createdBy && typeof populatedInquiry.createdBy === 'object'
+        ? populatedInquiry.createdBy.toObject?.() || populatedInquiry.createdBy
+        : null
+    );
+    const inquiryRecipients = await getInquiryCreatedRecipientUsers(creatorUser);
     const waCreatedBy = data.createdBy?.name || req.user?.name || 'System';
     const whatsappMessage = buildNewInquiryWhatsAppMessage(data, waCreatedBy);
 

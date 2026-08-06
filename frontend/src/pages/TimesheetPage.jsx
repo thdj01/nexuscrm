@@ -43,6 +43,9 @@ import { useAuth }  from '../context/AuthContext';
 import Modal         from '../components/common/Modal';
 import TimesheetForm from '../components/timesheet/TimesheetForm';
 import { TASK_STATUSES, TASK_TYPES } from '../components/timesheet/TimesheetForm';
+import DateRangeCalendarPicker, {
+  getCurrentWeekRange,
+} from '../components/timesheet/DateRangeCalendarPicker';
 
 import {
   Button,
@@ -65,16 +68,6 @@ const fmtHours = (h) => {
   if (hours > 0)              return `${hours}h`;
   return `${mins}m`;
 };
-
-const weekStart = () => {
-  const d   = new Date();
-  const day = d.getDay();
-  const diff = d.getDate() - day + (day === 0 ? -6 : 1);
-  d.setDate(diff);
-  return d.toISOString().split('T')[0];
-};
-
-const todayISO = () => new Date().toISOString().split('T')[0];
 
 // ── Stat widget — unchanged signature, used for both rows ─────────────────────
 const StatWidget = ({ icon: Icon, label, value, sub, colorClass = 'text-blue-600', bgClass = 'bg-blue-50' }) => (
@@ -108,8 +101,8 @@ const getPageTitle = (role) => {
   return 'My Timesheet';
 };
 
-// Shared class for every filter control — h-11 ≈ 44px, w-44 ≈ 176px, text-sm
-const CTRL = 'h-11 w-full rounded-lg border border-gray-300 bg-white px-3 text-sm text-gray-700 focus:border-blue-400 focus:outline-none focus:ring-1 focus:ring-blue-400 lg:w-44 lg:shrink-0';
+// Compact desktop filter controls. Mobile keeps a comfortable touch height.
+const CTRL = 'h-10 w-full min-w-0 rounded-lg border border-gray-300 bg-white px-2 text-xs text-gray-700 focus:border-blue-400 focus:outline-none focus:ring-1 focus:ring-blue-400 lg:h-9 lg:w-[7.25rem] lg:shrink-0';
 
 const TimesheetPage = () => {
   const toast    = useToast();
@@ -125,10 +118,12 @@ const TimesheetPage = () => {
   const pageTitle  = getPageTitle(user?.role);
 
   // ── Filter state (UNCHANGED) ────────────────────────────────────────────
+  const initialWeekRange = useMemo(() => getCurrentWeekRange(), []);
+
   const [filterStatus,   setFilterStatus]   = useState('');
   const [filterTaskType, setFilterTaskType] = useState('');
-  const [filterFrom,     setFilterFrom]     = useState('');
-  const [filterTo,       setFilterTo]       = useState('');
+  const [filterFrom,     setFilterFrom]     = useState(() => initialWeekRange.from);
+  const [filterTo,       setFilterTo]       = useState(() => initialWeekRange.to);
   const [filterDepartment, setFilterDepartment] = useState('');
   const [filterTeam,     setFilterTeam]     = useState('');
   const [filterProject,  setFilterProject]  = useState('');
@@ -271,6 +266,9 @@ const TimesheetPage = () => {
 
   const openEdit   = useCallback((task) => { setSelected(task); setEditModal(true); },   []);
 
+  const isCurrentWeekSelected =
+    filterFrom === initialWeekRange.from && filterTo === initialWeekRange.to;
+
   const clearFilters = () => {
     setFilterStatus('');
     setFilterTaskType('');
@@ -279,14 +277,18 @@ const TimesheetPage = () => {
     setFilterProject('');
     setFilterArchived('active');
     setFilterTaskSource('');
-    setFilterFrom('');
-    setFilterTo('');
+    setFilterFrom(initialWeekRange.from);
+    setFilterTo(initialWeekRange.to);
+  };
+
+  const handleDateRangeChange = ({ from, to }) => {
+    setFilterFrom(from);
+    setFilterTo(to);
   };
 
   const hasActiveFilters =
     filterStatus || filterTaskType || filterDepartment || filterTeam || filterProject ||
-    filterArchived !== 'active' || filterTaskSource ||
-    filterFrom || filterTo;
+    filterArchived !== 'active' || filterTaskSource || !isCurrentWeekSelected;
 
   const activeFilterCount = [
     filterStatus,
@@ -295,9 +297,9 @@ const TimesheetPage = () => {
     filterTeam,
     filterProject,
     filterTaskSource,
-    filterFrom,
-    filterTo,
-  ].filter(Boolean).length + (filterArchived !== 'active' ? 1 : 0);
+  ].filter(Boolean).length
+    + (filterArchived !== 'active' ? 1 : 0)
+    + (!isCurrentWeekSelected ? 1 : 0);
 
   const activeTab = VIEW_TABS.find((t) =>
     // For Analytics tab, match exactly to avoid /timesheet/admin matching /timesheet
@@ -446,27 +448,17 @@ const TimesheetPage = () => {
           </div>
 
           <div className={`${mobileFiltersOpen ? 'block' : 'hidden'} lg:block`}>
-            <div className="overflow-visible">
-              <div className="grid min-w-0 grid-cols-1 gap-2 px-3 py-2.5 sm:grid-cols-2 md:grid-cols-3 lg:flex lg:flex-wrap lg:items-center lg:px-4">
+            <div className="overflow-visible lg:flex lg:items-center lg:gap-1.5 lg:px-3 lg:py-2">
+              <div className="grid min-w-0 flex-1 grid-cols-1 gap-2 px-3 py-2.5 sm:grid-cols-2 md:grid-cols-3 lg:flex lg:flex-nowrap lg:items-center lg:gap-1.5 lg:overflow-x-auto lg:px-0 lg:py-0 lg:pb-0.5">
 
-              {/* Date range */}
-              <div className="grid w-full grid-cols-[1fr_auto_1fr] items-center gap-2 lg:flex lg:w-auto lg:shrink-0">
-                <input
-                  type="date"
-                  value={filterFrom}
-                  onChange={(e) => setFilterFrom(e.target.value)}
-                  className={CTRL}
-                />
-                <span className="text-center text-xs text-gray-400 lg:shrink-0">–</span>
-                <input
-                  type="date"
-                  value={filterTo}
-                  onChange={(e) => setFilterTo(e.target.value)}
-                  className={CTRL}
-                />
-              </div>
+              {/* Calendar date / range filter. Current Monday-Sunday is selected by default. */}
+              <DateRangeCalendarPicker
+                from={filterFrom}
+                to={filterTo}
+                onChange={handleDateRangeChange}
+              />
 
-              <div className="hidden h-5 w-px shrink-0 bg-gray-200 lg:block" />
+              <div className="hidden h-4 w-px shrink-0 bg-gray-200 lg:block" />
 
               {/* Status */}
               <select
@@ -546,7 +538,7 @@ const TimesheetPage = () => {
                 <select
                   value={filterProject}
                   onChange={(e) => setFilterProject(e.target.value)}
-                  className={`${CTRL} lg:w-56`}
+                  className={`${CTRL} lg:w-40`}
                 >
                   <option value="">All Projects</option>
                   {projects.map((p) => (
@@ -561,23 +553,26 @@ const TimesheetPage = () => {
               {hasActiveFilters && (
                 <button
                   onClick={clearFilters}
-                  className="flex h-11 w-full items-center justify-center gap-1.5 rounded-lg border border-red-200 bg-red-50 px-3 text-sm font-medium text-red-500 transition-colors hover:bg-red-100 hover:text-red-700 lg:w-auto lg:shrink-0"
+                  className="flex h-10 w-full items-center justify-center gap-1 rounded-lg border border-red-200 bg-red-50 px-2 text-xs font-medium text-red-500 transition-colors hover:bg-red-100 hover:text-red-700 lg:h-9 lg:w-auto lg:shrink-0"
                 >
-                  <X size={14} /> Clear
+                  <X size={13} /> Clear
                 </button>
               )}
 
-              {/* Refresh — far right */}
-              <button
-                onClick={triggerRefresh}
-                className="hidden rounded-lg p-2.5 text-gray-400 transition-colors hover:bg-gray-100 hover:text-gray-700 lg:ml-auto lg:flex lg:shrink-0"
-                title="Refresh"
-              >
-                <RefreshCw size={15} className={statsLoading ? 'animate-spin' : ''} />
-              </button>
+              </div>
 
+              {/* Fixed desktop action: stays aligned with the first filter row instead of wrapping below it. */}
+              <button
+                type="button"
+                onClick={triggerRefresh}
+                disabled={statsLoading}
+                className="hidden h-9 w-9 shrink-0 items-center justify-center rounded-lg border border-gray-200 bg-white text-gray-500 shadow-sm transition-colors hover:border-blue-200 hover:bg-blue-50 hover:text-blue-600 disabled:cursor-wait disabled:opacity-70 lg:inline-flex"
+                title="Refresh tasks"
+                aria-label="Refresh tasks"
+              >
+                <RefreshCw size={14} className={statsLoading ? 'animate-spin' : ''} />
+              </button>
             </div>
-          </div>
           </div>
         </Card>
       </div>

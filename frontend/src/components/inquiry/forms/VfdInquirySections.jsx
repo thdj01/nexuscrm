@@ -443,7 +443,7 @@ const VfdInquirySections = ({
           </FormField>
 
           {showOnsiteSupportDays && (
-            <FormField label="On-site Days" error={onsiteSupportDaysError}>
+            <FormField label="On-site Days" required error={onsiteSupportDaysError}>
               <Input
                 type="number"
                 min="0"
@@ -484,7 +484,7 @@ const VfdInquirySections = ({
           </FormField>
 
           {showCommissioningSupportDays && (
-            <FormField label="Commissioning Days" error={commissioningSupportDaysError}>
+            <FormField label="Commissioning Days" required error={commissioningSupportDaysError}>
               <Input
                 type="number"
                 min="0"

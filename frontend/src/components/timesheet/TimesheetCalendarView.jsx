@@ -293,7 +293,7 @@ const TimesheetCalendarView = () => {
 
   const [tasks,        setTasks]        = useState([]);
   const [loading,      setLoading]      = useState(true);
-  const [currentView,  setCurrentView]  = useState('dayGridMonth');
+  const [currentView,  setCurrentView]  = useState('timeGridWeek');
   const [title,        setTitle]        = useState('');
   const [visibleRange, setVisibleRange] = useState({ start: null, end: null });
   const [selectedPersonDayId, setSelectedPersonDayId] = useState(null);

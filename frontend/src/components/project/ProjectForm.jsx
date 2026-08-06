@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { AlertTriangle, CheckCircle2, Eye, Plus } from 'lucide-react';
+import { AlertTriangle, CheckCircle2, ChevronDown, Eye, Plus } from 'lucide-react';
 import { Button, FormField, Input } from '../common/FormComponents';
 import { SearchableSelect } from '../common/FormComponents.extended';
 import StickyActionBar from '../common/StickyActionBar';
@@ -866,8 +866,11 @@ const ProjectForm = ({
                 && !availableDepartments.includes('Automation');
 
               return (
-                <details key={panelType} open className="rounded-xl border border-gray-200 bg-gray-50">
-                  <summary className="cursor-pointer px-4 py-3 text-sm font-bold text-gray-800">{panelType} Panel Planning</summary>
+                <details key={panelType} className="group/panel overflow-hidden rounded-xl border border-gray-200 bg-gray-50">
+                  <summary className="flex cursor-pointer list-none items-center gap-2 px-4 py-3 text-sm font-bold text-gray-800 [&::-webkit-details-marker]:hidden">
+                    <ChevronDown size={16} className="shrink-0 transition-transform duration-200 group-open/panel:rotate-180" aria-hidden="true" />
+                    <span className="min-w-0 truncate">{panelType} Panel Planning</span>
+                  </summary>
                   <div className="space-y-3 border-t border-gray-200 p-4">
                     <FormField label="Departments" required error={errors[`panel-${panelType}`]}>
                       <div className="grid grid-cols-2 gap-2 sm:grid-cols-3 lg:grid-cols-6">
@@ -888,38 +891,47 @@ const ProjectForm = ({
                       const key = selectionKey(department, panelType);
                       const relatedGrids = planningGrids.filter((grid) => grid.department === department && grid.panelType === panelType);
                       return (
-                        <div key={key} className="rounded-xl border border-indigo-100 bg-white p-3">
-                          <div className="grid grid-cols-1 items-end gap-3 lg:grid-cols-[minmax(140px,0.7fr)_minmax(150px,0.5fr)_minmax(280px,1fr)_auto]">
-                            <div><p className="text-xs font-bold text-indigo-700">{department}</p><p className="text-[11px] text-gray-500">{panelType} panel planning</p></div>
-                            <FormField label="Panel Quantity" required error={errors[`quantity-${key}`]}>
-                              <Input type="number" min="1" step="1" value={selection.quantity} disabled={readOnly || !canManagePlanning || planningLoading} onChange={(event) => updatePanelSelection(department, panelType, { quantity: event.target.value })} />
-                            </FormField>
-                            <FormField label={Number(selection.quantity) > 1 ? 'Your planning grid should be' : 'Planning Mode'} error={errors[`mode-${key}`]}>
-                              {Number(selection.quantity) > 1 ? (
-                                <div className="flex h-10 items-center gap-5 rounded-lg border border-gray-200 px-3">
-                                  {['common', 'separate'].map((mode) => <label key={mode} className="flex items-center gap-2 text-sm font-medium capitalize"><input type="radio" name={`mode-${key}`} checked={selection.planningMode === mode} disabled={readOnly || !canManagePlanning || planningLoading} onChange={() => updatePanelSelection(department, panelType, { planningMode: mode })} /> {mode}</label>)}
-                                </div>
-                              ) : <div className="flex h-10 items-center rounded-lg border border-gray-200 bg-gray-50 px-3 text-sm text-gray-500">One planning grid</div>}
-                            </FormField>
-                            {Number(selection.quantity) > 1 && selection.planningMode === 'separate' && canAddPlanningGrid && (
-                              <Button type="button" variant="outline" disabled={readOnly || planningLoading || relatedGrids.length >= Number(selection.quantity)} onClick={() => addSeparateGrid(selection)}><Plus size={14} /> Add Planning Grid ({relatedGrids.length}/{selection.quantity})</Button>
-                            )}
-                          </div>
-                          {errors[`department-${key}`] && <p className="mt-2 text-xs font-medium text-red-600">{errors[`department-${key}`]}</p>}
-                          {errors[`grid-${key}`] && <p className="mt-2 text-xs font-medium text-red-600">{errors[`grid-${key}`]}</p>}
+                        <details key={key} className="group/department overflow-hidden rounded-xl border border-indigo-100 bg-white">
+                          <summary className="flex cursor-pointer list-none items-center gap-2 bg-indigo-50/60 px-3 py-3 text-indigo-700 [&::-webkit-details-marker]:hidden">
+                            <ChevronDown size={16} className="shrink-0 transition-transform duration-200 group-open/department:rotate-180" aria-hidden="true" />
+                            <span className="min-w-0">
+                              <span className="text-xs font-bold">{department}</span>
+                              <span className="ml-2 text-[11px] font-normal text-gray-500">{panelType} panel planning</span>
+                            </span>
+                          </summary>
 
-                          <div className="mt-3 border-t border-indigo-100 pt-3">
-                            <ProjectPlanningGrid
-                              planningGrids={relatedGrids}
-                              onChange={(nextGrids) => onDepartmentPlanningGridChange(department, panelType, nextGrids)}
-                              readOnly={readOnly}
-                              canManagePlanning={canManagePlanning}
-                              canUpdateCompletion={canUpdateCompletion}
-                              activeGridId={activePlanningGridId}
-                              projectId={initialData?._id || ''}
-                            />
+                          <div className="border-t border-indigo-100 p-3">
+                            <div className="grid grid-cols-1 items-end gap-3 lg:grid-cols-[minmax(150px,0.5fr)_minmax(280px,1fr)_auto]">
+                              <FormField label="Panel Quantity" required error={errors[`quantity-${key}`]}>
+                                <Input type="number" min="1" step="1" value={selection.quantity} disabled={readOnly || !canManagePlanning || planningLoading} onChange={(event) => updatePanelSelection(department, panelType, { quantity: event.target.value })} />
+                              </FormField>
+                              <FormField label={Number(selection.quantity) > 1 ? 'Your planning grid should be' : 'Planning Mode'} error={errors[`mode-${key}`]}>
+                                {Number(selection.quantity) > 1 ? (
+                                  <div className="flex h-10 items-center gap-5 rounded-lg border border-gray-200 px-3">
+                                    {['common', 'separate'].map((mode) => <label key={mode} className="flex items-center gap-2 text-sm font-medium capitalize"><input type="radio" name={`mode-${key}`} checked={selection.planningMode === mode} disabled={readOnly || !canManagePlanning || planningLoading} onChange={() => updatePanelSelection(department, panelType, { planningMode: mode })} /> {mode}</label>)}
+                                  </div>
+                                ) : <div className="flex h-10 items-center rounded-lg border border-gray-200 bg-gray-50 px-3 text-sm text-gray-500">One planning grid</div>}
+                              </FormField>
+                              {Number(selection.quantity) > 1 && selection.planningMode === 'separate' && canAddPlanningGrid && (
+                                <Button type="button" variant="outline" disabled={readOnly || planningLoading || relatedGrids.length >= Number(selection.quantity)} onClick={() => addSeparateGrid(selection)}><Plus size={14} /> Add Planning Grid ({relatedGrids.length}/{selection.quantity})</Button>
+                              )}
+                            </div>
+                            {errors[`department-${key}`] && <p className="mt-2 text-xs font-medium text-red-600">{errors[`department-${key}`]}</p>}
+                            {errors[`grid-${key}`] && <p className="mt-2 text-xs font-medium text-red-600">{errors[`grid-${key}`]}</p>}
+
+                            <div className="mt-3 border-t border-indigo-100 pt-3">
+                              <ProjectPlanningGrid
+                                planningGrids={relatedGrids}
+                                onChange={(nextGrids) => onDepartmentPlanningGridChange(department, panelType, nextGrids)}
+                                readOnly={readOnly}
+                                canManagePlanning={canManagePlanning}
+                                canUpdateCompletion={canUpdateCompletion}
+                                activeGridId={activePlanningGridId}
+                                projectId={initialData?._id || ''}
+                              />
+                            </div>
                           </div>
-                        </div>
+                        </details>
                       );
                     })}
                   </div>

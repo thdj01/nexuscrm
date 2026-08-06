@@ -18,14 +18,14 @@ const mongoose = require('mongoose');
 const notificationSchema = new mongoose.Schema(
   {
     title: {
-      type:     String,
+      type: String,
       required: true,
-      trim:     true,
+      trim: true,
     },
     message: {
-      type:     String,
+      type: String,
       required: true,
-      trim:     true,
+      trim: true,
     },
     type: {
       type: String,
@@ -45,26 +45,26 @@ const notificationSchema = new mongoose.Schema(
       default: 'info',
     },
     isRead: {
-      type:    Boolean,
+      type: Boolean,
       default: false,
     },
     recipient: {
       type: mongoose.Schema.Types.ObjectId,
-      ref:  'User',
+      ref: 'User',
     },
     relatedInquiry: {
       type: mongoose.Schema.Types.ObjectId,
-      ref:  'Inquiry',
+      ref: 'Inquiry',
     },
     relatedProject: {
       type: mongoose.Schema.Types.ObjectId,
-      ref:  'Project',
+      ref: 'Project',
     },
     relatedTicket: {
-  type: mongoose.Schema.Types.ObjectId,
-  ref: 'Ticket',
-  default: null,
-},
+      type: mongoose.Schema.Types.ObjectId,
+      ref: 'Ticket',
+      default: null,
+    },
   },
   { timestamps: true }
 );
