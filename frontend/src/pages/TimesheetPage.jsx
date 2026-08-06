@@ -449,7 +449,7 @@ const TimesheetPage = () => {
 
           <div className={`${mobileFiltersOpen ? 'block' : 'hidden'} lg:block`}>
             <div className="overflow-visible lg:flex lg:items-center lg:gap-1.5 lg:px-3 lg:py-2">
-              <div className="grid min-w-0 flex-1 grid-cols-1 gap-2 px-3 py-2.5 sm:grid-cols-2 md:grid-cols-3 lg:flex lg:flex-nowrap lg:items-center lg:gap-1.5 lg:overflow-x-auto lg:px-0 lg:py-0 lg:pb-0.5">
+              <div className="grid min-w-0 flex-1 grid-cols-1 gap-2 px-3 py-2.5 sm:grid-cols-2 md:grid-cols-3 lg:flex lg:flex-nowrap lg:items-center lg:gap-1.5 lg:overflow-visible lg:px-0 lg:py-0">
 
               {/* Calendar date / range filter. Current Monday-Sunday is selected by default. */}
               <DateRangeCalendarPicker

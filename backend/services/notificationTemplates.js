@@ -268,12 +268,19 @@ function getAttendeeNames(workflow = {}, fallbackAttendees = []) {
   return names.length ? names.join(', ') : '-';
 }
 
-function buildKickoffSummaryWhatsAppMessage(inquiry = {}, workflow = {}, attendees = [], inquiryMadeByName = 'System') {
+function buildKickoffSummaryWhatsAppMessage(
+  inquiry = {},
+  workflow = {},
+  attendees = [],
+  inquiryMadeByName = 'System',
+  kickoffScheduledByName = 'System'
+) {
   const lines = [
     '🚀 Kick-off Meeting Scheduled',
     '',
     `Inquiry ID: ${inquiry.inquiryId || '-'}`,
     `Inquiry Made By: ${inquiryMadeByName || 'System'}`,
+    `Kick-off Scheduled By: ${kickoffScheduledByName || 'System'}`,
     `Project / Requirement: ${resolveInquiryProjectName(inquiry)}`,
     `Date & Time: ${formatDateTime(workflow.scheduledAt)}`,
     '',
@@ -287,7 +294,14 @@ function buildKickoffSummaryWhatsAppMessage(inquiry = {}, workflow = {}, attende
   return lines.join('\n');
 }
 
-function buildKickoffAssignedWhatsAppMessage(inquiry = {}, workflow = {}, user = {}, attendees = [], inquiryMadeByName = 'System') {
+function buildKickoffAssignedWhatsAppMessage(
+  inquiry = {},
+  workflow = {},
+  user = {},
+  attendees = [],
+  inquiryMadeByName = 'System',
+  kickoffScheduledByName = 'System'
+) {
   const lines = [
     `Hello ${user.name || 'Team Member'},`,
     '',
@@ -295,6 +309,7 @@ function buildKickoffAssignedWhatsAppMessage(inquiry = {}, workflow = {}, user =
     '',
     `Inquiry ID: ${inquiry.inquiryId || '-'}`,
     `Sales Person: ${inquiryMadeByName || 'System'}`,
+    `Kick-off Scheduled By: ${kickoffScheduledByName || 'System'}`,
     `Project / Requirement: ${resolveInquiryProjectName(inquiry)}`,
     `Date & Time: ${formatDateTime(workflow.scheduledAt)}`,
     '',
@@ -308,13 +323,21 @@ function buildKickoffAssignedWhatsAppMessage(inquiry = {}, workflow = {}, user =
   return lines.join('\n');
 }
 
-function buildKickoffEmailHtml(inquiry = {}, workflow = {}, recipientName = '', attendees = [], inquiryMadeByName = '') {
+function buildKickoffEmailHtml(
+  inquiry = {},
+  workflow = {},
+  recipientName = '',
+  attendees = [],
+  inquiryMadeByName = '',
+  kickoffScheduledByName = 'System'
+) {
   return buildBaseEmail({
     heading: 'Kick-off Meeting Scheduled',
     intro: `Hello ${escapeHtml(recipientName || inquiry.contactPerson || resolveCustomerName(inquiry) || 'Team')},<br/>The Kick-off Meeting has been scheduled with the below details.`,
     rows: [
       ['Inquiry ID', escapeHtml(inquiry.inquiryId || '-')],
       ['Inquiry Made By', escapeHtml(inquiryMadeByName || resolveCreatedByName(inquiry))],
+      ['Kick-off Scheduled By', escapeHtml(kickoffScheduledByName || 'System')],
       ['Customer / Company', escapeHtml(resolveCustomerName(inquiry))],
       ['Project / Requirement', escapeHtml(resolveInquiryProjectName(inquiry))],
       ['Meeting Date & Time', escapeHtml(formatDateTime(workflow.scheduledAt))],
@@ -327,25 +350,39 @@ function buildKickoffEmailHtml(inquiry = {}, workflow = {}, recipientName = '', 
   });
 }
 
-function buildProjectCreatedAfterKickoffWhatsAppMessage(project = {}, inquiry = {}, workflow = {}) {
+function buildProjectCreatedAfterKickoffWhatsAppMessage(
+  project = {},
+  inquiry = {},
+  workflow = {},
+  convertedByName = 'User'
+) {
   return [
-    '✅ Project created automatically after Kick-off Meeting.',
+    '✅ Project Created After Kick-off Meeting',
     '',
     `Project: ${project.projectName || '-'} (${project.projectId || '-'})`,
     `Inquiry: ${inquiry.inquiryId || '-'}`,
     `Customer: ${project.customerName || resolveCustomerName(inquiry)}`,
+    `Converted to Project By: ${convertedByName || 'User'}`,
     `Kick-off: ${formatDateTime(workflow.scheduledAt)}`,
   ].join('\n');
 }
 
-function buildProjectCreatedAfterKickoffEmailHtml(project = {}, inquiry = {}, workflow = {}, userName = '') {
+function buildProjectCreatedAfterKickoffEmailHtml(
+  project = {},
+  inquiry = {},
+  workflow = {},
+  userName = '',
+  convertedByName = 'User'
+) {
   return buildBaseEmail({
     heading: 'Project Created',
-    intro: `Hello ${escapeHtml(userName || 'Team Member')},<br/>The project was created automatically after the scheduled Kick-off Meeting.`,
+    intro: `Hello ${escapeHtml(userName || 'Team Member')},<br/>The inquiry was converted into a project by ${escapeHtml(convertedByName || 'User')} after the scheduled Kick-off Meeting.`,
     rows: [
       ['Project ID', escapeHtml(`${project.projectId || '-'}${project.projectNumber ? ` (${project.projectNumber})` : ''}`)],
       ['Project Name', escapeHtml(project.projectName || '-')],
+      ['Inquiry ID', escapeHtml(inquiry.inquiryId || '-')],
       ['Customer', escapeHtml(project.customerName || resolveCustomerName(inquiry))],
+      ['Converted to Project By', escapeHtml(convertedByName || 'User')],
       ['Kick-off Date & Time', escapeHtml(formatDateTime(workflow.scheduledAt))],
     ],
   });
@@ -476,7 +513,7 @@ const dashboardMessages = {
   inquiryUpdated: (inquiry = {}) => `Inquiry ${inquiry.inquiryId || '-'} updated successfully`,
   inquiryStatusChanged: (inquiry = {}) => `Inquiry ${inquiry.inquiryId || '-'} moved to ${inquiry.status || '-'}`,
   inquiryDeleted: (inquiry = {}) => `Inquiry ${inquiry.inquiryId || '-'} deleted successfully`,
-  projectCreatedAfterKickoff: (project = {}) => `Project ${project.projectId || '-'} - ${project.projectName || '-'} has been created automatically.`,
+  projectCreatedAfterKickoff: (project = {}, convertedByName = 'User') => `Project ${project.projectId || '-'} - ${project.projectName || '-'} was created by ${convertedByName || 'User'} after the Kick-off Meeting.`,
 };
 
 module.exports = {

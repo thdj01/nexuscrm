@@ -59,6 +59,13 @@ const cleanPermissionList = (value) => {
     normalized.add(CUSTOMER_PERMISSIONS.VIEW);
   }
 
+  // Customer Master is required specifically for creating an Inquiry.
+  // Edit, follow-up, commercial-submit, and universal view permissions do not
+  // automatically grant Customer access.
+  if (normalized.has(INQUIRY_PERMISSIONS.CREATE)) {
+    ALL_CUSTOMER_PERMISSIONS.forEach((permission) => normalized.add(permission));
+  }
+
   return mergeUniversalPermissions([...normalized]);
 };
 
@@ -114,9 +121,6 @@ const getSuggestedEmployeeAccess = async (user = {}) => {
 
   if (departments.has('SALES') || departments.has('ESTIMATION')) {
     ALL_INQUIRY_PERMISSIONS.forEach((permission) => permissions.add(permission));
-  }
-
-  if (departments.has('SALES')) {
     ALL_CUSTOMER_PERMISSIONS.forEach((permission) => permissions.add(permission));
   }
 
@@ -152,7 +156,7 @@ const userHasPermission = (user, permission) => {
     PLANNING_LEADERSHIP_PERMISSIONS.includes(permission)
   ) return true;
   if (UNIVERSAL_EMPLOYEE_PERMISSIONS.includes(permission)) return true;
-  return Array.isArray(user.employeeAccess) && user.employeeAccess.includes(permission);
+  return Array.isArray(user.employeeAccess) && cleanPermissionList(user.employeeAccess).includes(permission);
 };
 
 const userHasAnyPermission = (user, permissions = []) => (

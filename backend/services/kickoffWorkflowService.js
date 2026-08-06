@@ -98,6 +98,32 @@ async function getInquiryMadeByName(inquiry = {}) {
   return creator?.name || creator?.email || 'System';
 }
 
+async function getKickoffScheduledByName(user = {}, workflow = {}) {
+  if (user?.name) return user.name;
+  if (user?.email) return user.email;
+
+  const scheduledById = user?._id || user?.id || workflow?.updatedBy || workflow?.createdBy;
+  if (!scheduledById || !mongoose.Types.ObjectId.isValid(String(scheduledById))) {
+    return 'System';
+  }
+
+  const scheduler = await User.findById(scheduledById).select('name email').lean();
+  return scheduler?.name || scheduler?.email || 'System';
+}
+
+async function getActionUserName(user = {}, fallbackUserId = null) {
+  if (user?.name) return user.name;
+  if (user?.email) return user.email;
+
+  const userId = user?._id || user?.id || fallbackUserId;
+  if (!userId || !mongoose.Types.ObjectId.isValid(String(userId))) {
+    return 'User';
+  }
+
+  const actor = await User.findById(userId).select('name email').lean();
+  return actor?.name || actor?.email || 'User';
+}
+
 function buildScheduledAt(date, time) {
   const dateText = String(date || '').trim();
   const timeText = String(time || '').trim();
@@ -131,7 +157,13 @@ function getInquiryCustomerPhone(inquiry = {}) {
   return inquiry.mobileNumber || inquiry.contacts?.find(contact => contact.phone)?.phone || '';
 }
 
-function buildCustomerWhatsAppMessage(inquiry, workflow, attendees = [], inquiryMadeByName = 'System') {
+function buildCustomerWhatsAppMessage(
+  inquiry,
+  workflow,
+  attendees = [],
+  inquiryMadeByName = 'System',
+  kickoffScheduledByName = 'System'
+) {
   const lines = [
     `Hello ${inquiry.contactPerson || inquiry.customerName || 'Customer'},`,
     '',
@@ -139,6 +171,7 @@ function buildCustomerWhatsAppMessage(inquiry, workflow, attendees = [], inquiry
     '',
     `Inquiry ID: ${inquiry.inquiryId || '-'}`,
     `Inquiry Made By: ${inquiryMadeByName || 'System'}`,
+    `Kick-off Scheduled By: ${kickoffScheduledByName || 'System'}`,
     `Project / Requirement: ${inquiry.projectName || inquiry.productType || '-'}`,
     `Date & Time: ${formatDateTime(workflow.scheduledAt)}`,
     '',
@@ -158,17 +191,62 @@ function buildCustomerWhatsAppMessage(inquiry, workflow, attendees = [], inquiry
   return lines.join('\n');
 }
 
-function buildAssignedWhatsAppMessage(inquiry, workflow, user, attendees = [], inquiryMadeByName = 'System') {
-  return buildKickoffAssignedWhatsAppTemplate(inquiry, workflow, user, attendees, inquiryMadeByName);
+function buildAssignedWhatsAppMessage(
+  inquiry,
+  workflow,
+  user,
+  attendees = [],
+  inquiryMadeByName = 'System',
+  kickoffScheduledByName = 'System'
+) {
+  return buildKickoffAssignedWhatsAppTemplate(
+    inquiry,
+    workflow,
+    user,
+    attendees,
+    inquiryMadeByName,
+    kickoffScheduledByName
+  );
 }
-function buildKickoffSummaryWhatsAppMessage(inquiry, workflow, attendees = [], inquiryMadeByName = 'System') {
-  return buildKickoffSummaryWhatsAppTemplate(inquiry, workflow, attendees, inquiryMadeByName);
+function buildKickoffSummaryWhatsAppMessage(
+  inquiry,
+  workflow,
+  attendees = [],
+  inquiryMadeByName = 'System',
+  kickoffScheduledByName = 'System'
+) {
+  return buildKickoffSummaryWhatsAppTemplate(
+    inquiry,
+    workflow,
+    attendees,
+    inquiryMadeByName,
+    kickoffScheduledByName
+  );
 }
-function buildKickoffEmailHtml(inquiry, workflow, recipientName = '', attendees = [], inquiryMadeByName = '') {
-  return buildKickoffEmailTemplate(inquiry, workflow, recipientName, attendees, inquiryMadeByName);
+function buildKickoffEmailHtml(
+  inquiry,
+  workflow,
+  recipientName = '',
+  attendees = [],
+  inquiryMadeByName = '',
+  kickoffScheduledByName = 'System'
+) {
+  return buildKickoffEmailTemplate(
+    inquiry,
+    workflow,
+    recipientName,
+    attendees,
+    inquiryMadeByName,
+    kickoffScheduledByName
+  );
 }
-function buildProjectCreatedMessage(project, inquiry, workflow) {
-  return buildProjectCreatedAfterKickoffWhatsAppMessage(project, inquiry, workflow);
+function buildProjectCreatedMessage(project, inquiry, workflow, convertedByName) {
+  return buildProjectCreatedAfterKickoffWhatsAppMessage(
+    project,
+    inquiry,
+    workflow,
+    convertedByName
+  );
 }
 function snapshotInquiry(inquiry) {
   const obj = inquiry.toObject ? inquiry.toObject() : inquiry;
@@ -229,7 +307,7 @@ function normaliseNotificationResult(result) {
   return 'Failed';
 }
 
-async function sendKickoffNotifications({ inquiry, workflow, attendees }) {
+async function sendKickoffNotifications({ inquiry, workflow, attendees, scheduledBy }) {
   let whatsappSent = false;
   let whatsappQueued = false;
   let whatsappSkipped = false;
@@ -242,7 +320,14 @@ async function sendKickoffNotifications({ inquiry, workflow, attendees }) {
   const customerPhone = getInquiryCustomerPhone(inquiry);
   const customerEmail = getInquiryCustomerEmail(inquiry);
   const inquiryMadeByName = await getInquiryMadeByName(inquiry);
-  const summaryWhatsAppMessage = buildKickoffSummaryWhatsAppMessage(inquiry, workflow, attendees, inquiryMadeByName);
+  const kickoffScheduledByName = await getKickoffScheduledByName(scheduledBy, workflow);
+  const summaryWhatsAppMessage = buildKickoffSummaryWhatsAppMessage(
+    inquiry,
+    workflow,
+    attendees,
+    inquiryMadeByName,
+    kickoffScheduledByName
+  );
   const whatsappConfig = getActiveWhatsAppConfig();
   const [adminUsers, salesLeadershipUsers] = await Promise.all([
     getAdminUsers(),
@@ -254,7 +339,7 @@ async function sendKickoffNotifications({ inquiry, workflow, attendees }) {
   await dispatchNotificationsToUsers({
     users: internalRecipients,
     title: `Kick-off Meeting Scheduled - ${inquiry.inquiryId || 'Inquiry'}`,
-    message: `Kick-off Meeting for inquiry ${inquiry.inquiryId || '-'} was scheduled by ${inquiryMadeByName}.`,
+    message: `Kick-off Meeting for inquiry ${inquiry.inquiryId || '-'} was scheduled by ${kickoffScheduledByName}.`,
     type: 'kickoff_scheduled',
     relatedInquiry: inquiry._id,
     sendEmail: false,
@@ -310,7 +395,13 @@ async function sendKickoffNotifications({ inquiry, workflow, attendees }) {
 
   if (customerPhone) {
     const result = await sendWhatsAppNotification(
-      buildCustomerWhatsAppMessage(inquiry, workflow, attendees, inquiryMadeByName),
+      buildCustomerWhatsAppMessage(
+        inquiry,
+        workflow,
+        attendees,
+        inquiryMadeByName,
+        kickoffScheduledByName
+      ),
       customerPhone
     );
     const status = normaliseNotificationResult(result);
@@ -361,7 +452,14 @@ async function sendKickoffNotifications({ inquiry, workflow, attendees }) {
     const isAssignedAttendee = attendeeIdSet.has(idString(user));
     const result = await sendWhatsAppNotification(
       isAssignedAttendee
-        ? buildAssignedWhatsAppMessage(inquiry, workflow, user, attendees, inquiryMadeByName)
+        ? buildAssignedWhatsAppMessage(
+          inquiry,
+          workflow,
+          user,
+          attendees,
+          inquiryMadeByName,
+          kickoffScheduledByName
+        )
         : summaryWhatsAppMessage,
       phone
     );
@@ -402,7 +500,14 @@ async function sendKickoffNotifications({ inquiry, workflow, attendees }) {
       const result = await sendOutlookNotification({
         to,
         subject: `Kick-off Meeting Scheduled - ${inquiry.projectName || inquiry.inquiryId || 'Inquiry'}`,
-        html: buildKickoffEmailHtml(inquiry, workflow, recipientUser?.name || inquiry.contactPerson || inquiry.customerName, attendees, inquiryMadeByName),
+        html: buildKickoffEmailHtml(
+          inquiry,
+          workflow,
+          recipientUser?.name || inquiry.contactPerson || inquiry.customerName,
+          attendees,
+          inquiryMadeByName,
+          kickoffScheduledByName
+        ),
       });
       const status = normaliseNotificationResult(result);
 
@@ -434,6 +539,74 @@ async function sendKickoffNotifications({ inquiry, workflow, attendees }) {
     : (emailQueued ? 'Queued' : (emailSkipped && !emailFailed ? 'Skipped' : 'Failed'));
 
   await workflow.save();
+}
+
+function queueKickoffNotifications({
+  inquiryId,
+  workflowId,
+  expectedScheduledAt,
+  scheduledBy,
+}) {
+  const schedulerSnapshot = scheduledBy
+    ? {
+      _id: scheduledBy._id || scheduledBy.id || null,
+      name: scheduledBy.name || '',
+      email: scheduledBy.email || '',
+    }
+    : {};
+
+  setImmediate(async () => {
+    try {
+      const [inquiry, workflow] = await Promise.all([
+        Inquiry.findById(inquiryId).populate('createdBy', 'name email'),
+        KickoffWorkflow.findById(workflowId)
+          .populate('attendees', 'name email role teamId mobileNumber whatsappNumber phone')
+          .populate({ path: 'inquiry', populate: { path: 'createdBy', select: 'name email' } }),
+      ]);
+
+      if (!inquiry || !workflow) {
+        console.warn('[kickoffWorkflow] Notification job skipped because inquiry/workflow was not found');
+        return;
+      }
+
+      // A rapid reschedule can leave an older background job pending. Do not
+      // send notifications for a meeting time that is no longer current.
+      if (
+        expectedScheduledAt
+        && new Date(workflow.scheduledAt).getTime() !== new Date(expectedScheduledAt).getTime()
+      ) {
+        console.info('[kickoffWorkflow] Skipped stale kickoff notification job after reschedule');
+        return;
+      }
+
+      await sendKickoffNotifications({
+        inquiry,
+        workflow,
+        attendees: workflow.attendees || [],
+        scheduledBy: schedulerSnapshot,
+      });
+    } catch (error) {
+      console.error('[kickoffWorkflow] Background kickoff notification failed:', error.message);
+
+      try {
+        await KickoffWorkflow.findByIdAndUpdate(workflowId, {
+          $set: { lastError: error.message || 'Kickoff notification processing failed' },
+          $push: {
+            notificationLogs: {
+              channel: 'System',
+              recipientType: 'System',
+              status: 'Failed',
+              message: 'Background kickoff notification processing failed',
+              error: error.message || 'Unknown notification error',
+              loggedAt: new Date(),
+            },
+          },
+        });
+      } catch (logError) {
+        console.error('[kickoffWorkflow] Could not save notification failure log:', logError.message);
+      }
+    }
+  });
 }
 
 async function scheduleKickoffForInquiry({ inquiryId, payload, user }) {
@@ -521,19 +694,27 @@ async function scheduleKickoffForInquiry({ inquiryId, payload, user }) {
     .populate('attendees', 'name email role teamId mobileNumber whatsappNumber phone')
     .populate({ path: 'inquiry', populate: { path: 'createdBy', select: 'name email' } });
 
-  await sendKickoffNotifications({ inquiry, workflow, attendees });
+  // Saving the schedule must not wait for every WhatsApp and Outlook request.
+  // Those network calls can take several seconds per recipient. Process them
+  // after the API response so the user sees the meeting as scheduled quickly.
+  queueKickoffNotifications({
+    inquiryId: inquiry._id,
+    workflowId: workflow._id,
+    expectedScheduledAt: workflow.scheduledAt,
+    scheduledBy: user,
+  });
 
-  return KickoffWorkflow.findById(workflow._id)
-    .populate('attendees', 'name email role teamId mobileNumber whatsappNumber phone')
-    .populate('inquiry')
-    .populate('projectReference', 'projectId projectName');
+  return workflow;
 }
 
-async function createProjectFromWorkflow(workflow) {
+async function createProjectFromWorkflow(workflow, convertedBy = {}) {
   const inquiry = await Inquiry.findById(workflow.inquiry);
   if (!inquiry) {
     throw new Error('Inquiry not found for scheduled kickoff workflow');
   }
+
+  const convertedById = convertedBy?._id || convertedBy?.id || workflow.updatedBy || null;
+  const convertedByName = await getActionUserName(convertedBy, convertedById);
 
   if (inquiry.convertedToProject && inquiry.projectReference) {
     workflow.status = 'Project Created';
@@ -636,20 +817,20 @@ async function createProjectFromWorkflow(workflow) {
 
   await ProjectActivityLog.create({
     projectId: project._id,
-    userId: workflow.createdBy || null,
-    userName: 'System',
+    userId: convertedById || workflow.createdBy || null,
+    userName: convertedByName,
     actionType: 'created',
     fieldChanged: 'Kick-off Workflow',
     newValue: project.projectId,
-    description: `Project ${project.projectId} created automatically after Kick-off Meeting`,
+    description: `Project ${project.projectId} created by ${convertedByName} after Kick-off Meeting`,
     activityDate: new Date(),
   });
 
   return project;
 }
 
-async function notifyProjectCreated({ project, inquiry, workflow }) {
-  const message = buildProjectCreatedMessage(project, inquiry, workflow);
+async function notifyProjectCreated({ project, inquiry, workflow, convertedByName }) {
+  const message = buildProjectCreatedMessage(project, inquiry, workflow, convertedByName);
 
   await sendWhatsAppGroupNotification(message);
 
@@ -667,7 +848,7 @@ async function notifyProjectCreated({ project, inquiry, workflow }) {
   await dispatchNotificationsToUsers({
     users: recipients,
     title: 'Project Created After Kick-off Meeting',
-    message: dashboardMessages.projectCreatedAfterKickoff(project),
+    message: dashboardMessages.projectCreatedAfterKickoff(project, convertedByName),
     type: 'project_created',
     relatedInquiry: inquiry._id,
     relatedProject: project._id,
@@ -676,7 +857,8 @@ async function notifyProjectCreated({ project, inquiry, workflow }) {
       project,
       inquiry,
       workflow,
-      user?.name || 'Team Member'
+      user?.name || 'Team Member',
+      convertedByName
     ),
     whatsappMessage: message,
   });
@@ -738,8 +920,9 @@ async function completeKickoffMeetingAndCreateProject({ inquiryId, user }) {
   });
 
   const inquiry = await Inquiry.findById(workflow.inquiry);
-  const project = await createProjectFromWorkflow(workflow);
-  await notifyProjectCreated({ project, inquiry, workflow });
+  const convertedByName = await getActionUserName(user, workflow.updatedBy);
+  const project = await createProjectFromWorkflow(workflow, user);
+  await notifyProjectCreated({ project, inquiry, workflow, convertedByName });
 
   return {
     workflow: await KickoffWorkflow.findById(workflow._id)

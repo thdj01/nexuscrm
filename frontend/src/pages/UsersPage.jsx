@@ -277,9 +277,6 @@ const getSuggestedEmployeeAccess = ({ role, department, hodDepartments = [] }, d
 
   if (departmentNames.some((name) => name === 'SALES' || name === 'ESTIMATION')) {
     ALL_INQUIRY_PERMISSIONS.forEach((permission) => next.add(permission));
-  }
-
-  if (departmentNames.some((name) => name === 'SALES')) {
     ALL_CUSTOMER_PERMISSIONS.forEach((permission) => next.add(permission));
   }
 
@@ -291,6 +288,10 @@ const getSuggestedEmployeeAccess = ({ role, department, hodDepartments = [] }, d
 
   return ALL_EMPLOYEE_PERMISSIONS.filter((permission) => next.has(permission));
 };
+
+const hasCreateInquiryAccess = (permissions = []) => (
+  Array.isArray(permissions) && permissions.includes(INQUIRY_PERMISSIONS.CREATE)
+);
 
 const normalizeEmployeeAccessDependencies = (permissions = []) => {
   const allowed = new Set(ALL_EMPLOYEE_PERMISSIONS);
@@ -308,6 +309,12 @@ const normalizeEmployeeAccessDependencies = (permissions = []) => {
     next.add(CUSTOMER_PERMISSIONS.VIEW);
   }
 
+  // Creating an Inquiry requires Customer Master access. Other Inquiry
+  // permissions do not automatically grant Customer access.
+  if (hasCreateInquiryAccess([...next])) {
+    ALL_CUSTOMER_PERMISSIONS.forEach((permission) => next.add(permission));
+  }
+
   return ALL_EMPLOYEE_PERMISSIONS.filter((permission) => next.has(permission));
 };
 
@@ -320,11 +327,14 @@ const AccessChecklist = ({
   disabled = false,
   onApplySuggested,
   footer,
+  lockedKeys = [],
+  lockedReason = '',
 }) => {
   const selected = new Set(normalizeEmployeeAccessDependencies(value));
+  const locked = new Set(lockedKeys);
 
   const toggle = (item) => {
-    if (disabled || item.universal) return;
+    if (disabled || item.universal || locked.has(item.key)) return;
     const next = new Set(selected);
 
     if (next.has(item.key)) {
@@ -366,7 +376,8 @@ const AccessChecklist = ({
       <div className="grid grid-cols-1 gap-2 sm:grid-cols-2 lg:grid-cols-3">
         {options.map((item) => {
           const checked = selected.has(item.key);
-          const itemDisabled = disabled || item.universal;
+          const dependencyLocked = locked.has(item.key);
+          const itemDisabled = disabled || item.universal || dependencyLocked;
           return (
             <label
               key={item.key}
@@ -375,7 +386,13 @@ const AccessChecklist = ({
                   ? 'border-blue-200 bg-blue-50 text-blue-700'
                   : 'border-gray-200 bg-white text-gray-600'
               } ${itemDisabled ? 'cursor-not-allowed opacity-70' : 'cursor-pointer'}`}
-              title={item.universal ? 'View access is available to every authenticated user' : undefined}
+              title={
+                item.universal
+                  ? 'View access is available to every authenticated user'
+                  : dependencyLocked
+                    ? lockedReason
+                    : undefined
+              }
             >
               <input
                 type="checkbox"
@@ -417,13 +434,19 @@ const ProjectAccessChecklist = (props) => (
   />
 );
 
-const CustomerAccessChecklist = (props) => (
+const CustomerAccessChecklist = ({ createInquiryActive = false, ...props }) => (
   <AccessChecklist
     {...props}
     title="Customer Employee Access"
-    description="SALES is the suggested owner for Create, View, and Edit Customer access."
+    description="Customer access is granted automatically when Create Inquiry is enabled."
     options={CUSTOMER_PERMISSION_OPTIONS}
-    footer="Customer deletion remains unavailable because all delete APIs are removed."
+    lockedKeys={createInquiryActive ? ALL_CUSTOMER_PERMISSIONS : []}
+    lockedReason="Customer access is required while Create Inquiry is enabled."
+    footer={
+      createInquiryActive
+        ? 'Automatically enabled because Create Inquiry is selected. Uncheck Create Inquiry before changing Customer access separately.'
+        : 'Customer deletion remains unavailable because all delete APIs are removed.'
+    }
   />
 );
 
@@ -540,6 +563,7 @@ const UserForm = ({
   const showDepartment = form.role === 'employee' || form.role === 'team_lead';
   const showHodDepartments = form.role === 'hod';
   const departmentOptions = ensureSelectedDepartmentOption(departments, form.department);
+  const createInquiryActive = form.role === 'admin' || hasCreateInquiryAccess(form.employeeAccess);
 
   const handleSubmit = (e) => {
     e.preventDefault();
@@ -800,6 +824,7 @@ const UserForm = ({
             <CustomerAccessChecklist
               value={form.role === 'admin' ? ALL_EMPLOYEE_PERMISSIONS : form.employeeAccess}
               disabled={form.role === 'admin'}
+              createInquiryActive={createInquiryActive}
               onApplySuggested={applySuggestedCustomerAccess}
               onChange={(employeeAccess) => setForm((prev) => ({ ...prev, employeeAccess }))}
             />

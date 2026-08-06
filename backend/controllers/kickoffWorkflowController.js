@@ -78,7 +78,7 @@ const scheduleKickoffMeeting = async (req, res, next) => {
 
     return res.status(201).json({
       success: true,
-      message: 'Kick-off Meeting scheduled. Notifications have been queued/sent. Open the Kick-off popup after the meeting and click Kickoff Meeting Done to create the project.',
+      message: 'Kick-off Meeting scheduled. Notifications are being sent in the background. Open the Kick-off popup after the meeting and click Kickoff Meeting Done to create the project.',
       data: workflow,
     });
   } catch (error) {

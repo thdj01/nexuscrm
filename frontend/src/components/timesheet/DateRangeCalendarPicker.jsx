@@ -155,7 +155,8 @@ const DateRangeCalendarPicker = ({
         <div
           role="dialog"
           aria-label="Select timesheet date or date range"
-          className="absolute bottom-[calc(100%+8px)] left-0 z-50 w-[min(19rem,calc(100vw-2rem))] rounded-xl border border-gray-200 bg-white p-2.5 shadow-xl"
+          className="absolute bottom-[calc(100%+0.5rem)] left-0 z-[100] w-[19rem] max-w-[calc(100vw-1rem)] rounded-xl border border-gray-200 bg-white p-2.5 shadow-xl"
+          onClick={(event) => event.stopPropagation()}
         >
           <div className="mb-2 flex items-center justify-between gap-2">
             <button
