@@ -210,10 +210,6 @@ function toPlainProjectResponse(doc) {
   return obj;
 }
 
-function isValidMongoId(value) {
-  return typeof value === 'string' && mongoose.Types.ObjectId.isValid(value);
-}
-
 const PROJECT_TASK_STATUSES = [...TASK_STATUSES, 'Hold', 'Not Started', 'Delayed'];
 
 function normalizePlanningStatus(value) {
@@ -1027,21 +1023,6 @@ function stripEmptyDateValues(value) {
   return output;
 }
 
-function calculateTaskDelay(task = {}, oldTask = {}) {
-  const plannedEndDate = task.plannedEndDate || task.endDate || oldTask.plannedEndDate || oldTask.endDate;
-  const status = task.status || oldTask.status || 'Pending';
-
-  if (!plannedEndDate) {
-    return Number(task.delayDays ?? oldTask.delayDays ?? 0) || 0;
-  }
-
-  if (status === 'Completed') {
-    const completedDate = task.actualCompletedDate || oldTask.actualCompletedDate || new Date();
-    return daysBetween(plannedEndDate, completedDate);
-  }
-
-  return daysBetween(plannedEndDate, new Date());
-}
 
 function applyProjectDelayFields(body = {}, oldProject = {}) {
   const delayFields = calculateProjectDelay(body, oldProject);
@@ -1057,23 +1038,6 @@ function makeHttpError(message, statusCode = 400) {
   const err = new Error(message);
   err.statusCode = statusCode;
   return err;
-}
-
-function safeTaskType(value, fallback = 'Production') {
-  return ['Production', 'Programming', 'Common', 'Joint'].includes(value)
-    ? value
-    : fallback;
-}
-
-function gridLetter(index = 0) {
-  let n = Number(index) + 1;
-  let result = '';
-  while (n > 0) {
-    const rem = (n - 1) % 26;
-    result = String.fromCharCode(65 + rem) + result;
-    n = Math.floor((n - 1) / 26);
-  }
-  return result || 'A';
 }
 
 function gridNameFromId(gridId) {
@@ -1465,54 +1429,6 @@ async function attachUniversalCustomer(body = {}, userId, oldProject = {}) {
 
   applyCustomerToPayload(body, customer);
   return body;
-}
-
-
-async function normalizeKickoffMeetingPayload(input = {}, userId) {
-  const raw = input.kickoffMeeting || input;
-  const date = String(raw.date || '').trim();
-  const time = String(raw.time || '').trim();
-  const attendees = Array.isArray(raw.attendees)
-    ? raw.attendees.map(toId).filter(Boolean)
-    : [];
-
-  if (!date) {
-    throw makeHttpError('Kick-off meeting date is required', 400);
-  }
-
-  if (!time) {
-    throw makeHttpError('Kick-off meeting time is required', 400);
-  }
-
-  if (attendees.length === 0) {
-    throw makeHttpError('Please select at least one person for the Kick-off Meeting', 400);
-  }
-
-  const scheduledAt = new Date(`${date}T${time}:00`);
-  if (Number.isNaN(scheduledAt.getTime())) {
-    throw makeHttpError('Invalid Kick-off meeting date or time', 400);
-  }
-
-  const uniqueAttendees = [...new Set(attendees)];
-  const activeUsersCount = await User.countDocuments({
-    _id: { $in: uniqueAttendees },
-    isActive: true,
-  });
-
-  if (activeUsersCount !== uniqueAttendees.length) {
-    throw makeHttpError('One or more selected Kick-off Meeting users are invalid or inactive', 400);
-  }
-
-  return {
-    scheduledAt,
-    date,
-    time,
-    attendees: uniqueAttendees,
-    status: 'Scheduled',
-    createdBy: userId,
-    scheduledBy: userId,
-    scheduledOn: new Date(),
-  };
 }
 
 async function resolveUserDepartmentSet(user = {}) {

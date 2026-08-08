@@ -373,12 +373,6 @@ function isBooleanOptionsObject(value) {
   return entries.length >= 2 && entries.every(([, item]) => typeof item === 'boolean');
 }
 
-function objectToTableRows(object = {}) {
-  return Object.entries(object)
-    .filter(([key, value]) => !OMIT_KEYS.has(key) && hasMeaningfulValue(value))
-    .map(([key, value]) => ({ label: humanizeKey(key), value: safeText(value, key) }));
-}
-
 class InquiryPdfCanvas {
   constructor(inquiry, options = {}) {
     this.inquiry = inquiry || {};

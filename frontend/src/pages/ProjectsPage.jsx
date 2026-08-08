@@ -80,10 +80,7 @@ const PANEL_TYPE_LABELS = {
   'MCC cum PLC': 'MCC cum PLC',
 };
 
-const getPanelTypeLabel = (value = '') => {
-  const text = String(value || '').trim();
-  return PANEL_TYPE_LABELS[text] || text || '—';
-};
+
 
 const fmt = (d) => d ? new Date(d).toLocaleDateString('en-IN') : '—';
 
@@ -219,16 +216,6 @@ const ProjectsPage = () => {
       return false;
     } finally {
       setSubmitting(false);
-    }
-  };
-
-  const handleInlineEndDateUpdate = async (projectId, dbId, newEndDate) => {
-    try {
-      await apiUpdate(dbId, { projectEndDate: newEndDate });
-      toast.success('End date updated and saved');
-      fetchProjects();
-    } catch (err) {
-      toast.error(err.response?.data?.message || 'Failed to update end date');
     }
   };
 

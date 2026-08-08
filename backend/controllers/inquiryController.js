@@ -1012,9 +1012,6 @@ const buildBomStatusDetails = ({ inquiry, baseDetails, revisionNumber, versionLa
 
 const padYearSuffix = (year) => String(year % 100).padStart(2, '0');
 
-const getCurrentFinancialYearStart = (date = new Date()) => (
-  date.getMonth() >= 3 ? date.getFullYear() : date.getFullYear() - 1
-);
 
 const parseFinancialYear = (value) => {
   if (typeof value !== 'string') return null;

@@ -993,17 +993,6 @@ const ensureNestedDefaults = (record = {}) => {
   };
 };
 
-const updateInquiryType = (setForm, inquiryType) => {
-  setForm((prev) =>
-    ensureNestedDefaults({
-      ...prev,
-      inquiryType,
-      productType: getProductTypeFromInquiryType(inquiryType),
-      panelTypes: getPanelTypesFromInquiryType(inquiryType),
-    })
-  );
-};
-
 // ─────────────────────────────────────────────────────────────────────────────
 // MAIN COMPONENT
 // ─────────────────────────────────────────────────────────────────────────────
@@ -2234,91 +2223,6 @@ const handleDrop = (e) => {
       </PageHeader>
 
       <form onSubmit={handleSubmit} className="min-w-0 space-y-4" noValidate>
-
-
-{false && (
-  <>
-    {/* ══════════════════════════════════════════════════════════════════════
-        LEGACY SECTION 1 — CLIENT INFORMATION
-        Kept for rollback only. Replaced by CommonInquirySections.
-    ══════════════════════════════════════════════════════════════════════ */}
-    <div ref={el => sectionRefs.current[0] = el}>
-      <SectionCard number="1" title="Client Information" subtitle="Customer, site address, and contact persons" icon={Building2} color="blue">
-        {/* Legacy UI isolated for Sprint 2 rollback */}
-      </SectionCard>
-    </div>
-
-    {/* ══════════════════════════════════════════════════════════════════════
-        LEGACY SECTION 2 — PROJECT DETAILS
-        Kept for rollback only. Replaced by CommonInquirySections.
-    ══════════════════════════════════════════════════════════════════════ */}
-    <div ref={el => sectionRefs.current[1] = el}>
-      <SectionCard number="2" title="Project Details" subtitle="Project name, industry type, and offer type" icon={FolderOpen} color="orange">
-        {/* Legacy UI isolated for Sprint 2 rollback */}
-      </SectionCard>
-    </div>
-
-    {/* ══════════════════════════════════════════════════════════════════════
-        LEGACY SECTION 3 — PANEL TYPE & APPLICATION
-        Kept for rollback only.
-    ══════════════════════════════════════════════════════════════════════ */}
-    <div ref={el => sectionRefs.current[2] = el}>
-      <SectionCard number="3" title="Panel Type & Application" subtitle="Select one or more panel types required for this project" icon={Zap} color="amber">
-        {/* Legacy UI isolated for Sprint 2 rollback */}
-      </SectionCard>
-    </div>
-
-    {/* ══════════════════════════════════════════════════════════════════════
-        LEGACY SECTION 4 — TECHNICAL SPECIFICATIONS
-        Kept for rollback only.
-    ══════════════════════════════════════════════════════════════════════ */}
-    <div ref={el => sectionRefs.current[3] = el}>
-      <SectionCard number="4" title="Technical Specifications" subtitle="Electrical parameters, protection class, and environment" icon={Settings} color="cyan">
-        {/* Legacy UI isolated for Sprint 2 rollback */}
-      </SectionCard>
-    </div>
-
-    {/* ══════════════════════════════════════════════════════════════════════
-        LEGACY SECTION 5 — LOAD DETAILS
-        Kept for rollback only.
-    ══════════════════════════════════════════════════════════════════════ */}
-    <div ref={el => sectionRefs.current[4] = el}>
-      <SectionCard number="5" title="Load Details" subtitle="Legacy load table" icon={Cpu} color="violet">
-        {/* Legacy UI isolated for Sprint 2 rollback */}
-      </SectionCard>
-    </div>
-
-    {/* ══════════════════════════════════════════════════════════════════════
-        LEGACY SECTION 6 — CONTROL & MONITORING REQUIREMENTS
-        Kept for rollback only.
-    ══════════════════════════════════════════════════════════════════════ */}
-    <div ref={el => sectionRefs.current[5] = el}>
-      <SectionCard number="6" title="Control & Monitoring Requirements" subtitle="Legacy control matrix" icon={Shield} color="green">
-        {/* Legacy UI isolated for Sprint 2 rollback */}
-      </SectionCard>
-    </div>
-
-    {/* ══════════════════════════════════════════════════════════════════════
-        LEGACY SECTION 7 — STANDARDS & COMPLIANCE
-        Kept for rollback only.
-    ══════════════════════════════════════════════════════════════════════ */}
-    <div ref={el => sectionRefs.current[6] = el}>
-      <SectionCard number="7" title="Standards & Compliance" subtitle="Legacy compliance fields" icon={ClipboardCheck} color="purple">
-        {/* Legacy UI isolated for Sprint 2 rollback */}
-      </SectionCard>
-    </div>
-
-    {/* ══════════════════════════════════════════════════════════════════════
-        LEGACY SECTION 8 — NOTES & ATTACHMENTS
-        Kept for rollback only.
-    ══════════════════════════════════════════════════════════════════════ */}
-    <div ref={el => sectionRefs.current[7] = el}>
-      <SectionCard number="8" title="Notes & Attachments" subtitle="Legacy notes and attachments" icon={Info} color="slate">
-        {/* Legacy UI isolated for Sprint 2 rollback */}
-      </SectionCard>
-    </div>
-  </>
-)}
 
 <div>
   <CommonInquirySections

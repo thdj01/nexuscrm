@@ -1,31 +1,3 @@
-// ─────────────────────────────────────────────────────────────────────────────
-// backend/services/whatsappService.js
-//
-// Full replacement.
-//
-// Existing features kept:
-//   • WhatsApp client boots once with whatsapp-web.js + LocalAuth.
-//   • QR scan appears in terminal on first run.
-//   • Existing sendWhatsAppNotification(), sendWhatsAppGroupNotification(),
-//     sendWhatsAppGroupWithAttachments() functions still work.
-//
-// New feature added:
-//   • Incoming WhatsApp message can update Project Planning Grid task status
-//     and task remark.
-//
-// Supported incoming message formats:
-//   NEXUS | NAPL-0209 | GA Approval | Completed | Sent to client
-//   PROJECT NAPL-0209 | GA Approval | In Progress | Waiting for client
-//
-//   PROJECT: NAPL-0209
-//   TASK: GA Approval
-//   STATUS: Completed
-//   REMARK: Sent to client
-//
-// Notes:
-//   • Sender phone must match an active User phone number in User Management.
-//   • Incoming sender permissions are controlled from Master → Integration Settings.
-// ─────────────────────────────────────────────────────────────────────────────
 
 'use strict';
 
@@ -404,10 +376,6 @@ function getCandidateSenderDigits(message) {
   });
 
   return digits;
-}
-
-function getSenderDigits(message) {
-  return getCandidateSenderDigits(message)[0] || '';
 }
 
 function phoneMatches(senderDigits, savedPhone) {

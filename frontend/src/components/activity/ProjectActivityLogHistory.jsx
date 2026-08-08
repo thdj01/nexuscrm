@@ -110,29 +110,6 @@ const formatDate = (value) => {
   return date.toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' });
 };
 
-const formatShortDate = (value) => {
-  const date = toDate(value);
-  if (!date) return '—';
-  return date.toLocaleDateString('en-IN', { day: '2-digit', month: 'short' });
-};
-
-const formatDay = (value) => {
-  const date = toDate(value);
-  if (!date) return '—';
-  return date.toLocaleDateString('en-IN', { day: '2-digit' });
-};
-
-const formatWeekday = (value) => {
-  const date = toDate(value);
-  if (!date) return '';
-  return date.toLocaleDateString('en-IN', { weekday: 'short' });
-};
-
-const formatMonth = (value) => {
-  const date = toDate(value);
-  if (!date) return '';
-  return date.toLocaleDateString('en-IN', { month: 'short', year: 'numeric' });
-};
 
 const formatTime = (value) => {
   if (!value) return '—';
@@ -155,28 +132,6 @@ const formatDateGroup = (value) => {
   return formatDate(date);
 };
 
-const normalizeStatus = (task = {}) => {
-  const status = task.status || 'Not Started';
-  const today = toDate(new Date());
-  const endDate = toDate(task.plannedEndDate || task.endDate);
-  const delayedEndDate = toDate(task.delayedEndDate);
-  const hasExtension = Boolean(
-    Number(task.delayDays || 0) > 0 ||
-    (delayedEndDate && endDate && delayedEndDate > endDate)
-  );
-
-  if (status === 'Completed') return 'Completed';
-  if (status === 'Delayed' || hasExtension || (endDate && today && endDate < today)) return 'Delayed';
-  if (status === 'In Progress') return 'In Progress';
-  if (/test|review/i.test(task.taskName || '')) return 'Review / Testing';
-  return 'Not Started';
-};
-
-const getAssigneeName = (assignedTo) => {
-  if (!assignedTo) return 'Unassigned';
-  if (typeof assignedTo === 'object') return assignedTo.name || assignedTo.email || 'Assigned';
-  return 'Assigned';
-};
 
 const getAssignee = (task) => {
   const assignedTo = task.assignedTo;
@@ -230,89 +185,6 @@ const LoadingSkeleton = ({ rows = 4, height = 'h-16' }) => (
     ))}
   </div>
 );
-
-const ActivityFilters = ({ filters, onChange, users = [], project, onReset }) => {
-  const update = (key, value) => onChange({ ...filters, [key]: value, page: 1 });
-
-  return (
-    <div className="rounded-2xl border border-gray-200 bg-white p-4 shadow-sm">
-      <div className="mb-3 flex items-center gap-2 text-sm font-semibold text-gray-800">
-        <SlidersHorizontal size={16} className="text-blue-600" />
-        Activity Filters
-      </div>
-
-      <div className="grid grid-cols-1 gap-3 md:grid-cols-2 xl:grid-cols-6">
-        <div className="xl:col-span-2">
-          <label className="mb-1 block text-xs font-medium text-gray-500">Project</label>
-          <select className={`${fieldClass} w-full`} value={project?._id || ''} disabled aria-label="Current project">
-            <option>{project?.projectName || project?.projectId || 'Current Project'}</option>
-          </select>
-        </div>
-
-        <div>
-          <label className="mb-1 block text-xs font-medium text-gray-500">Date Range</label>
-          <select className={`${fieldClass} w-full`} value={filters.dateRange || 'projectTimeline'} onChange={(e) => update('dateRange', e.target.value)}>
-            {DATE_RANGE_OPTIONS.map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}
-          </select>
-        </div>
-
-        <div>
-          <label className="mb-1 block text-xs font-medium text-gray-500">Status</label>
-          <select className={`${fieldClass} w-full`} value={filters.status || ''} onChange={(e) => update('status', e.target.value)}>
-            {STATUS_OPTIONS.map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}
-          </select>
-        </div>
-
-        <div>
-          <label className="mb-1 block text-xs font-medium text-gray-500">Assigned User</label>
-          <select className={`${fieldClass} w-full`} value={filters.userId || ''} onChange={(e) => update('userId', e.target.value)}>
-            <option value="">All Users</option>
-            {users.map((user) => (
-              <option key={user._id || user.id || user.name} value={user._id || user.id}>{user.name}</option>
-            ))}
-          </select>
-        </div>
-
-        <div>
-          <label className="mb-1 block text-xs font-medium text-gray-500">Activity Type</label>
-          <select className={`${fieldClass} w-full`} value={filters.actionType || ''} onChange={(e) => update('actionType', e.target.value)}>
-            {ACTION_OPTIONS.map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}
-          </select>
-        </div>
-      </div>
-
-      {filters.dateRange === 'custom' && (
-        <div className="mt-3 grid grid-cols-1 gap-3 md:grid-cols-2 xl:w-1/2">
-          <div>
-            <label className="mb-1 block text-xs font-medium text-gray-500">From Date</label>
-            <input type="date" className={`${fieldClass} w-full`} value={filters.startDate || ''} onChange={(e) => update('startDate', e.target.value)} />
-          </div>
-          <div>
-            <label className="mb-1 block text-xs font-medium text-gray-500">To Date</label>
-            <input type="date" className={`${fieldClass} w-full`} value={filters.endDate || ''} onChange={(e) => update('endDate', e.target.value)} />
-          </div>
-        </div>
-      )}
-
-      <div className="mt-3 flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
-        <div className="relative max-w-xl flex-1">
-          <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
-          <input
-            type="text"
-            value={filters.search || ''}
-            onChange={(e) => update('search', e.target.value)}
-            placeholder="Search by task, user, action, or notes..."
-            className={`${fieldClass} w-full pl-9`}
-          />
-        </div>
-
-        <button type="button" onClick={onReset} className="inline-flex h-10 items-center justify-center gap-2 rounded-xl border border-gray-200 bg-white px-3 text-sm font-medium text-gray-600 shadow-sm hover:bg-gray-50">
-          <X size={14} /> Reset
-        </button>
-      </div>
-    </div>
-  );
-};
 
 const buildSentence = (log) => {
   if (log.description) return log.description;
@@ -465,8 +337,7 @@ const ProjectActivityLogHistory = ({ project, projectId, compact = false, focusD
     window.addEventListener('project-activity-updated', handler);
     return () => window.removeEventListener('project-activity-updated', handler);
   }, [resolvedProjectId, refreshActivity]);
-
-  const resetFilters = () => setFilters(DEFAULT_FILTERS);
+  
   const groupedLogs = groupLogsByDate(logs);
 
   const handleLoadMore = () => {

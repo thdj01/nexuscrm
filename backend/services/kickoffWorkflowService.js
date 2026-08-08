@@ -34,15 +34,6 @@ const {
 const IST_OFFSET = '+05:30';
 const DEFAULT_AGENDA = 'Kick-off Meeting to review customer requirements, scope, responsibilities, timeline, and next actions.';
 
-function escapeHtml(value = '') {
-  return String(value)
-    .replace(/&/g, '&amp;')
-    .replace(/</g, '&lt;')
-    .replace(/>/g, '&gt;')
-    .replace(/"/g, '&quot;')
-    .replace(/'/g, '&#039;');
-}
-
 function formatDateTime(date) {
   if (!date) return '-';
   return new Date(date).toLocaleString('en-IN', {
@@ -53,18 +44,6 @@ function formatDateTime(date) {
     hour: '2-digit',
     minute: '2-digit',
   });
-}
-
-function getAttendeeNames(workflow = {}, fallbackAttendees = []) {
-  const source = Array.isArray(workflow.attendees) && workflow.attendees.length
-    ? workflow.attendees
-    : fallbackAttendees;
-
-  const names = source
-    .map(item => item?.name || item?.email || '')
-    .filter(Boolean);
-
-  return names.length ? names.join(', ') : '-';
 }
 
 function getAttendeeListText(workflow = {}, fallbackAttendees = []) {
@@ -257,16 +236,6 @@ function snapshotInquiry(inquiry) {
   delete clone.enclosureMaterial;
   delete clone.enclosureStandard;
   return clone;
-}
-
-function buildProjectNotes(inquiry, workflow) {
-  return [
-    inquiry.additionalNotes ? `Additional Notes: ${inquiry.additionalNotes}` : '',
-    inquiry.internalRemarks ? `Internal Remarks: ${inquiry.internalRemarks}` : '',
-    inquiry.applicationDescription ? `Application: ${inquiry.applicationDescription}` : '',
-    workflow.agenda ? `Kick-off Agenda: ${workflow.agenda}` : '',
-    workflow.meetingLink ? `Kick-off Meeting Link: ${workflow.meetingLink}` : '',
-  ].filter(Boolean).join('\n');
 }
 
 async function validateAttendees(attendeeIds = []) {

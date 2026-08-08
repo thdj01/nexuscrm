@@ -193,34 +193,6 @@ function buildDateFilter(from, to) {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// buildEmployeeFilter
-// ─────────────────────────────────────────────────────────────────────────────
-
-/**
- * Build the employee scope filter from req.allowedEmployeeIds.
- *
- * req.allowedEmployeeIds is injected by scopeToHierarchy middleware:
- *   null  → admin, unrestricted
- *   [...] → array of ObjectIds the caller may access
- *
- * Returns a plain object fragment ready to merge into a Mongoose find() filter.
- */
-function buildEmployeeFilter(req) {
-  const { allowedEmployeeIds } = req;
-
-  if (allowedEmployeeIds === null || allowedEmployeeIds === undefined) {
-    // Admin — no employee restriction
-    return {};
-  }
-
-  if (allowedEmployeeIds.length === 1) {
-    return { employee: allowedEmployeeIds[0] };
-  }
-
-  return { employee: { $in: allowedEmployeeIds } };
-}
-
-// ─────────────────────────────────────────────────────────────────────────────
 // buildAggregateEmployeeMatch
 // ─────────────────────────────────────────────────────────────────────────────
 

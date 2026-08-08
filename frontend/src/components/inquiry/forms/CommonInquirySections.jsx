@@ -325,13 +325,6 @@ const buildPastInquiryOptions = (pastInquiries = [], currentValue = '') => {
 
 const getError = (errors = {}, key) => errors?.[key] || '';
 
-const getContactError = (errors = {}, index, field) => (
-  errors?.[`contacts.${index}.${field}`] ||
-  errors?.[`contacts[${index}].${field}`] ||
-  errors?.[`contact.${index}.${field}`] ||
-  ''
-);
-
 const setValue = (setForm, field, value) => {
   setForm((prev) => ({
     ...prev,
@@ -606,71 +599,6 @@ const getNestedDetail = (source = {}, detailKey = '') => {
     .split('.')
     .filter(Boolean)
     .reduce((current, key) => current?.[key], source) || {};
-};
-
-const updateNestedDetailField = (setForm, detailKey, field, value) => {
-  if (!detailKey) return;
-
-  const keys = detailKey.split('.').filter(Boolean);
-
-  setForm((prev) => {
-    if (keys.length === 1) {
-      const key = keys[0];
-      return {
-        ...prev,
-        [key]: {
-          ...(prev?.[key] || {}),
-          [field]: value,
-        },
-      };
-    }
-
-    const [parentKey, childKey] = keys;
-    return {
-      ...prev,
-      [parentKey]: {
-        ...(prev?.[parentKey] || {}),
-        [childKey]: {
-          ...(prev?.[parentKey]?.[childKey] || {}),
-          [field]: value,
-        },
-      },
-    };
-  });
-};
-
-const updateSwitchgearMake = (setForm, detailKey, value) => {
-  if (!detailKey) return;
-
-  const keys = detailKey.split('.').filter(Boolean);
-
-  setForm((prev) => {
-    const currentDetails = getNestedDetail(prev, detailKey);
-    const nextDetails = {
-      ...currentDetails,
-      switchgearMake: value,
-      customSwitchgearMake: isOtherValue(value)
-        ? currentDetails.customSwitchgearMake || ''
-        : '',
-    };
-
-    if (keys.length === 1) {
-      const key = keys[0];
-      return {
-        ...prev,
-        [key]: nextDetails,
-      };
-    }
-
-    const [parentKey, childKey] = keys;
-    return {
-      ...prev,
-      [parentKey]: {
-        ...(prev?.[parentKey] || {}),
-        [childKey]: nextDetails,
-      },
-    };
-  });
 };
 
 const CommonInquirySections = ({

@@ -4,15 +4,6 @@ const path = require('path');
 const { getActiveEmailConfig, createTransporter } = require('./emailSettingsService');
 const { buildInquiryEmailHtml } = require('./notificationTemplates');
 
-function escapeHtml(value = '') {
-  return String(value)
-    .replace(/&/g, '&amp;')
-    .replace(/</g, '&lt;')
-    .replace(/>/g, '&gt;')
-    .replace(/"/g, '&quot;')
-    .replace(/'/g, '&#039;');
-}
-
 function buildInquiryHtml(inquiry = {}, options = {}) {
   return buildInquiryEmailHtml(inquiry, options);
 }

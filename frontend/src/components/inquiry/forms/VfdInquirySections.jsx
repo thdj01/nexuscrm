@@ -145,12 +145,6 @@ const updateVfdDetails = (setForm, updater) => {
   });
 };
 
-const updateVfdField = (setForm, field, value) => {
-  updateVfdDetails(setForm, {
-    [field]: value,
-  });
-};
-
 const updateSupportField = (setForm, field, value) => {
   updateVfdDetails(setForm, {
     [field]: value,

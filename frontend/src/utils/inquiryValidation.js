@@ -15,12 +15,6 @@ const normalisePhone = (value) =>
 const isValidPhone = (value) =>
   /^\d{10}$/.test(normalisePhone(value));
 
-const toNumber = (value) => {
-  if (value === undefined || value === null || value === '') return 0;
-  const parsed = Number(value);
-  return Number.isFinite(parsed) ? parsed : 0;
-};
-
 const mergeErrors = (...errorObjects) =>
   errorObjects.reduce((merged, current) => ({
     ...merged,
@@ -106,9 +100,6 @@ const isPanelColourVisible = (form = {}) => {
   const material = String(selectedEnclosureType(form)).trim().toUpperCase();
   return Boolean(material) && !['SS304', 'SS316'].includes(material);
 };
-
-const hasRequirementRows = (rows = []) =>
-  Array.isArray(rows) && rows.length > 0;
 
 const validateCommonTechnicalFields = (form = {}, requiredFields = {}) => {
   const errors = {};

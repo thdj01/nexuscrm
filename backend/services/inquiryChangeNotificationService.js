@@ -187,19 +187,6 @@ function buildInquiryChangeItems(beforeInquiry = {}, afterInquiry = {}, options 
   return items;
 }
 
-function valueMatchesEstimation(value, estimationDepartmentIds = new Set()) {
-  if (!value) return false;
-  if (Array.isArray(value)) {
-    return value.some((item) => valueMatchesEstimation(item, estimationDepartmentIds));
-  }
-
-  const id = extractId(value);
-  if (id && estimationDepartmentIds.has(id)) return true;
-  return departmentTokens(value).some((token) => (
-    token === ESTIMATION_TOKEN || token.includes(ESTIMATION_TOKEN)
-  ));
-}
-
 async function resolveEstimationLeadershipIds() {
   // Kept for compatibility with older callers. The new rule intentionally
   // includes every active Estimation user, not only HOD/TL.
