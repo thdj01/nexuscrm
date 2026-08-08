@@ -22,6 +22,7 @@ const {
   reorderPlanningTasks,
   projectDocumentUpload,
   uploadProjectDocuments,
+  downloadProjectDocument,
   convertInquiryToProject,
   recalcAllDelays,
 } = require('../controllers/projectController');
@@ -101,6 +102,12 @@ router.post(
   requirePermission(PROJECT_PERMISSIONS.EDIT),
   projectDocumentUpload.array('documents', 10),
   uploadProjectDocuments
+);
+
+router.get(
+  '/:id/documents/:fileKey',
+  requirePermission(PROJECT_PERMISSIONS.VIEW),
+  downloadProjectDocument
 );
 
 

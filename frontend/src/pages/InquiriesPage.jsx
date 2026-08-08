@@ -13,6 +13,7 @@ import {
 } from 'lucide-react';
 
 import API from '../api/axios';
+import { downloadProtectedFile } from '../api/protectedFileService';
 import { useToast } from '../context/ToastContext';
 import { useAuth } from '../context/AuthContext';
 import { INQUIRY_PERMISSIONS } from '../constants/permissions';
@@ -96,16 +97,6 @@ const getLatestBomRevisionLabel = (attachments = []) => {
     .sort((a, b) => b.revisionNumber - a.revisionNumber)[0];
 
   return latest ? getBomRevisionLabel(latest.attachment) : '';
-};
-
-const getAttachmentUrl = (attachment = {}) => {
-  const storagePath = String(attachment?.storagePath || '').trim();
-  return storagePath ? `/uploads/${storagePath}` : '';
-};
-
-const getAttachmentDownloadName = (attachment = {}) => {
-  const rawName = attachment.name || attachment.originalName || attachment.storedName || 'Attachment';
-  return String(rawName).split(/[\/]/).pop() || 'Attachment';
 };
 
 const formatUploadDateTime = (value) => {
@@ -464,6 +455,18 @@ const InquiriesPage = () => {
     setUsersDropdownOpen(false);
     setKickoffModal(true);
     fetchMeetingUsers();
+  };
+
+  const downloadInquiryFile = async (inquiry, attachment) => {
+    try {
+      await downloadProtectedFile({
+        resource: 'inquiries',
+        recordId: inquiry?._id,
+        attachment,
+      });
+    } catch (error) {
+      toast.error(error?.response?.data?.message || error.message || 'Attachment download failed');
+    }
   };
 
   // ── Convert / Status workflow ───────────────────────────────────────────
@@ -1327,15 +1330,13 @@ const InquiriesPage = () => {
                         className="rounded-lg border border-indigo-100 bg-white px-3 py-2"
                       >
                         <div className="flex min-w-0 items-center justify-between gap-3">
-                          <a
-                            href={getAttachmentUrl(file)}
-                            download={getAttachmentDownloadName(file)}
-                            target="_blank"
-                            rel="noreferrer"
+                          <button
+                            type="button"
+                            onClick={() => downloadInquiryFile(statusModal.inquiry, file)}
                             className="min-w-0 truncate text-sm font-medium text-blue-700 hover:underline"
                           >
                             {file?.name || file?.originalName || file?.storedName || 'Technical BoM Document'}
-                          </a>
+                          </button>
                           <span className="shrink-0 rounded-full bg-indigo-100 px-2 py-0.5 text-[11px] font-semibold text-indigo-700">
                             {getBomRevisionLabel(file) || file?.versionLabel || `Document ${index + 1}`}
                           </span>
@@ -1443,15 +1444,13 @@ const InquiriesPage = () => {
             {kickoffForm.finalTechnicalBomDocument && !(isFileObject(kickoffForm.finalTechnicalBomDocument)) && (
               <p className="mt-2 text-xs text-gray-500">
                 Attached:&nbsp;
-                <a
-                  href={getAttachmentUrl(kickoffForm.finalTechnicalBomDocument)}
-                  download={getAttachmentDownloadName(kickoffForm.finalTechnicalBomDocument)}
-                  target="_blank"
-                  rel="noreferrer"
+                <button
+                  type="button"
+                  onClick={() => downloadInquiryFile(pendingConversion, kickoffForm.finalTechnicalBomDocument)}
                   className="font-semibold text-blue-700 underline"
                 >
                   {kickoffForm.finalTechnicalBomDocument.name || kickoffForm.finalTechnicalBomDocument.storedName || 'Final Technical BoM'}
-                </a>
+                </button>
               </p>
             )}
             {isFileObject(kickoffForm.finalTechnicalBomDocument) && (

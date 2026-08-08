@@ -1,4 +1,5 @@
 import React, { useEffect, useState } from 'react';
+import API from '../../api/axios';
 
 export const getUserInitials = (name = '') => {
   const words = String(name || 'User').trim().split(/\s+/).filter(Boolean);
@@ -44,12 +45,39 @@ const Avatar = ({
   imageClassName = '',
 }) => {
   const displayName = name || user?.name || user?.fullName || user?.email || 'User';
-  const avatarSrc = resolveAvatarSrc(src ?? user?.avatar ?? user?.profilePhoto ?? '');
+  const rawAvatarSrc = resolveAvatarSrc(src ?? user?.avatar ?? user?.profilePhoto ?? '');
+  const [protectedAvatarSrc, setProtectedAvatarSrc] = useState('');
   const [imageBroken, setImageBroken] = useState(false);
+
+  const protectedAvatarMatch = rawAvatarSrc.match(/^\/?uploads\/users\/([^/?#]+)$/i);
+  const avatarSrc = protectedAvatarMatch ? protectedAvatarSrc : rawAvatarSrc;
 
   useEffect(() => {
     setImageBroken(false);
-  }, [avatarSrc]);
+    setProtectedAvatarSrc('');
+
+    if (!protectedAvatarMatch) return () => {};
+
+    const controller = new AbortController();
+    let objectUrl = '';
+    API.get(`/auth/avatars/${encodeURIComponent(protectedAvatarMatch[1])}`, {
+      responseType: 'blob',
+      signal: controller.signal,
+    })
+      .then((response) => {
+        if (controller.signal.aborted) return;
+        objectUrl = URL.createObjectURL(response.data);
+        setProtectedAvatarSrc(objectUrl);
+      })
+      .catch(() => {
+        if (!controller.signal.aborted) setImageBroken(true);
+      });
+
+    return () => {
+      controller.abort();
+      if (objectUrl) URL.revokeObjectURL(objectUrl);
+    };
+  }, [rawAvatarSrc]);
 
   const baseClass = `inline-flex shrink-0 items-center justify-center overflow-hidden rounded-full align-middle ${sizeClasses[size] || sizeClasses.sm} ${className}`;
 

@@ -45,6 +45,10 @@ const { PROJECT_PERMISSIONS } = require('../constants/permissions');
 const { getNextInquiryNumber } = require('../utils/inquiryNumber');
 const { userHasPermission } = require('../utils/accessControl');
 const {
+  attachmentMatchesKey,
+  sendProtectedFile,
+} = require('../utils/protectedFile');
+const {
   SUPPORTED_PROJECT_DEPARTMENTS,
   SUPPORTED_PANEL_TYPES,
   PLANNING_MODES,
@@ -3384,6 +3388,35 @@ const uploadProjectDocuments = async (req, res, next) => {
   }
 };
 
+const downloadProjectDocument = async (req, res, next) => {
+  try {
+    const project = await Project.findById(req.params.id).select('documents').lean();
+    if (!project) {
+      return res.status(404).json({ success: false, message: 'Project not found' });
+    }
+
+    const attachment = (project.documents || []).find((item) =>
+      attachmentMatchesKey(item, req.params.fileKey)
+    );
+    if (!attachment) {
+      return res.status(404).json({
+        success: false,
+        message: 'Document not found for this project',
+      });
+    }
+
+    return sendProtectedFile({
+      req,
+      res,
+      next,
+      attachment,
+      fallbackDirectory: 'projects',
+    });
+  } catch (error) {
+    next(error);
+  }
+};
+
 
 // ── Bulk recalculate delay for all projects (cron / daily sync) ───────────────
 const recalcAllDelays = async (req, res, next) => {
@@ -3434,6 +3467,7 @@ module.exports = {
   reorderPlanningTasks,
   projectDocumentUpload,
   uploadProjectDocuments,
+  downloadProjectDocument,
   convertInquiryToProject,
   recalcAllDelays,
   __test: {

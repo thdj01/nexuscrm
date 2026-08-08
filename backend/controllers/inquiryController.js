@@ -54,6 +54,10 @@ const {
   canUserEditInquiry,
   assertUserCanEditInquiry,
 } = require('../services/inquiryAccessService');
+const {
+  attachmentMatchesKey,
+  sendProtectedFile,
+} = require('../utils/protectedFile');
 
 const FINAL_INQUIRY_STATUSES = [
   'New',
@@ -2108,6 +2112,60 @@ const getFollowUps = async (req, res, next) => {
   }
 };
 
+// ─────────────────────────────────────────────────────────────────────────────
+// @desc  View or download an attachment that belongs to one inquiry
+// @route GET /api/inquiries/:id/attachments/:fileKey
+// @access Private — Inquiry view/edit permission is enforced by the route
+// ─────────────────────────────────────────────────────────────────────────────
+const downloadInquiryAttachment = async (req, res, next) => {
+  try {
+    const inquiry = await Inquiry.findById(req.params.id)
+      .select('attachments attachment bomAttachments statusDetails.revision.attachment kickoffMeeting.finalTechnicalBomDocument')
+      .lean();
+
+    if (!inquiry) {
+      return res.status(404).json({ success: false, message: 'Inquiry not found' });
+    }
+
+    const attachments = [
+      ...(Array.isArray(inquiry.attachments) ? inquiry.attachments : []),
+      ...(Array.isArray(inquiry.bomAttachments) ? inquiry.bomAttachments : []),
+      inquiry.statusDetails?.revision?.attachment,
+      inquiry.kickoffMeeting?.finalTechnicalBomDocument,
+    ].filter(Boolean);
+
+    // Support old inquiry records that stored one attachment as a plain path.
+    if (inquiry.attachment) {
+      attachments.push({
+        name: path.basename(inquiry.attachment),
+        storedName: path.basename(inquiry.attachment),
+        storagePath: inquiry.attachment,
+      });
+    }
+
+    const attachment = attachments.find((item) =>
+      attachmentMatchesKey(item, req.params.fileKey)
+    );
+
+    if (!attachment) {
+      return res.status(404).json({
+        success: false,
+        message: 'Attachment not found for this inquiry',
+      });
+    }
+
+    return sendProtectedFile({
+      req,
+      res,
+      next,
+      attachment,
+      fallbackDirectory: 'inquiry',
+    });
+  } catch (error) {
+    next(error);
+  }
+};
+
 module.exports = {
   getInquiries,
   getInquiry,
@@ -2117,5 +2175,6 @@ module.exports = {
   updateInquiryFollowUp,
   getFollowUps,
   downloadInquiryPdf,
+  downloadInquiryAttachment,
   uploadMiddleware,
 };

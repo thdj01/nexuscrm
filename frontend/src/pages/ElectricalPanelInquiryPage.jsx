@@ -2322,6 +2322,7 @@ const handleDrop = (e) => {
 
 <div>
   <CommonInquirySections
+    inquiryId={id}
     form={form}
     setForm={setSprint2Form}
     errors={errors}

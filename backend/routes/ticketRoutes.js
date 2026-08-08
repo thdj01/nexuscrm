@@ -19,6 +19,7 @@ const {
   getComments,
   updateComment,
   uploadTicketAttachments,
+  downloadTicketAttachment,
   ticketAttachmentUpload, // multer multi-file middleware
   getTicketActivity,
 } = require('../controllers/ticketController');
@@ -57,6 +58,7 @@ router.route('/:id/comments')
 
 // ── Attachments ──────────────────────────────────────────────────────────────
 router.post('/:id/attachments', ticketAttachmentUpload, uploadTicketAttachments);
+router.get('/:id/attachments/:fileKey', downloadTicketAttachment);
 
 // ── Activity timeline ────────────────────────────────────────────────────────
 router.get('/:id/activity', getTicketActivity);

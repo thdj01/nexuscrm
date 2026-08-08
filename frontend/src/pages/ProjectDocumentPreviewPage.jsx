@@ -3,7 +3,12 @@ import { useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import { ArrowLeft, Download, ExternalLink, FileText, RefreshCw } from 'lucide-react';
 import Spinner from '../components/common/Spinner';
 import StatusBadge from '../components/common/StatusBadge';
-import { fetchProject as apiFetchProject, getProjectDocumentUrl } from '../api/projectService';
+import { fetchProject as apiFetchProject } from '../api/projectService';
+import {
+  downloadProtectedFile,
+  fetchProtectedFileBlob,
+  openProtectedFile,
+} from '../api/protectedFileService';
 import { useToast } from '../context/ToastContext';
 
 const OFFICE_PREVIEW_EXTENSIONS = ['doc', 'docx', 'xls', 'xlsx', 'ppt', 'pptx'];
@@ -33,52 +38,11 @@ const getPreviewKind = (doc = {}) => {
   const mime = String(doc.mimeType || '').toLowerCase();
   const ext = getFileExtension(doc);
 
-  if (mime.startsWith('image/') || ['png', 'jpg', 'jpeg', 'gif', 'webp', 'bmp', 'svg'].includes(ext)) return 'image';
+  if (['png', 'jpg', 'jpeg', 'gif', 'webp', 'bmp'].includes(ext)) return 'image';
   if (mime === 'application/pdf' || ext === 'pdf') return 'pdf';
   if (mime.startsWith('text/') || ['txt', 'csv', 'log', 'json', 'xml'].includes(ext)) return 'text';
   if (OFFICE_PREVIEW_EXTENSIONS.includes(ext)) return 'office';
   return 'unsupported';
-};
-
-const getAbsoluteDocumentUrl = (url = '') => {
-  const cleaned = String(url || '').trim();
-  if (!cleaned) return '';
-  if (/^https?:\/\//i.test(cleaned)) return cleaned;
-
-  try {
-    if (typeof window !== 'undefined' && window.location?.origin) {
-      return new URL(cleaned, window.location.origin).href;
-    }
-  } catch {}
-
-  return cleaned;
-};
-
-const isPrivatePreviewHost = (host = '') => {
-  const hostname = String(host || '').toLowerCase();
-  return (
-    !hostname ||
-    hostname === 'localhost' ||
-    hostname === '127.0.0.1' ||
-    hostname === '0.0.0.0' ||
-    hostname.startsWith('10.') ||
-    hostname.startsWith('192.168.') ||
-    /^172\.(1[6-9]|2\d|3[0-1])\./.test(hostname)
-  );
-};
-
-const getOfficePreviewUrl = (url = '') => {
-  const absoluteUrl = getAbsoluteDocumentUrl(url);
-  if (!/^https?:\/\//i.test(absoluteUrl)) return '';
-
-  try {
-    const parsed = new URL(absoluteUrl);
-    if (isPrivatePreviewHost(parsed.hostname)) return '';
-  } catch {
-    return '';
-  }
-
-  return `https://view.officeapps.live.com/op/embed.aspx?src=${encodeURIComponent(absoluteUrl)}`;
 };
 
 const appendPdfViewerOptions = (url = '') => {
@@ -97,6 +61,7 @@ const ProjectDocumentPreviewPage = () => {
   const requestedDocumentKey = searchParams.get('doc') || '';
   const [project, setProject] = useState(null);
   const [loading, setLoading] = useState(true);
+  const [filePreview, setFilePreview] = useState({ loading: false, url: '', error: '' });
   const [textPreview, setTextPreview] = useState({ loading: false, value: '', error: '' });
 
   const loadProject = useCallback(async () => {
@@ -137,49 +102,86 @@ const ProjectDocumentPreviewPage = () => {
     }) || documents[0];
   }, [project, requestedDocumentKey]);
 
-  const previewUrl = document ? getProjectDocumentUrl(document) : '';
   const previewKind = document ? getPreviewKind(document) : 'unsupported';
-  const officePreviewUrl = previewKind === 'office' ? getOfficePreviewUrl(previewUrl) : '';
+  const previewUrl = filePreview.url;
 
   useEffect(() => {
-    if (!document || previewKind !== 'text' || !previewUrl) {
+    if (!document || !id) {
+      setFilePreview({ loading: false, url: '', error: '' });
       setTextPreview({ loading: false, value: '', error: '' });
       return () => {};
     }
 
     const controller = new AbortController();
-    setTextPreview({ loading: true, value: '', error: '' });
+    let objectUrl = '';
+    setFilePreview({ loading: true, url: '', error: '' });
+    setTextPreview({ loading: previewKind === 'text', value: '', error: '' });
 
-    fetch(previewUrl, { signal: controller.signal })
-      .then((response) => {
-        if (!response.ok) throw new Error('Unable to load text preview.');
-        return response.text();
-      })
-      .then((text) => {
-        if (!controller.signal.aborted) {
-          setTextPreview({ loading: false, value: text, error: '' });
+    fetchProtectedFileBlob({
+      resource: 'projects',
+      recordId: id,
+      attachment: document,
+      signal: controller.signal,
+    })
+      .then(async (blob) => {
+        if (controller.signal.aborted) return;
+        objectUrl = URL.createObjectURL(blob);
+        setFilePreview({ loading: false, url: objectUrl, error: '' });
+
+        if (previewKind === 'text') {
+          const text = await blob.text();
+          if (!controller.signal.aborted) {
+            setTextPreview({ loading: false, value: text, error: '' });
+          }
+        } else {
+          setTextPreview({ loading: false, value: '', error: '' });
         }
       })
       .catch((error) => {
         if (controller.signal.aborted) return;
-        setTextPreview({ loading: false, value: '', error: error.message || 'Unable to load text preview.' });
+        const message = error?.response?.data?.message || error.message || 'Unable to load document preview.';
+        setFilePreview({ loading: false, url: '', error: message });
+        setTextPreview({ loading: false, value: '', error: message });
       });
 
-    return () => controller.abort();
-  }, [document, previewKind, previewUrl]);
+    return () => {
+      controller.abort();
+      if (objectUrl) URL.revokeObjectURL(objectUrl);
+    };
+  }, [document, id, previewKind]);
+
+  const downloadDocument = async () => {
+    try {
+      await downloadProtectedFile({ resource: 'projects', recordId: id, attachment: document });
+    } catch (error) {
+      toast.error(error?.response?.data?.message || error.message || 'Document download failed');
+    }
+  };
+
+  const openDocument = async () => {
+    try {
+      await openProtectedFile({ resource: 'projects', recordId: id, attachment: document });
+    } catch (error) {
+      toast.error(error?.response?.data?.message || error.message || 'Could not open document');
+    }
+  };
 
   const goBackToProject = () => {
     navigate(id ? `/projects/${id}` : '/projects');
   };
 
   const renderPreview = () => {
+    if (filePreview.loading) {
+      return <div className="flex min-h-[640px] items-center justify-center rounded-2xl bg-white p-8 text-sm font-medium text-gray-500 shadow-sm">Loading secure preview…</div>;
+    }
+
     if (!document || !previewUrl) {
       return (
         <div className="flex h-full min-h-[560px] items-center justify-center rounded-2xl bg-white p-8 text-center">
           <div className="max-w-md">
             <FileText size={44} className="mx-auto mb-3 text-gray-400" />
             <p className="text-sm font-semibold text-gray-800">Document preview is not available.</p>
-            <p className="mt-1 text-xs text-gray-500">The selected file could not be found in this project.</p>
+            <p className="mt-1 text-xs text-gray-500">{filePreview.error || 'The selected file could not be found in this project.'}</p>
           </div>
         </div>
       );
@@ -228,17 +230,6 @@ const ProjectDocumentPreviewPage = () => {
       );
     }
 
-    if (previewKind === 'office' && officePreviewUrl) {
-      return (
-        <iframe
-          title={document.name || 'Project document preview'}
-          src={officePreviewUrl}
-          className="h-full min-h-[640px] w-full rounded-2xl border-0 bg-white shadow-sm"
-          allowFullScreen
-        />
-      );
-    }
-
     return (
       <div className="flex min-h-[640px] items-center justify-center rounded-2xl bg-white p-8 text-center shadow-sm">
         <div className="max-w-lg">
@@ -246,7 +237,7 @@ const ProjectDocumentPreviewPage = () => {
           <p className="text-sm font-semibold text-gray-800">Preview is not available for this file type here.</p>
           {previewKind === 'office' ? (
             <p className="mt-1 text-xs leading-5 text-gray-500">
-              Word, Excel and PowerPoint preview needs a public browser-accessible file URL or server-side conversion. Local/private files like localhost uploads cannot be opened by Office online preview, so use Download for this file.
+              Word, Excel and PowerPoint files are private and cannot be sent to an external online preview service. Use Download for this file.
             </p>
           ) : (
             <p className="mt-1 text-xs leading-5 text-gray-500">PDF, images, text, CSV, JSON and XML files can be shown directly. Other files need to be downloaded.</p>
@@ -299,23 +290,22 @@ const ProjectDocumentPreviewPage = () => {
               <RefreshCw size={14} /> Refresh
             </button>
             {previewUrl && (
-              <a
-                href={previewUrl}
-                target="_blank"
-                rel="noreferrer"
+              <button
+                type="button"
+                onClick={openDocument}
                 className="inline-flex items-center justify-center gap-1.5 rounded-xl border border-gray-200 bg-white px-3 py-2 text-xs font-semibold text-gray-700 shadow-sm transition hover:bg-gray-50"
               >
                 <ExternalLink size={14} /> Open Tab
-              </a>
+              </button>
             )}
             {previewUrl && (
-              <a
-                href={previewUrl}
-                download={document?.name}
+              <button
+                type="button"
+                onClick={downloadDocument}
                 className="inline-flex items-center justify-center gap-1.5 rounded-xl bg-green-600 px-3 py-2 text-xs font-semibold text-white shadow-sm transition hover:bg-green-700"
               >
                 <Download size={14} /> Download
-              </a>
+              </button>
             )}
           </div>
         </div>

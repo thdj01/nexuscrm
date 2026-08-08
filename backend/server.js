@@ -1,12 +1,8 @@
 // ─────────────────────────────────────────────────────────────────────────────
 // backend/server.js  — FIXED (full replacement)
 //
-// Bug fix applied:
-//   [H3] Added express.static middleware to serve the uploads/ directory.
-//        Without this, every file the user downloads goes to /uploads/<path>
-//        which Express never matched, returning 404 for all attachments.
-//        The frontend links to /uploads/inquiry/<filename> — this must be
-//        reachable from the browser through the same Express server.
+// Uploaded business documents are intentionally not exposed with express.static.
+// Authenticated, resource-scoped download routes resolve and authorize them.
 // ─────────────────────────────────────────────────────────────────────────────
 
 const path = require('path');
@@ -55,20 +51,6 @@ app.use(express.urlencoded({ extended: true }));
 if (process.env.NODE_ENV === 'development') {
   app.use(morgan('dev'));
 }
-
-// ─── Static file serving for uploads  [FIX H3] ────────────────────────────────
-// Serves files under backend/uploads/ at the URL path /uploads.
-// The frontend references attachment URLs as /uploads/inquiry/<filename>.
-// Must be registered BEFORE the API routes so it is matched first.
-app.use(
-  '/uploads',
-  express.static(path.join(__dirname, 'uploads'), {
-    // Do not list directory contents — serve individual files only
-    index: false,
-    // 1 day cache for uploaded files in production; no-cache in dev
-    maxAge: process.env.NODE_ENV === 'production' ? '1d' : 0,
-  })
-);
 
 // ─── Routes ───────────────────────────────────────────────────────────────────
 

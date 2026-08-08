@@ -295,11 +295,6 @@ export const uploadProjectDocuments = (id, files = []) => {
   });
 };
 
-export const getProjectDocumentUrl = (document = {}) => {
-  const storagePath = String(document.storagePath || '').trim();
-  return storagePath ? `/uploads/${storagePath}` : '';
-};
-
 // ── Project planning v2 catalog and task APIs ────────────────────────────────
 export const fetchProjectPlanningOptions = () =>
   API.get('/projects/planning-templates').then((r) => r.data.data);

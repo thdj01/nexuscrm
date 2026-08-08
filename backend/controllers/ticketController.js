@@ -13,6 +13,10 @@ const Customer = require('../models/Customer');
 const Project = require('../models/Project');
 const Inquiry = require('../models/Inquiry');
 const Department = require('../models/Department');
+const {
+  attachmentMatchesKey,
+  sendProtectedFile,
+} = require('../utils/protectedFile');
 const { dispatchNotificationsToUsers } = require('../services/userNotificationDispatchService');
 const {
   combineUsers,
@@ -1620,6 +1624,33 @@ const uploadTicketAttachments = async (req, res) => {
   }
 };
 
+const downloadTicketAttachment = async (req, res, next) => {
+  try {
+    const { id, fileKey } = req.params;
+    if (!isValidId(id)) return fail(res, 'Invalid ticket ID');
+
+    const ticket = await Ticket.findById(id).select('attachments').lean();
+    if (!ticket) return fail(res, 'Ticket not found', 404);
+
+    const attachment = (ticket.attachments || []).find((item) =>
+      attachmentMatchesKey(item, fileKey)
+    );
+    if (!attachment) {
+      return fail(res, 'Attachment not found for this ticket', 404);
+    }
+
+    return sendProtectedFile({
+      req,
+      res,
+      next,
+      attachment,
+      fallbackDirectory: 'tickets',
+    });
+  } catch (error) {
+    next(error);
+  }
+};
+
 
 // ─────────────────────────────────────────────────────────────────────────────
 // GET /api/tickets/:id/activity
@@ -1682,6 +1713,7 @@ module.exports = {
   getComments,
   updateComment,
   uploadTicketAttachments,
+  downloadTicketAttachment,
   ticketAttachmentUpload,
   getTicketActivity,
 };

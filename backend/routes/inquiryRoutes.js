@@ -12,6 +12,7 @@ const {
   updateInquiryFollowUp,
   getFollowUps,
   downloadInquiryPdf,
+  downloadInquiryAttachment,
   uploadMiddleware,
 } = require('../controllers/inquiryController');
 const { protect } = require('../middleware/authMiddleware');
@@ -45,6 +46,15 @@ router.get(
     INQUIRY_PERMISSIONS.EDIT
   ),
   downloadInquiryPdf
+);
+
+router.get(
+  '/:id/attachments/:fileKey',
+  requireAnyPermission(
+    INQUIRY_PERMISSIONS.VIEW,
+    INQUIRY_PERMISSIONS.EDIT
+  ),
+  downloadInquiryAttachment
 );
 
 router.patch(

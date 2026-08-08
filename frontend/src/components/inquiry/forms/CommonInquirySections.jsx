@@ -1,4 +1,6 @@
 import React from 'react';
+import { downloadProtectedFile } from '../../../api/protectedFileService';
+import { useToast } from '../../../context/ToastContext';
 import {
   Calendar,
   Building2,
@@ -242,17 +244,6 @@ const normalizeInquiryStatusValue = (status = '') => {
 
 const ORDER_LOST_REASONS = ['Price', 'Commercial', 'Priority', 'Timing', 'Trust Issue', 'Certification'];
 const HOLD_REASONS = ['Due to Customer', 'Specification', 'Technical', 'Commercial'];
-
-const getAttachmentUrl = (attachment) => {
-  if (!attachment) return '';
-  const storagePath = attachment.storagePath || (attachment.storedName ? `inquiry/${attachment.storedName}` : '');
-  return storagePath ? `/uploads/${storagePath}` : '';
-};
-
-const getAttachmentDownloadName = (attachment = {}) => {
-  const rawName = attachment.name || attachment.originalName || attachment.storedName || 'Attachment';
-  return String(rawName).split(/[\/]/).pop() || 'Attachment';
-};
 
 const getBomVersionLabel = (attachment = {}) => {
   const revisionNumber = Number(attachment.revisionNumber);
@@ -683,6 +674,7 @@ const updateSwitchgearMake = (setForm, detailKey, value) => {
 };
 
 const CommonInquirySections = ({
+  inquiryId,
   form,
   setForm,
   errors = {},
@@ -732,6 +724,7 @@ const CommonInquirySections = ({
   engineeringContent = null,
   vfdPanelContent = null,
 }) => {
+  const toast = useToast();
   const contacts = safeContacts(form?.contacts);
   const panelTypes = normalizeInquiryPanelTypes(form?.panelTypes || []);
   const inquiryType = getInquiryTypeFromPanelTypes(panelTypes);
@@ -820,6 +813,16 @@ const CommonInquirySections = ({
     !['SS304', 'SS316'].includes(normalizedEnclosureType);
   const showControlFeeder = isControlFeederSupplyVoltage(form?.supplyVoltage);
   const [bomDragActive, setBomDragActive] = React.useState(false);
+
+  const downloadInquiryFile = (attachment) => {
+    downloadProtectedFile({
+      resource: 'inquiries',
+      recordId: inquiryId || form?._id,
+      attachment,
+    }).catch((error) => {
+      toast.error(error?.response?.data?.message || error.message || 'Attachment download failed');
+    });
+  };
 
   const handleBomDrag = (event) => {
     event.preventDefault();
@@ -1747,15 +1750,13 @@ const CommonInquirySections = ({
                       {typeof fileEmoji === 'function' ? fileEmoji(file) : '📎'}
                     </span>
                     <div className="min-w-0 flex-1">
-                      <a
-                        href={getAttachmentUrl(file)}
-                        download={getAttachmentDownloadName(file)}
-                        target="_blank"
-                        rel="noreferrer"
+                      <button
+                        type="button"
+                        onClick={() => downloadInquiryFile(file)}
                         className="block truncate text-sm font-medium text-blue-700 hover:underline"
                       >
                         {file?.name || file?.originalName || file?.storedName || 'Attachment'}
-                      </a>
+                      </button>
                       <p className="text-xs text-gray-500">
                         {typeof formatBytes === 'function' ? formatBytes(file?.sizeBytes || file?.size || 0) : ''}
                         {file?.uploadedAt ? `${typeof formatBytes === 'function' ? ' · ' : ''}Uploaded: ${formatUploadDateTime(file.uploadedAt)}` : ''}
@@ -1912,15 +1913,13 @@ const CommonInquirySections = ({
                         {typeof fileEmoji === 'function' ? fileEmoji(file) : '📎'}
                       </span>
                       <div className="min-w-0 flex-1">
-                        <a
-                          href={getAttachmentUrl(file)}
-                          download={getAttachmentDownloadName(file)}
-                          target="_blank"
-                          rel="noreferrer"
+                        <button
+                          type="button"
+                          onClick={() => downloadInquiryFile(file)}
                           className="block truncate text-sm font-medium text-blue-700 hover:underline"
                         >
                           {file?.name || file?.originalName || file?.storedName || 'Technical BOM Attachment'}
-                        </a>
+                        </button>
                         <p className="text-xs text-gray-500">
                           {getBomVersionLabel(file)}
                           {file?.uploadedAt ? ` · Uploaded: ${formatUploadDateTime(file.uploadedAt)}` : ''}

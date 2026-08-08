@@ -1,7 +1,8 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Download, Eye, FileText, Trash2, UploadCloud } from 'lucide-react';
-import { getProjectDocumentUrl, uploadProjectDocuments } from '../../api/projectService';
+import { uploadProjectDocuments } from '../../api/projectService';
+import { downloadProtectedFile } from '../../api/protectedFileService';
 import { useToast } from '../../context/ToastContext';
 
 const formatBytes = (bytes = 0) => {
@@ -96,6 +97,18 @@ const ProjectDocumentAttachments = ({ projectId, documents = [], pendingDocument
     navigate(`/projects/${projectId}/documents/preview?doc=${encodeURIComponent(documentKey)}`);
   };
 
+  const downloadDocument = async (doc) => {
+    try {
+      await downloadProtectedFile({
+        resource: 'projects',
+        recordId: projectId,
+        attachment: doc,
+      });
+    } catch (error) {
+      toast.error(error?.response?.data?.message || error.message || 'Document download failed');
+    }
+  };
+
   return (
     <section className="w-full min-w-0 max-w-full overflow-hidden rounded-xl border border-gray-200 bg-white p-3 space-y-4 sm:p-4">
       <div className="flex min-w-0 flex-col gap-1 sm:flex-row sm:items-center sm:justify-between">
@@ -187,7 +200,7 @@ const ProjectDocumentAttachments = ({ projectId, documents = [], pendingDocument
                 ))}
 
                 {sortedDocuments.map((doc) => {
-                  const url = getProjectDocumentUrl(doc);
+                  const hasFileReference = Boolean(doc.storedName || doc.storagePath);
                   return (
                     <tr key={doc.storedName || doc.storagePath || doc.name} className="border-t border-gray-100">
                       <td className="px-3 py-2.5">
@@ -201,14 +214,14 @@ const ProjectDocumentAttachments = ({ projectId, documents = [], pendingDocument
                       <td className="px-3 py-2.5 text-gray-500">{formatBytes(doc.sizeBytes)}</td>
                       <td className="px-3 py-2.5">
                         <div className="flex items-center justify-center gap-2">
-                          {url && (
+                          {hasFileReference && (
                             <>
                               <button type="button" onClick={() => openDocumentPreview(doc)} className="rounded-lg p-1.5 text-blue-600 hover:bg-blue-50" title="View">
                                 <Eye size={15} />
                               </button>
-                              <a href={url} download={doc.name} className="rounded-lg p-1.5 text-green-600 hover:bg-green-50" title="Download">
+                              <button type="button" onClick={() => downloadDocument(doc)} className="rounded-lg p-1.5 text-green-600 hover:bg-green-50" title="Download">
                                 <Download size={15} />
-                              </a>
+                              </button>
                             </>
                           )}
                         </div>

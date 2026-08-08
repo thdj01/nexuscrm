@@ -4,6 +4,7 @@ const Department = require('../models/Department');
 const { generateToken } = require('../utils/generateToken');
 const { buildUploadedAvatarPath, deleteLocalUploadByUrl } = require('../utils/avatarUpload');
 const { resolveEffectiveEmployeeAccess } = require('../utils/accessControl');
+const { sendProtectedFile } = require('../utils/protectedFile');
 
 const getDepartmentKey = (value) => {
   if (!value) return '';
@@ -278,6 +279,39 @@ const updateProfileAvatar = async (req, res, next) => {
   }
 };
 
+const getAvatar = async (req, res, next) => {
+  try {
+    const fileName = String(req.params.fileName || '');
+    if (!fileName || fileName !== require('path').basename(fileName)) {
+      return res.status(400).json({ success: false, message: 'Invalid avatar filename' });
+    }
+
+    const storedPaths = [
+      `/uploads/users/${fileName}`,
+      `uploads/users/${fileName}`,
+      `users/${fileName}`,
+    ];
+    const avatarExists = await User.exists({ avatar: { $in: storedPaths } });
+    if (!avatarExists) {
+      return res.status(404).json({ success: false, message: 'Avatar not found' });
+    }
+
+    return sendProtectedFile({
+      req,
+      res,
+      next,
+      attachment: {
+        name: fileName,
+        storedName: fileName,
+        storagePath: `users/${fileName}`,
+      },
+      fallbackDirectory: 'users',
+    });
+  } catch (error) {
+    next(error);
+  }
+};
+
 // @desc    Change password
 // @route   PUT /api/auth/change-password
 // @access  Private
@@ -318,4 +352,4 @@ const changePassword = async (req, res, next) => {
   }
 };
 
-module.exports = { login, getMe, updateProfile, updateProfileAvatar, changePassword };
+module.exports = { login, getMe, updateProfile, updateProfileAvatar, getAvatar, changePassword };
