@@ -71,9 +71,14 @@ const resolveInquiryEditContext = async (user = {}) => {
     token.startsWith('estimator')
   ));
 
+  const isSalesUser = [...tokens].some((token) => (
+    token === 'sales' || token.startsWith('sales')
+  ));
+
   return {
     isAdmin: user?.role === 'admin',
     isEstimationUser,
+    isSalesUser,
     departmentTokens: [...tokens],
   };
 };
@@ -90,6 +95,30 @@ const canUserEditInquiry = (user, inquiry, context = {}) => {
   if (user.role === 'admin' || context.isAdmin) return true;
   if (context.isEstimationUser) return true;
   return isInquiryCreator(user, inquiry);
+};
+
+const canUserCompleteKickoff = (user, inquiry, context = {}) => {
+  if (!user || !inquiry) return false;
+  if (user.role === 'admin' || context.isAdmin) return true;
+  if (context.isEstimationUser) return true;
+  const effectiveRole = user.role === 'manager' ? 'hod' : user.role;
+  if (context.isSalesUser && ['hod', 'team_lead'].includes(effectiveRole)) return true;
+  return isInquiryCreator(user, inquiry);
+};
+
+const assertUserCanCompleteKickoff = async (user, inquiry, context) => {
+  const resolvedContext = context || await resolveInquiryEditContext(user);
+
+  if (canUserCompleteKickoff(user, inquiry, resolvedContext)) {
+    return resolvedContext;
+  }
+
+  const error = new Error(
+    'Only Sales HOD/TL, the inquiry creator, an Estimation user, or an Admin can complete the kickoff'
+  );
+  error.statusCode = 403;
+  error.isOperational = true;
+  throw error;
 };
 
 const assertUserCanEditInquiry = async (user, inquiry, context) => {
@@ -113,4 +142,6 @@ module.exports = {
   isInquiryCreator,
   canUserEditInquiry,
   assertUserCanEditInquiry,
+  canUserCompleteKickoff,
+  assertUserCanCompleteKickoff,
 };

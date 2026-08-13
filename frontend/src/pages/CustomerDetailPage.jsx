@@ -86,14 +86,9 @@ const CustomerDetailPage = () => {
     setSubmitting(true);
     try {
       if (isNew) {
-        const { data } = await API.post('/customers', formData);
-        const createdCustomer = data?.data?.customer || data?.customer || data?.data;
+        await API.post('/customers', formData);
         toast.success('Customer added successfully');
-        if (createdCustomer?._id && canViewCustomer) {
-          navigate(`/customers/${createdCustomer._id}`, { replace: true });
-        } else {
-          navigate(canViewCustomer ? '/customers' : '/', { replace: true });
-        }
+        navigate(canViewCustomer ? '/customers' : '/', { replace: true });
         return;
       }
 
@@ -101,6 +96,7 @@ const CustomerDetailPage = () => {
       toast.success('Customer updated successfully');
       setCustomer(data?.data || { ...customer, ...formData });
       setReadOnly(true);
+      navigate(canViewCustomer ? '/customers' : '/', { replace: true });
     } catch (err) {
       toast.error(err.response?.data?.message || (isNew ? 'Failed to add customer' : 'Failed to update customer'));
     } finally {

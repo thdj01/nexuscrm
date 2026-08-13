@@ -61,6 +61,35 @@ function assertPlanningStartDateAllowed(value, options = {}) {
   return date;
 }
 
+function assertProjectDetailDateAllowed(value, options = {}) {
+  if (!value) return null;
+
+  const date = startOfDay(value);
+  const fieldName = String(options.fieldName || 'Project date');
+  if (!date) {
+    const error = new Error(`${fieldName} is invalid.`);
+    error.statusCode = 400;
+    throw error;
+  }
+
+  if (options.existingValue && sameCalendarDay(date, options.existingValue)) return date;
+
+  if (isSunday(date)) {
+    const error = new Error(`${fieldName} cannot be a Sunday. Select Monday to Saturday.`);
+    error.statusCode = 400;
+    throw error;
+  }
+
+  const today = startOfDay(options.today || new Date());
+  if (today && date < today) {
+    const error = new Error(`${fieldName} cannot be a previous date. Select today or a future working day.`);
+    error.statusCode = 400;
+    throw error;
+  }
+
+  return date;
+}
+
 function nextWorkingDay(value, includeCurrent = false) {
   const date = startOfDay(value);
   if (!date) return null;
@@ -275,6 +304,7 @@ module.exports = {
   isSunday,
   sameCalendarDay,
   assertPlanningStartDateAllowed,
+  assertProjectDetailDateAllowed,
   nextWorkingDay,
   addWorkingDays,
   workingDaysBetween,

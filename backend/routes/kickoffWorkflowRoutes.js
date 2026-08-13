@@ -3,9 +3,15 @@
 const express = require('express');
 const router = express.Router();
 const { protect, authorize } = require('../middleware/authMiddleware');
-const { requirePermission, requireAnyPermission } = require('../middleware/permissionMiddleware');
+const {
+  requirePermission,
+  requireAnyPermission,
+} = require('../middleware/permissionMiddleware');
 const { INQUIRY_PERMISSIONS } = require('../constants/permissions');
-const { requireInquiryEditAccess } = require('../middleware/inquiryAccessMiddleware');
+const {
+  requireInquiryEditAccess,
+  requireKickoffCompletionAccess,
+} = require('../middleware/inquiryAccessMiddleware');
 const {
   scheduleKickoffMeeting,
   getInquiryKickoffWorkflow,
@@ -17,7 +23,11 @@ const {
 router.use(protect);
 
 router.post('/:inquiryId/schedule', requirePermission(INQUIRY_PERMISSIONS.EDIT), requireInquiryEditAccess('inquiryId'), kickoffFinalBomUpload, scheduleKickoffMeeting);
-router.post('/:inquiryId/complete', requirePermission(INQUIRY_PERMISSIONS.EDIT), requireInquiryEditAccess('inquiryId'), completeKickoffMeeting);
+router.post(
+  '/:inquiryId/complete',
+  requireKickoffCompletionAccess('inquiryId'),
+  completeKickoffMeeting
+);
 router.get('/:inquiryId', requireAnyPermission(INQUIRY_PERMISSIONS.VIEW, INQUIRY_PERMISSIONS.EDIT), getInquiryKickoffWorkflow);
 router.post('/process/due', authorize('admin'), processDueKickoffs);
 

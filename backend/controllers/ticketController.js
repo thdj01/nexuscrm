@@ -20,8 +20,7 @@ const {
 const { dispatchNotificationsToUsers } = require('../services/userNotificationDispatchService');
 const {
   combineUsers,
-  getAdminUsers,
-  getDepartmentLeadershipUsers,
+  getAutomationHodUsers,
 } = require('../services/notificationRecipientService');
 const {
   buildTicketCreatedWhatsAppMessage,
@@ -36,12 +35,20 @@ const fail = (res, message, statusCode = 400) =>
   res.status(statusCode).json({ success: false, message });
 
 const isValidId = (id) => mongoose.Types.ObjectId.isValid(id);
+const TICKET_CONTACT_NUMBER_PATTERN = /^\d{10}$/;
+
+const validateTicketContactNumber = (value) => {
+  const contactNumber = String(value || '').trim();
+  return TICKET_CONTACT_NUMBER_PATTERN.test(contactNumber)
+    ? ''
+    : 'Contact number must contain exactly 10 digits';
+};
 
 const normalizeRole = (role = '') =>
   String(role).trim().toLowerCase().replace(/\s+/g, '_');
 
 const TICKET_MANAGER_ROLES = Object.freeze(['admin', 'hod', 'manager', 'team_lead']);
-const TICKET_ASSIGNABLE_ROLES = Object.freeze(['employee']);
+const TICKET_ASSIGNABLE_ROLES = Object.freeze(['employee', 'team_lead', 'hod', 'manager']);
 
 const isTicketManagerRole = (role = '') => TICKET_MANAGER_ROLES.includes(normalizeRole(role));
 
@@ -51,6 +58,29 @@ const canCreateTicket = canManageTickets;
 const canAssignTicket = canManageTickets;
 
 const isAssignableTicketUser = (user) => TICKET_ASSIGNABLE_ROLES.includes(normalizeRole(user?.role));
+
+const userDepartmentValues = (user = {}) => [
+  user.department,
+  ...(Array.isArray(user.hodDepartments) ? user.hodDepartments : []),
+].map((value) => String(value?._id || value?.id || value || '').trim()).filter(Boolean);
+
+const userBelongsToDepartment = (user, department) => {
+  if (!user || !department) return false;
+
+  const departmentKeys = new Set([
+    department._id,
+    department.name,
+    department.code,
+  ].map((value) => String(value || '').trim().toUpperCase()).filter(Boolean));
+
+  if (userDepartmentValues(user).some((value) => departmentKeys.has(value.toUpperCase()))) {
+    return true;
+  }
+
+  const userId = String(user._id || '').trim();
+  return [department.hod, ...(department.hods || []), department.teamLead]
+    .some((value) => String(value?._id || value || '').trim() === userId);
+};
 
 const isAssignedEmployee = (req, ticket) => {
   if (!ticket?.assignedTo || !req.user?._id) return false;
@@ -258,13 +288,33 @@ const resolveTicketDepartment = async (value) => {
   const department = await Department.findOne({
     isActive: true,
     $or: lookup,
-  }).select('name').lean();
+  }).select('_id name code hod hods teamLead').lean();
 
   if (!department) {
     return { error: 'Department must be selected from Department Master' };
   }
 
-  return { value: department.name };
+  return { value: department.name, department };
+};
+
+const resolveTicketAssignee = async (assignedTo, department) => {
+  if (!assignedTo) return { assignee: null };
+  if (!isValidId(assignedTo)) return { error: 'Assigned user is invalid' };
+
+  const assignee = await User.findOne({
+    _id: assignedTo,
+    isActive: true,
+  }).lean();
+
+  if (!assignee) return { error: 'Assigned user not found' };
+  if (!isAssignableTicketUser(assignee)) {
+    return { error: 'Ticket can only be assigned to an active department user' };
+  }
+  if (department && !userBelongsToDepartment(assignee, department)) {
+    return { error: 'Assigned user must belong to the selected department' };
+  }
+
+  return { assignee };
 };
 
 const syncTicketCustomerContact = async (customerId, payload = {}) => {
@@ -415,30 +465,17 @@ const buildTicketAttachmentDocs = (files = [], uploadedBy) =>
 
 const COMMENT_POPULATE = { path: 'author', select: 'name email avatar role' };
 
-async function getTicketCreatorNotificationUser(ticket = {}) {
-  const creatorId = ticket.createdBy?._id || ticket.createdBy;
-  if (!creatorId || !isValidId(creatorId)) return null;
-
-  return User.findOne({ _id: creatorId, isActive: { $ne: false } })
-    .select('_id name email phone mobileNumber whatsappNumber mobile role department hodDepartments teamId')
-    .lean();
-}
-
 async function notifyTicketCreated(ticket, actor = {}) {
-  const [admins, departmentLeadership, creator] = await Promise.all([
-    getAdminUsers(),
-    getDepartmentLeadershipUsers([ticket.department]),
-    getTicketCreatorNotificationUser(ticket),
-  ]);
+  const automationHods = await getAutomationHodUsers();
   const recipients = combineUsers(
-    admins,
-    departmentLeadership,
-    creator ? [creator] : []
+    ticket.assignedTo && typeof ticket.assignedTo === 'object' ? [ticket.assignedTo] : [],
+    automationHods
   );
   const createdMessage = buildTicketCreatedWhatsAppMessage(ticket);
 
   await dispatchNotificationsToUsers({
     users: recipients,
+    excludeUserIds: [actor?._id || actor?.id],
     title: `New Ticket Created - ${ticket.ticketId || 'Ticket'}`,
     message: `${actor?.name || 'A user'} created ticket ${ticket.ticketId || '-'} - ${ticket.title || '-'}.`,
     type: 'ticket_created',
@@ -461,21 +498,16 @@ async function notifyTicketAssigned(ticket, actor = {}) {
     : null;
   if (!assignee?._id) return;
 
-  const [admins, departmentLeadership, creator] = await Promise.all([
-    getAdminUsers(),
-    getDepartmentLeadershipUsers([ticket.department, assignee.department]),
-    getTicketCreatorNotificationUser(ticket),
-  ]);
+  const automationHods = await getAutomationHodUsers();
   const recipients = combineUsers(
     [assignee],
-    admins,
-    departmentLeadership,
-    creator ? [creator] : []
+    automationHods
   );
   const assigneeId = String(assignee._id);
 
   await dispatchNotificationsToUsers({
     users: recipients,
+    excludeUserIds: [actor?._id || actor?.id],
     title: (user) => String(user?._id) === assigneeId
       ? `Ticket Assigned - ${ticket.ticketId || 'Ticket'}`
       : `Ticket Assignment Updated - ${ticket.ticketId || 'Ticket'}`,
@@ -529,6 +561,8 @@ const createTicket = async (req, res) => {
     if (!ticketType) return fail(res, 'Ticket type is required');
     if (!customer) return fail(res, 'Customer is required');
     if (!product) return fail(res, 'Product details are required');
+    const contactNumberError = validateTicketContactNumber(req.body.contactNumber);
+    if (contactNumberError) return fail(res, contactNumberError);
 
     const referenceError = await validateReferences({ customer, project, inquiry });
     if (referenceError) return fail(res, referenceError);
@@ -558,17 +592,8 @@ const createTicket = async (req, res) => {
     };
 
     if (assignedTo) {
-      if (!isValidId(assignedTo)) return fail(res, 'Assigned employee is invalid');
-
-      const assignee = await User.findOne({
-        _id: assignedTo,
-        isActive: true,
-      }).lean();
-
-      if (!assignee) return fail(res, 'Assigned employee not found');
-      if (!isAssignableTicketUser(assignee)) {
-        return fail(res, 'Ticket can only be assigned to an active employee');
-      }
+      const assigneeResult = await resolveTicketAssignee(assignedTo, departmentResult.department);
+      if (assigneeResult.error) return fail(res, assigneeResult.error);
 
       payload.assignedTo = assignedTo;
       payload.assignedBy = req.user._id;
@@ -606,7 +631,6 @@ const createTicket = async (req, res) => {
     setImmediate(async () => {
       try {
         await notifyTicketCreated(ticket, actor);
-        if (ticket.assignedTo?._id) await notifyTicketAssigned(ticket, actor);
       } catch (notificationError) {
         console.error('[ticketController] Ticket creation notification failed:', notificationError?.message || notificationError);
       }
@@ -832,6 +856,12 @@ const updateTicket = async (req, res) => {
 
     const payload = buildTicketPayload(req.body);
 
+    const nextContactNumber = Object.prototype.hasOwnProperty.call(payload, 'contactNumber')
+      ? payload.contactNumber
+      : oldTicket.contactNumber;
+    const contactNumberError = validateTicketContactNumber(nextContactNumber);
+    if (contactNumberError) return fail(res, contactNumberError);
+
     if (Object.prototype.hasOwnProperty.call(req.body, 'status')) {
       return fail(res, 'Status cannot be changed from updateTicket. Use ticket workflow action APIs.', 400);
     }
@@ -995,16 +1025,11 @@ const assignTicket = async (req, res) => {
       return fail(res, 'Void ticket cannot be assigned.', 400);
     }
 
-    const assignee = await User.findOne({
-      _id: assignedTo,
-      isActive: true,
-    }).lean();
+    const departmentResult = await resolveTicketDepartment(ticket.department);
+    if (departmentResult.error) return fail(res, departmentResult.error);
 
-    if (!assignee) return fail(res, 'Assigned employee not found');
-
-    if (!isAssignableTicketUser(assignee)) {
-      return fail(res, 'Ticket can only be assigned to an active employee');
-    }
+    const assigneeResult = await resolveTicketAssignee(assignedTo, departmentResult.department);
+    if (assigneeResult.error) return fail(res, assigneeResult.error);
 
     const previousAssignee = ticket.assignedTo;
 

@@ -40,6 +40,18 @@ const requireAnyPermission = (...permissions) => (req, _res, next) => {
   next();
 };
 
+const requireProjectLeadershipRole = (req, _res, next) => {
+  if (!req.user) return next(createError('Not authenticated', 401));
+
+  const role = effectiveRole(req.user.role);
+  if ([ROLES.ADMIN, ROLES.HOD, ROLES.TEAM_LEAD].includes(role)) return next();
+
+  return next(createError(
+    'Only Admin, HOD, and Team Lead users can create projects or change planning-grid structure.',
+    403
+  ));
+};
+
 // ─────────────────────────────────────────────────────────────────────────────
 // 1. requireRoles
 // ─────────────────────────────────────────────────────────────────────────────
@@ -272,6 +284,7 @@ const canModifyProjectLinkedTaskStructure = (req, task) => {
 module.exports = {
   requirePermission,
   requireAnyPermission,
+  requireProjectLeadershipRole,
   requireRoles,
   attachTeamContext,
   scopeToHierarchy,

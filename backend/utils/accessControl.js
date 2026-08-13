@@ -31,6 +31,36 @@ const PLANNING_LEADERSHIP_PERMISSIONS = Object.freeze([
   PROJECT_PERMISSIONS.UPDATE_COMPLETION,
 ]);
 
+const PROJECT_MANAGEMENT_PERMISSIONS = Object.freeze([
+  PROJECT_PERMISSIONS.CREATE,
+  PROJECT_PERMISSIONS.EDIT,
+  PROJECT_PERMISSIONS.PLANNING_GRID,
+  PROJECT_PERMISSIONS.ADD_DUPLICATE_PLANNING_GRID,
+  PROJECT_PERMISSIONS.UPDATE_COMPLETION,
+  PROJECT_PERMISSIONS.MARK_COMPLETED,
+]);
+
+// Employees participate in planning by viewing every project planning grid and
+// updating only tasks assigned to them. Project creation and planning-structure
+// changes are leadership actions even if those permissions were saved on an
+// older user record.
+const EMPLOYEE_RESTRICTED_PROJECT_PERMISSIONS = Object.freeze([
+  PROJECT_PERMISSIONS.CREATE,
+  PROJECT_PERMISSIONS.PLANNING_GRID,
+  PROJECT_PERMISSIONS.ADD_DUPLICATE_PLANNING_GRID,
+]);
+
+const PROJECT_PLANNING_DEPARTMENTS = Object.freeze([
+  'DESIGN',
+  'PRODUCTION',
+  'PURCHASE',
+  'AUTOMATION',
+  'STORE',
+  'QC',
+]);
+
+const isAutomationHodRole = (role) => [ROLES.HOD, ROLES.MANAGER].includes(role);
+
 const isPlanningLeadershipRole = (role) => [
   ROLES.ADMIN,
   ROLES.HOD,
@@ -38,12 +68,17 @@ const isPlanningLeadershipRole = (role) => [
   ROLES.MANAGER,
 ].includes(role);
 
-const mergeRoleRequiredPermissions = (user = {}, permissions = []) => {
+const mergeRoleRequiredPermissions = (user = {}, permissions = [], hasPlanningDepartment = false) => {
   const merged = new Set(permissions);
-  if (isPlanningLeadershipRole(user.role)) {
+  if (isPlanningLeadershipRole(user.role) && hasPlanningDepartment) {
     PLANNING_LEADERSHIP_PERMISSIONS.forEach((permission) => merged.add(permission));
   }
-  return ALL_EMPLOYEE_PERMISSIONS.filter((permission) => merged.has(permission));
+  return ALL_EMPLOYEE_PERMISSIONS.filter((permission) => (
+    merged.has(permission) && !(
+      user.role === ROLES.EMPLOYEE &&
+      EMPLOYEE_RESTRICTED_PROJECT_PERMISSIONS.includes(permission)
+    )
+  ));
 };
 
 const cleanPermissionList = (value) => {
@@ -113,6 +148,31 @@ const resolveDepartmentNames = async (user = {}) => {
   return tokens;
 };
 
+const mergeDepartmentRequiredPermissions = async (user = {}, permissions = []) => {
+  const merged = new Set(permissions);
+  const departments = await resolveDepartmentNames(user);
+  const hasPlanningDepartment = PROJECT_PLANNING_DEPARTMENTS.some((department) => departments.has(department));
+
+  // A non-planning department (for example Sales or Estimation) has Project
+  // View only. Strip stale management permissions that may have been saved by
+  // an earlier role-only access matrix.
+  if (user.role !== ROLES.ADMIN && !hasPlanningDepartment) {
+    PROJECT_MANAGEMENT_PERMISSIONS.forEach((permission) => merged.delete(permission));
+  }
+
+  if (isPlanningLeadershipRole(user.role) && hasPlanningDepartment) {
+    PLANNING_LEADERSHIP_PERMISSIONS.forEach((permission) => merged.add(permission));
+  }
+
+  // Automation HODs need Customer Master visibility to select and inspect the
+  // customer used by a ticket. Create/Edit remain controlled by the checklist.
+  if (isAutomationHodRole(user.role) && departments.has('AUTOMATION')) {
+    merged.add(CUSTOMER_PERMISSIONS.VIEW);
+  }
+
+  return ALL_EMPLOYEE_PERMISSIONS.filter((permission) => merged.has(permission));
+};
+
 const getSuggestedEmployeeAccess = async (user = {}) => {
   if (user.role === ROLES.ADMIN) return [...ALL_EMPLOYEE_PERMISSIONS];
 
@@ -124,12 +184,16 @@ const getSuggestedEmployeeAccess = async (user = {}) => {
     ALL_CUSTOMER_PERMISSIONS.forEach((permission) => permissions.add(permission));
   }
 
-  if (
-    departments.has('DESIGN') ||
-    departments.has('AUTOMATION') ||
-    departments.has('PRODUCTION')
-  ) {
-    ALL_PROJECT_PERMISSIONS.forEach((permission) => permissions.add(permission));
+  if (isAutomationHodRole(user.role) && departments.has('AUTOMATION')) {
+    permissions.add(CUSTOMER_PERMISSIONS.VIEW);
+  }
+
+  if (PROJECT_PLANNING_DEPARTMENTS.some((department) => departments.has(department))) {
+    permissions.add(PROJECT_PERMISSIONS.VIEW);
+
+    if (isPlanningLeadershipRole(user.role)) {
+      ALL_PROJECT_PERMISSIONS.forEach((permission) => permissions.add(permission));
+    }
   }
 
   return ALL_EMPLOYEE_PERMISSIONS.filter((permission) => permissions.has(permission));
@@ -143,18 +207,24 @@ const hasConfiguredEmployeeAccess = (user = {}) => Array.isArray(user.employeeAc
 const resolveEffectiveEmployeeAccess = async (user = {}) => {
   if (user.role === ROLES.ADMIN) return [...ALL_EMPLOYEE_PERMISSIONS];
   if (hasConfiguredEmployeeAccess(user)) {
-    return mergeRoleRequiredPermissions(user, cleanPermissionList(user.employeeAccess));
+    return mergeDepartmentRequiredPermissions(
+      user,
+      mergeRoleRequiredPermissions(user, cleanPermissionList(user.employeeAccess), false)
+    );
   }
-  return mergeRoleRequiredPermissions(user, await getSuggestedEmployeeAccess(user));
+  return mergeDepartmentRequiredPermissions(
+    user,
+    mergeRoleRequiredPermissions(user, await getSuggestedEmployeeAccess(user), false)
+  );
 };
 
 const userHasPermission = (user, permission) => {
   if (!user || !permission) return false;
   if (user.role === ROLES.ADMIN) return true;
   if (
-    isPlanningLeadershipRole(user.role) &&
-    PLANNING_LEADERSHIP_PERMISSIONS.includes(permission)
-  ) return true;
+    user.role === ROLES.EMPLOYEE &&
+    EMPLOYEE_RESTRICTED_PROJECT_PERMISSIONS.includes(permission)
+  ) return false;
   if (UNIVERSAL_EMPLOYEE_PERMISSIONS.includes(permission)) return true;
   return Array.isArray(user.employeeAccess) && cleanPermissionList(user.employeeAccess).includes(permission);
 };
@@ -180,5 +250,7 @@ module.exports = {
   userHasPermission,
   userHasAnyPermission,
   PLANNING_LEADERSHIP_PERMISSIONS,
+  EMPLOYEE_RESTRICTED_PROJECT_PERMISSIONS,
+  PROJECT_PLANNING_DEPARTMENTS,
   isPlanningLeadershipRole,
 };

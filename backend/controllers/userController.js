@@ -7,7 +7,11 @@ const Department = require('../models/Department');
 const { ROLES } = require('../models/User');
 const { departmentMatchesUserTeam } = require('../utils/departmentUtils');
 const { buildUploadedAvatarPath, deleteLocalUploadByUrl } = require('../utils/avatarUpload');
-const { cleanPermissionList, resolveEffectiveEmployeeAccess } = require('../utils/accessControl');
+const {
+  cleanPermissionList,
+  resolveEffectiveEmployeeAccess,
+  EMPLOYEE_RESTRICTED_PROJECT_PERMISSIONS,
+} = require('../utils/accessControl');
 const { syncUserHierarchyToDepartments } = require('../services/userDepartmentHierarchyService');
 
 const ok = (res, data, status = 200) =>
@@ -388,6 +392,14 @@ const applyRoleOwnershipRules = (payload, existingUser = null) => {
 
   if (role === ROLES.TEAM_LEAD || role === ROLES.EMPLOYEE) {
     payload.hodDepartments = [];
+    if (role === ROLES.EMPLOYEE) {
+      const accessSource = payload.employeeAccess ?? existingUser?.employeeAccess;
+      if (Array.isArray(accessSource)) {
+        payload.employeeAccess = cleanPermissionList(accessSource).filter(
+          (permission) => !EMPLOYEE_RESTRICTED_PROJECT_PERMISSIONS.includes(permission)
+        );
+      }
+    }
     return payload;
   }
 

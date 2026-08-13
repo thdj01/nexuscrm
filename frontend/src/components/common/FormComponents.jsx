@@ -40,7 +40,7 @@ export const FormField = ({ label, error, required, children, className = '', ..
 // iOS Safari from auto-zooming (and shifting the layout) when an input is focused.
 export const Input = ({ className = '', ...props }) => (
   <input
-    className={`w-full px-3 py-2 text-base sm:text-sm border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent bg-white placeholder-gray-400 ${className}`}
+    className={`w-full px-3 py-2 text-base sm:text-sm border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent bg-white placeholder-gray-400 disabled:cursor-not-allowed disabled:border-slate-200 disabled:!bg-slate-100 disabled:!text-slate-400 disabled:opacity-75 disabled:shadow-none disabled:focus:ring-0 ${className}`}
     {...props}
   />
 );
@@ -48,7 +48,7 @@ export const Input = ({ className = '', ...props }) => (
 // Select dropdown
 export const Select = ({ children, className = '', ...props }) => (
   <select
-    className={`w-full px-3 py-2 text-base sm:text-sm border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent bg-white ${className}`}
+    className={`w-full px-3 py-2 text-base sm:text-sm border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent bg-white disabled:cursor-not-allowed disabled:border-slate-200 disabled:!bg-slate-100 disabled:!text-slate-400 disabled:opacity-75 disabled:shadow-none disabled:focus:ring-0 ${className}`}
     {...props}
   >
     {children}
@@ -58,7 +58,7 @@ export const Select = ({ children, className = '', ...props }) => (
 // Textarea
 export const Textarea = ({ className = '', ...props }) => (
   <textarea
-    className={`w-full px-3 py-2 text-base sm:text-sm border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent bg-white placeholder-gray-400 resize-none ${className}`}
+    className={`w-full px-3 py-2 text-base sm:text-sm border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent bg-white placeholder-gray-400 resize-none disabled:cursor-not-allowed disabled:border-slate-200 disabled:!bg-slate-100 disabled:!text-slate-400 disabled:opacity-75 disabled:shadow-none disabled:focus:ring-0 ${className}`}
     rows={3}
     {...props}
   />

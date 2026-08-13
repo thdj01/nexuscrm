@@ -308,14 +308,12 @@ const ProjectPlanningGrid = ({
   const canReorderTasks = canEditStructure && planningLeadershipRole;
   const currentUserId = userId(auth?.user);
 
-  const canLeadDepartment = (department) => {
-    if (!planningLeadershipRole) return false;
-    if (auth?.user?.role === 'admin') return true;
-
-    return (usersByDepartment[department] || []).some(
-      (departmentUser) => userId(departmentUser) === currentUserId
-    );
-  };
+  // Department authority comes from the authenticated user's resolved
+  // department/HOD department list. The assignee dropdown is not an authority
+  // source: a user appearing in that list must never make the grid editable.
+  const canLeadDepartment = (department) => Boolean(
+    planningLeadershipRole && auth?.canManagePlanningDepartment?.(department)
+  );
 
   const departments = useMemo(() => [...new Set(planningGrids.map((grid) => grid.department).filter(Boolean))], [planningGrids]);
 
@@ -586,7 +584,7 @@ const ProjectPlanningGrid = ({
                           const statusError = errors[`${gridIndex}-${taskIndex}-status`];
                           const status = effectiveStatus(task);
                           const taskSortableId = sortableTaskId(grid, task, taskIndex);
-                          const canChangeStatus = Boolean(projectId && (
+                          const canChangeStatus = Boolean(!readOnly && projectId && (
                             (currentAssigneeId && currentAssigneeId === currentUserId) || canManageGridStatus
                           ));
                           const statusUpdating = Boolean(updatingStatuses[`${gridIndex}-${taskIndex}-status`]);
@@ -710,7 +708,7 @@ const ProjectPlanningGrid = ({
                       const statusError = errors[`${gridIndex}-${taskIndex}-status`];
                       const status = effectiveStatus(task);
                       const taskSortableId = sortableTaskId(grid, task, taskIndex);
-                      const canChangeStatus = Boolean(projectId && (
+                      const canChangeStatus = Boolean(!readOnly && projectId && (
                         (currentAssigneeId && currentAssigneeId === currentUserId) || canManageGridStatus
                       ));
                       const statusUpdating = Boolean(updatingStatuses[`${gridIndex}-${taskIndex}-status`]);

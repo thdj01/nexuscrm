@@ -27,15 +27,16 @@ const {
   recalcAllDelays,
 } = require('../controllers/projectController');
 const { protect } = require('../middleware/authMiddleware');
-const { requirePermission, requireAnyPermission } = require('../middleware/permissionMiddleware');
+const {
+  requirePermission,
+  requireAnyPermission,
+  requireProjectLeadershipRole,
+} = require('../middleware/permissionMiddleware');
 const { PROJECT_PERMISSIONS } = require('../constants/permissions');
 
 const PROJECT_UPDATE_PERMISSIONS = [
   PROJECT_PERMISSIONS.EDIT,
   PROJECT_PERMISSIONS.PLANNING_GRID,
-  PROJECT_PERMISSIONS.ADD_DUPLICATE_PLANNING_GRID,
-  PROJECT_PERMISSIONS.UPDATE_COMPLETION,
-  PROJECT_PERMISSIONS.MARK_COMPLETED,
 ];
 
 const requirePlanningReorderRole = (req, res, next) => {
@@ -52,6 +53,7 @@ router.use(protect);
 
 router.post(
   '/convert/:inquiryId',
+  requireProjectLeadershipRole,
   requirePermission(PROJECT_PERMISSIONS.CREATE),
   convertInquiryToProject
 );
@@ -83,16 +85,18 @@ router.get(
 
 router.post(
   '/planning-preview/recalculate',
+  requireProjectLeadershipRole,
   requirePermission(PROJECT_PERMISSIONS.PLANNING_GRID),
   recalculatePlanningPreview
 );
 
 router.route('/')
   .get(requirePermission(PROJECT_PERMISSIONS.VIEW), getProjects)
-  .post(requirePermission(PROJECT_PERMISSIONS.CREATE), createProject);
+  .post(requireProjectLeadershipRole, requirePermission(PROJECT_PERMISSIONS.CREATE), createProject);
 
 router.post(
   '/:id/copy',
+  requireProjectLeadershipRole,
   requirePermission(PROJECT_PERMISSIONS.CREATE),
   copyProject
 );
@@ -113,18 +117,21 @@ router.get(
 
 router.post(
   '/:id/planning-grids',
+  requireProjectLeadershipRole,
   requirePermission(PROJECT_PERMISSIONS.ADD_DUPLICATE_PLANNING_GRID),
   createSeparatePlanningGrid
 );
 
 router.post(
   '/:id/planning-grids/:gridId/tasks',
+  requireProjectLeadershipRole,
   requirePermission(PROJECT_PERMISSIONS.PLANNING_GRID),
   addPlanningTask
 );
 
 router.patch(
   '/:id/planning-grids/:gridId/tasks/reorder',
+  requireProjectLeadershipRole,
   requirePermission(PROJECT_PERMISSIONS.PLANNING_GRID),
   requirePlanningReorderRole,
   reorderPlanningTasks
@@ -132,18 +139,20 @@ router.patch(
 
 router.patch(
   '/:id/planning-grids/:gridId/tasks/:taskId/status',
-  requirePermission(PROJECT_PERMISSIONS.VIEW),
+  requireAnyPermission(PROJECT_PERMISSIONS.EDIT, PROJECT_PERMISSIONS.PLANNING_GRID),
   updatePlanningTaskStatus
 );
 
 router.patch(
   '/:id/planning-grids/:gridId/tasks/:taskId',
+  requireProjectLeadershipRole,
   requireAnyPermission(PROJECT_PERMISSIONS.PLANNING_GRID, PROJECT_PERMISSIONS.UPDATE_COMPLETION),
   updatePlanningTask
 );
 
 router.delete(
   '/:id/planning-grids/:gridId/tasks/:taskId',
+  requireProjectLeadershipRole,
   requirePermission(PROJECT_PERMISSIONS.PLANNING_GRID),
   removePlanningTask
 );

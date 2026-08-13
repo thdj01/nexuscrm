@@ -72,7 +72,7 @@ const App = () => (
                 <Route path="/projects/:id/documents/preview" element={<ProjectDocumentPreviewPage />} />
               </Route>
 
-              <Route element={<ProtectedRoute permission={PROJECT_PERMISSIONS.CREATE} />}>
+              <Route element={<ProtectedRoute roles={['admin', 'hod', 'manager', 'team_lead']} permission={PROJECT_PERMISSIONS.CREATE} />}>
                 <Route path="/projects/new" element={<ProjectDetailPage />} />
               </Route>
 

@@ -22,6 +22,7 @@ import {
   CUSTOMER_PERMISSION_OPTIONS,
   INQUIRY_PERMISSIONS,
   INQUIRY_PERMISSION_OPTIONS,
+  PROJECT_PERMISSIONS,
   PROJECT_PERMISSION_OPTIONS,
   UNIVERSAL_EMPLOYEE_PERMISSIONS,
 } from '../constants/permissions';
@@ -40,6 +41,12 @@ import {
 } from '../components/common/FormComponents';
 
 const ROLES = ['admin', 'hod', 'team_lead', 'employee'];
+const PROJECT_PLANNING_DEPARTMENTS = ['DESIGN', 'PRODUCTION', 'PURCHASE', 'AUTOMATION', 'STORE', 'QC'];
+const EMPLOYEE_RESTRICTED_PROJECT_PERMISSIONS = [
+  PROJECT_PERMISSIONS.CREATE,
+  PROJECT_PERMISSIONS.PLANNING_GRID,
+  PROJECT_PERMISSIONS.ADD_DUPLICATE_PLANNING_GRID,
+];
 
 const normalizeDepartmentOption = (department) => {
   if (!department) return null;
@@ -280,10 +287,15 @@ const getSuggestedEmployeeAccess = ({ role, department, hodDepartments = [] }, d
     ALL_CUSTOMER_PERMISSIONS.forEach((permission) => next.add(permission));
   }
 
-  if (departmentNames.some((name) => (
-    name === 'DESIGN' || name === 'AUTOMATION' || name === 'PRODUCTION'
-  ))) {
-    ALL_PROJECT_PERMISSIONS.forEach((permission) => next.add(permission));
+  if ((role === 'hod' || role === 'manager') && departmentNames.includes('AUTOMATION')) {
+    next.add(CUSTOMER_PERMISSIONS.VIEW);
+  }
+
+  if (departmentNames.some((name) => PROJECT_PLANNING_DEPARTMENTS.includes(name))) {
+    next.add(PROJECT_PERMISSIONS.VIEW);
+    if (role !== 'employee') {
+      ALL_PROJECT_PERMISSIONS.forEach((permission) => next.add(permission));
+    }
   }
 
   return ALL_EMPLOYEE_PERMISSIONS.filter((permission) => next.has(permission));
@@ -316,6 +328,14 @@ const normalizeEmployeeAccessDependencies = (permissions = []) => {
   }
 
   return ALL_EMPLOYEE_PERMISSIONS.filter((permission) => next.has(permission));
+};
+
+const normalizeEmployeeAccessForRole = (permissions = [], role = 'employee') => {
+  const normalized = normalizeEmployeeAccessDependencies(permissions);
+  if (role !== 'employee') return normalized;
+  return normalized.filter(
+    (permission) => !EMPLOYEE_RESTRICTED_PROJECT_PERMISSIONS.includes(permission)
+  );
 };
 
 const AccessChecklist = ({
@@ -425,12 +445,15 @@ const InquiryAccessChecklist = (props) => (
   />
 );
 
-const ProjectAccessChecklist = (props) => (
+const ProjectAccessChecklist = ({ employeeRole = false, ...props }) => (
   <AccessChecklist
     {...props}
     title="Project Employee Access"
-    description="View Project is available to all. DESIGN / AUTOMATION / PRODUCTION is the suggested owner for the remaining actions."
+    description="Design, Production, Purchase, Automation, Store, and QC can view planning grids. Employees can update only their assigned task status."
     options={PROJECT_PERMISSION_OPTIONS}
+    lockedKeys={employeeRole ? EMPLOYEE_RESTRICTED_PROJECT_PERMISSIONS : []}
+    lockedReason="Employees cannot create projects or change planning-grid structure."
+    footer={employeeRole ? 'Create Project, Project Planning Grid, and Add Duplicate Planning Grid are restricted to Admin, HOD, and Team Lead roles.' : undefined}
   />
 );
 
@@ -473,8 +496,9 @@ const UserForm = ({
         avatar: initialData.avatar ?? '',
         department: getDepartmentId(initialData.department) || initialData.department || '',
         hodDepartments: normalizeHodDepartments(initialData),
-        employeeAccess: normalizeEmployeeAccessDependencies(
-          initialData.employeeAccess ?? initialData.effectiveEmployeeAccess ?? []
+        employeeAccess: normalizeEmployeeAccessForRole(
+          initialData.employeeAccess ?? initialData.effectiveEmployeeAccess ?? [],
+          initialData.role ?? 'employee'
         ),
         isActive: initialData.isActive ?? true,
       });
@@ -542,7 +566,7 @@ const UserForm = ({
   const applySuggestedModuleAccess = (modulePermissions) => {
     setForm((prev) => {
       const suggested = new Set(getSuggestedEmployeeAccess(prev, departments));
-      const next = new Set(normalizeEmployeeAccessDependencies(prev.employeeAccess));
+      const next = new Set(normalizeEmployeeAccessForRole(prev.employeeAccess, prev.role));
 
       modulePermissions.forEach((permission) => next.delete(permission));
       modulePermissions.forEach((permission) => {
@@ -551,7 +575,7 @@ const UserForm = ({
 
       return {
         ...prev,
-        employeeAccess: normalizeEmployeeAccessDependencies([...next]),
+        employeeAccess: normalizeEmployeeAccessForRole([...next], prev.role),
       };
     });
   };
@@ -579,7 +603,7 @@ const UserForm = ({
       hodDepartments: form.hodDepartments,
       employeeAccess: form.role === 'admin'
         ? [...ALL_EMPLOYEE_PERMISSIONS]
-        : normalizeEmployeeAccessDependencies(form.employeeAccess),
+        : normalizeEmployeeAccessForRole(form.employeeAccess, form.role),
     };
 
     if (form.password) {
@@ -814,10 +838,14 @@ const UserForm = ({
           />
           <div className="mt-3">
             <ProjectAccessChecklist
-              value={form.role === 'admin' ? ALL_EMPLOYEE_PERMISSIONS : form.employeeAccess}
+              value={form.role === 'admin' ? ALL_EMPLOYEE_PERMISSIONS : normalizeEmployeeAccessForRole(form.employeeAccess, form.role)}
               disabled={form.role === 'admin'}
+              employeeRole={form.role === 'employee'}
               onApplySuggested={applySuggestedProjectAccess}
-              onChange={(employeeAccess) => setForm((prev) => ({ ...prev, employeeAccess }))}
+              onChange={(employeeAccess) => setForm((prev) => ({
+                ...prev,
+                employeeAccess: normalizeEmployeeAccessForRole(employeeAccess, prev.role),
+              }))}
             />
           </div>
           <div className="mt-3">

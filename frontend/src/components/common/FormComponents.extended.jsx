@@ -319,7 +319,7 @@ export const SearchableSelect = ({
         disabled={disabled}
         onClick={() => setOpen(!open)}
         onKeyDown={handleKeyDown}
-        className={`w-full flex items-center justify-between px-3 py-2 text-base sm:text-sm border rounded-lg bg-white focus:outline-none focus:ring-2 focus:ring-blue-500 disabled:bg-gray-50 disabled:text-gray-400 text-left
+        className={`w-full flex items-center justify-between px-3 py-2 text-base sm:text-sm border rounded-lg bg-white focus:outline-none focus:ring-2 focus:ring-blue-500 disabled:cursor-not-allowed disabled:border-slate-200 disabled:!bg-slate-100 disabled:!text-slate-400 disabled:opacity-75 disabled:shadow-none disabled:focus:ring-0 text-left
           ${error ? 'border-red-400' : 'border-gray-300'}
           ${!selectedLabel ? 'text-gray-400' : 'text-gray-800'}`}
       >
@@ -469,7 +469,7 @@ export const MultiCheckSelect = ({
         onClick={() => !disabled && setOpen((current) => !current)}
         onKeyDown={handleTriggerKeyDown}
         className={`min-h-[40px] w-full px-3 py-1.5 text-base sm:text-sm border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 flex flex-wrap gap-1 items-center
-          ${disabled ? 'cursor-not-allowed bg-gray-50 text-gray-400' : 'cursor-pointer bg-white'}
+          ${disabled ? 'cursor-not-allowed border-slate-200 !bg-slate-100 !text-slate-400 opacity-75 shadow-none' : 'cursor-pointer bg-white'}
           ${error ? 'border-red-400' : 'border-gray-300'}`}
       >
         {selectedValues.length === 0 && (

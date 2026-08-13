@@ -96,6 +96,16 @@ const HOLD_REASONS = ['Due to Customer', 'Specification', 'Technical', 'Commerci
 
 const normalizeInquiryStatus = (status = '') => LEGACY_STATUS_MAP[status] || status || 'New';
 
+const parseMultiValueQuery = (value) => {
+  const source = Array.isArray(value) ? value : [value];
+  return Array.from(new Set(
+    source
+      .flatMap((item) => String(item || '').split(','))
+      .map((item) => item.trim())
+      .filter(Boolean)
+  ));
+};
+
 const denyMissingPermission = (res, permission) => res.status(403).json({
   success: false,
   message: `Access denied. Missing permission: ${permission}`,
@@ -877,12 +887,45 @@ const sanitizeRioBoxDetails = (details = {}) => ({
 });
 
 const buildStatusQuery = (status) => {
-  const normalized = normalizeInquiryStatus(status);
-  const aliases = Object.entries(LEGACY_STATUS_MAP)
-    .filter(([, mapped]) => mapped === normalized)
-    .map(([legacy]) => legacy);
+  const requestedStatuses = parseMultiValueQuery(status)
+    .map(normalizeInquiryStatus)
+    .filter((value) => FINAL_INQUIRY_STATUSES.includes(value));
 
-  return aliases.length > 0 ? { $in: [normalized, ...aliases] } : normalized;
+  const acceptedStatuses = new Set();
+  requestedStatuses.forEach((normalized) => {
+    acceptedStatuses.add(normalized);
+    Object.entries(LEGACY_STATUS_MAP)
+      .filter(([, mapped]) => mapped === normalized)
+      .forEach(([legacy]) => acceptedStatuses.add(legacy));
+  });
+
+  return { $in: [...acceptedStatuses] };
+};
+
+const buildPanelTypeFilter = (value) => {
+  const panelTypes = parseMultiValueQuery(value)
+    .map(normalizePanelType)
+    .filter((panelType) => ALLOWED_PANEL_TYPES.includes(panelType));
+
+  if (panelTypes.length === 0) return null;
+
+  const legacyProductTypes = panelTypes
+    .map((panelType) => ({
+      PLC: 'PLC',
+      MCC: 'MCC',
+      'MCC cum PLC': 'PLC_MCC',
+      VFD: 'VFD',
+    })[panelType])
+    .filter(Boolean);
+
+  return {
+    $or: [
+      { panelTypes: { $in: panelTypes } },
+      ...(legacyProductTypes.length > 0
+        ? [{ productType: { $in: Array.from(new Set(legacyProductTypes)) } }]
+        : []),
+    ],
+  };
 };
 
 const getExistingStatusDetails = (inquiry) => {
@@ -1053,13 +1096,21 @@ const getInquiries = async (req, res, next) => {
   try {
     const {
       page = 1, limit = 10,
-      search, status, productType, inquiryType, customerRef, createdBy, financialYear,
+      search, status, statuses, panelTypes, productType, inquiryType,
+      customerRef, createdBy, financialYear,
     } = req.query;
 
     const query = {};
     applyFinancialYearFilter(query, financialYear);
-    if (status)      query.status      = buildStatusQuery(status);
-    if (productType) query.productType = buildProductTypeQuery(productType);
+    const requestedStatuses = statuses || status;
+    if (requestedStatuses) {
+      const statusQuery = buildStatusQuery(requestedStatuses);
+      if (statusQuery.$in.length > 0) query.status = statusQuery;
+    }
+
+    const panelTypeFilter = buildPanelTypeFilter(panelTypes);
+    if (panelTypeFilter) query.$and = [...(query.$and || []), panelTypeFilter];
+    else if (productType) query.productType = buildProductTypeQuery(productType);
     if (inquiryType) query.inquiryType = inquiryType;
     if (customerRef && mongoose.Types.ObjectId.isValid(customerRef)) {
       query.customerRef = customerRef;
@@ -1442,6 +1493,7 @@ const createInquiry = async (req, res, next) => {
 
     await dispatchNotificationsToUsers({
       users: inquiryRecipients,
+      excludeUserIds: [req.user._id],
       title: 'New Inquiry Added',
       message: dashboardMessages.inquiryCreated(data),
       type: 'info',

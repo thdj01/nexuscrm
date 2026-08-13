@@ -53,22 +53,24 @@ const ProjectDetailPage = () => {
   const location = useLocation();
   const navigate = useNavigate();
   const toast = useToast();
-  const { hasPermission, hasAnyPermission } = useAuth();
+  const { hasPermission, hasAnyPermission, user } = useAuth();
 
   const isNewProject = location.pathname === '/projects/new' || id === 'new';
-  const canCreateProject = hasPermission(PROJECT_PERMISSIONS.CREATE);
+  const isProjectLeadership = ['admin', 'hod', 'manager', 'team_lead'].includes(user?.role);
+  const canCreateProject = isProjectLeadership && hasPermission(PROJECT_PERMISSIONS.CREATE);
   const canEditProject = hasPermission(PROJECT_PERMISSIONS.EDIT);
   const canManagePlanning = hasPermission(PROJECT_PERMISSIONS.PLANNING_GRID);
   const canAddPlanningGrid = hasPermission(PROJECT_PERMISSIONS.ADD_DUPLICATE_PLANNING_GRID);
   const canUpdateCompletion = hasPermission(PROJECT_PERMISSIONS.UPDATE_COMPLETION);
   const canMarkCompleted = hasPermission(PROJECT_PERMISSIONS.MARK_COMPLETED);
-  const canOpenProjectEditor = hasAnyPermission([
-    PROJECT_PERMISSIONS.EDIT,
-    PROJECT_PERMISSIONS.PLANNING_GRID,
-    PROJECT_PERMISSIONS.ADD_DUPLICATE_PLANNING_GRID,
-    PROJECT_PERMISSIONS.UPDATE_COMPLETION,
-    PROJECT_PERMISSIONS.MARK_COMPLETED,
-  ]);
+  const canOpenProjectEditor = canEditProject || (
+    isProjectLeadership && hasAnyPermission([
+      PROJECT_PERMISSIONS.PLANNING_GRID,
+      PROJECT_PERMISSIONS.ADD_DUPLICATE_PLANNING_GRID,
+      PROJECT_PERMISSIONS.UPDATE_COMPLETION,
+      PROJECT_PERMISSIONS.MARK_COMPLETED,
+    ])
+  );
   const startsEditable = isNewProject
     ? canCreateProject
     : location.pathname.endsWith('/edit') && canOpenProjectEditor;
@@ -261,7 +263,7 @@ const ProjectDetailPage = () => {
           ? 'Project created and documents uploaded successfully'
           : 'Project created successfully'
       );
-      navigate(createdProjectId ? `/projects/${createdProjectId}` : '/projects');
+      navigate('/projects', { replace: true });
       return true;
     } catch (err) {
       toast.error(err.response?.data?.message || 'Failed to create project');
@@ -280,7 +282,7 @@ const ProjectDetailPage = () => {
       toast.success('Project updated successfully');
       setProject({ ...updated, ...computeDelay(updated) });
       setReadOnly(true);
-      navigate(`/projects/${project._id}`, { replace: true });
+      navigate('/projects', { replace: true });
       return true;
     } catch (err) {
       toast.error(err.response?.data?.message || 'Failed to update project');

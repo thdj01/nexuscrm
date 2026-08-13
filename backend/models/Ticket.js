@@ -341,7 +341,7 @@ const ticketSchema = new mongoose.Schema(
       type: String,
       trim: true,
       required: [true, 'Contact number is required'],
-      maxlength: [20, 'Contact number cannot exceed 20 characters'],
+      match: [/^\d{10}$/, 'Contact number must contain exactly 10 digits'],
     },
 
 

@@ -1,8 +1,30 @@
 import React, { createContext, useContext, useEffect, useState } from 'react';
 import API from '../api/axios';
-import { PROJECT_PERMISSIONS, UNIVERSAL_EMPLOYEE_PERMISSIONS } from '../constants/permissions';
+import {
+  CUSTOMER_PERMISSIONS,
+  PROJECT_PERMISSIONS,
+  UNIVERSAL_EMPLOYEE_PERMISSIONS,
+} from '../constants/permissions';
 
 const AuthContext = createContext(null);
+
+const PROJECT_PLANNING_DEPARTMENTS = new Set([
+  'DESIGN',
+  'PRODUCTION',
+  'PURCHASE',
+  'AUTOMATION',
+  'STORE',
+  'QC',
+]);
+
+const PROJECT_MANAGEMENT_PERMISSIONS = new Set([
+  PROJECT_PERMISSIONS.CREATE,
+  PROJECT_PERMISSIONS.EDIT,
+  PROJECT_PERMISSIONS.PLANNING_GRID,
+  PROJECT_PERMISSIONS.ADD_DUPLICATE_PLANNING_GRID,
+  PROJECT_PERMISSIONS.UPDATE_COMPLETION,
+  PROJECT_PERMISSIONS.MARK_COMPLETED,
+]);
 
 const safelyParseUser = () => {
   try {
@@ -118,10 +140,49 @@ export const AuthProvider = ({ children }) => {
     PROJECT_PERMISSIONS.UPDATE_COMPLETION,
   ];
 
+  const employeeRestrictedProjectPermissions = [
+    PROJECT_PERMISSIONS.CREATE,
+    PROJECT_PERMISSIONS.PLANNING_GRID,
+    PROJECT_PERMISSIONS.ADD_DUPLICATE_PLANNING_GRID,
+  ];
+
+  const departmentNames = [
+    user?.departmentName,
+    user?.departmentCode,
+    ...(Array.isArray(user?.hodDepartmentNames) ? user.hodDepartmentNames : []),
+    ...(Array.isArray(user?.hodDepartmentInfo)
+      ? user.hodDepartmentInfo.flatMap((department) => [department?.name, department?.code])
+      : []),
+  ]
+    .map((value) => String(value || '').trim().toUpperCase())
+    .filter(Boolean);
+  const managedDepartmentNames = new Set(departmentNames);
+  const hasPlanningDepartmentParticipation = departmentNames.some(
+    (department) => PROJECT_PLANNING_DEPARTMENTS.has(department)
+  );
+  const hasPlanningDepartmentAuthority = isAdmin || (
+    isManager && hasPlanningDepartmentParticipation
+  );
+  const isAutomationHod = (isHod || isManagerRole) && departmentNames.includes('AUTOMATION');
+
+  const canManagePlanningDepartment = (department) => {
+    if (isAdmin) return true;
+    if (!isManager) return false;
+    return managedDepartmentNames.has(String(department || '').trim().toUpperCase());
+  };
+
   const hasPermission = (permission) => {
     if (!permission || !user) return false;
     if (isAdmin) return true;
-    if (isManager && planningLeadershipPermissions.includes(permission)) return true;
+    // Sales/Estimation and other non-planning departments have Project View
+    // only. This also neutralizes stale project-management checkboxes saved on
+    // accounts before department-aware planning access was enforced.
+    if (PROJECT_MANAGEMENT_PERMISSIONS.has(permission) && !hasPlanningDepartmentParticipation) return false;
+    if (isEmployee && employeeRestrictedProjectPermissions.includes(permission)) return false;
+    if (isManager && planningLeadershipPermissions.includes(permission)) {
+      return hasPlanningDepartmentAuthority;
+    }
+    if (isAutomationHod && permission === CUSTOMER_PERMISSIONS.VIEW) return true;
     if (UNIVERSAL_EMPLOYEE_PERMISSIONS.includes(permission)) return true;
     return Array.isArray(user.employeeAccess) && user.employeeAccess.includes(permission);
   };
@@ -142,6 +203,8 @@ export const AuthProvider = ({ children }) => {
         refreshAuthUser,
         hasPermission,
         hasAnyPermission,
+        canManagePlanningDepartment,
+        hasPlanningDepartmentAuthority,
         isAdmin,
         isHod,
         isTeamLead,

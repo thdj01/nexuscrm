@@ -108,18 +108,20 @@ const formatKickoffAttendees = (attendees = []) => {
 const ProjectsPage = () => {
   const toast = useToast();
   const navigate = useNavigate();
-  const { hasPermission, hasAnyPermission } = useAuth();
+  const { hasPermission, hasAnyPermission, user } = useAuth();
   const [searchParams, setSearchParams] = useSearchParams();
 
-  const canCreateProject = hasPermission(PROJECT_PERMISSIONS.CREATE);
+  const isProjectLeadership = ['admin', 'hod', 'manager', 'team_lead'].includes(user?.role);
+  const canCreateProject = isProjectLeadership && hasPermission(PROJECT_PERMISSIONS.CREATE);
   const canManagePlanning = hasPermission(PROJECT_PERMISSIONS.PLANNING_GRID);
-  const canOpenProjectEditor = hasAnyPermission([
-    PROJECT_PERMISSIONS.EDIT,
-    PROJECT_PERMISSIONS.PLANNING_GRID,
-    PROJECT_PERMISSIONS.ADD_DUPLICATE_PLANNING_GRID,
-    PROJECT_PERMISSIONS.UPDATE_COMPLETION,
-    PROJECT_PERMISSIONS.MARK_COMPLETED,
-  ]);
+  const canOpenProjectEditor = hasPermission(PROJECT_PERMISSIONS.EDIT) || (
+    isProjectLeadership && hasAnyPermission([
+      PROJECT_PERMISSIONS.PLANNING_GRID,
+      PROJECT_PERMISSIONS.ADD_DUPLICATE_PLANNING_GRID,
+      PROJECT_PERMISSIONS.UPDATE_COMPLETION,
+      PROJECT_PERMISSIONS.MARK_COMPLETED,
+    ])
+  );
 
   const [projects, setProjects] = useState([]);
   const [pagination, setPagination] = useState({ page: 1, pages: 1, total: 0, limit: 50 });

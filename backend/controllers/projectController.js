@@ -34,8 +34,8 @@ const { dispatchNotificationsToUsers } = require('../services/userNotificationDi
 const {
   combineUsers,
   getAdminUsers,
+  getAllDepartmentLeadershipUsers,
   getDepartmentLeadershipUsers,
-  getProjectDepartmentUsers,
 } = require('../services/notificationRecipientService');
 const {
   syncProjectTasksToTimesheet,
@@ -70,6 +70,7 @@ const {
   initialTasksForDepartment,
   panelSelectionKey,
   assertPlanningStartDateAllowed,
+  assertProjectDetailDateAllowed,
 } = require('../utils/projectPlanning');
 
 const PLANNING_LEADERSHIP_ROLES = new Set(['admin', 'hod', 'manager', 'team_lead']);
@@ -557,11 +558,15 @@ async function notifyAndLog({ projectDbId, projectId, projectName, userId, userN
 }
 
 
-async function notifyProjectCreatedStakeholders(project = {}, actingUserName = 'User') {
+async function notifyProjectCreatedStakeholders(
+  project = {},
+  actingUserName = 'User',
+  { sendInApp = true, sendEmail = true, sendWhatsApp = true, actorId = null } = {}
+) {
   const creatorId = project.createdBy?._id || project.createdBy;
-  const [adminUsers, departmentUsers, creatorUser] = await Promise.all([
+  const [adminUsers, leadershipUsers, creatorUser] = await Promise.all([
     getAdminUsers(),
-    getProjectDepartmentUsers(project),
+    getAllDepartmentLeadershipUsers(),
     creatorId && mongoose.Types.ObjectId.isValid(String(creatorId))
       ? User.findOne({ _id: creatorId, isActive: { $ne: false } })
           .select('_id name email phone mobileNumber whatsappNumber mobile role department hodDepartments teamId')
@@ -570,17 +575,21 @@ async function notifyProjectCreatedStakeholders(project = {}, actingUserName = '
   ]);
   const recipients = combineUsers(
     adminUsers,
-    departmentUsers,
+    leadershipUsers,
     creatorUser ? [creatorUser] : []
   );
   const projectMessage = buildProjectCreatedWhatsAppMessage(project);
 
   return dispatchNotificationsToUsers({
     users: recipients,
+    excludeUserIds: [actorId],
     title: `New Project Created - ${project.projectId || 'Project'}`,
     message: `${actingUserName || 'A user'} created project ${project.projectId || '-'} - ${project.projectName || '-'} for ${project.customerName || '-'}.`,
     type: 'project_created',
     relatedProject: project._id,
+    sendInApp,
+    sendEmail,
+    sendWhatsApp,
     emailSubject: `New Project Created - ${project.projectId || 'Project'}`,
     emailHtml: (user) => buildProjectCreatedEmailHtml(project, user?.name || 'Team Member'),
     whatsappMessage: projectMessage,
@@ -798,8 +807,6 @@ async function notifyAssignments(oldProject, newBody, projectDbId, projectId, pr
     .select('name email phone whatsappNumber mobileNumber mobile')
     .lean();
   const userMap = new Map(users.map((user) => [String(user._id), user]));
-  const adminUsers = await getAdminUsers();
-
   const promises = [];
 
   for (const [assigneeId, tasks] of taskAssignmentsByUser.entries()) {
@@ -832,26 +839,35 @@ async function notifyAssignments(oldProject, newBody, projectDbId, projectId, pr
     const departmentLeadership = await getDepartmentLeadershipUsers(
       tasks.map((task) => task.department).filter(Boolean)
     );
-    const oversightUsers = combineUsers(adminUsers, departmentLeadership)
-      .filter((recipient) => String(recipient?._id || '') !== String(assigneeId));
+    // Routine task assignment messages belong to the assignee and that
+    // department's leadership. Admins still receive project-level events, but
+    // are not copied on every task assignment/update.
+    const oversightUsers = combineUsers(departmentLeadership)
+      .filter((recipient) => (
+        String(recipient?._id || '') !== String(assigneeId)
+        && String(recipient?._id || '') !== String(actingUserId || '')
+      ));
 
     // Dashboard notification is independent from WhatsApp. A user must still
     // receive the assignment notification even when WhatsApp is disabled,
     // disconnected, or the user's phone number is missing.
-    promises.push(
-      createNotification({
-        title: `New task assignment - ${projectId || 'Project'}`,
-        message: inAppMessage,
-        type: 'info',
-        recipient: assigneeId,
-        relatedProject: projectDbId,
-      })
-    );
+    if (String(assigneeId) !== String(actingUserId || '')) {
+      promises.push(
+        createNotification({
+          title: `New task assignment - ${projectId || 'Project'}`,
+          message: inAppMessage,
+          type: 'info',
+          recipient: assigneeId,
+          relatedProject: projectDbId,
+        })
+      );
+    }
 
-    if (user?.email) {
+    if (user?.email && String(assigneeId) !== String(actingUserId || '')) {
       promises.push(
         dispatchNotificationsToUsers({
           users: [user],
+          excludeUserIds: [actingUserId],
           title: `New task assignment - ${projectId || 'Project'}`,
           message: inAppMessage,
           relatedProject: projectDbId,
@@ -872,6 +888,7 @@ async function notifyAssignments(oldProject, newBody, projectDbId, projectId, pr
       promises.push(
         dispatchNotificationsToUsers({
           users: oversightUsers,
+          excludeUserIds: [actingUserId],
           title: `Task Assigned - ${projectId || 'Project'}`,
           message: `${actingUserName || 'A project planner'} assigned ${userName} ${tasks.length} task${tasks.length === 1 ? '' : 's'} in project ${projectId || '-'} - ${projectName || '-'}.`,
           type: 'info',
@@ -898,8 +915,8 @@ async function notifyAssignments(oldProject, newBody, projectDbId, projectId, pr
         userId: actingUserId,
         userName: actingUserName,
         message: groupMsg,
-        personalMsg,
-        phone,
+        personalMsg: String(assigneeId) === String(actingUserId || '') ? null : personalMsg,
+        phone: String(assigneeId) === String(actingUserId || '') ? '' : phone,
       })
     );
   }
@@ -1271,6 +1288,15 @@ function validateIncomingPlanningStartDates(input = {}, oldProject = {}) {
         existingValue: oldTaskDateMap.get(key),
       });
     });
+  });
+}
+
+function validateIncomingProjectDetailDates(input = {}, oldProject = {}) {
+  if (!Object.prototype.hasOwnProperty.call(input, 'orderDate') || !input.orderDate) return;
+
+  assertProjectDetailDateAllowed(input.orderDate, {
+    existingValue: oldProject.orderDate,
+    fieldName: 'Order Date',
   });
 }
 
@@ -2669,6 +2695,7 @@ const assertProjectUpdatePermissions = (user, oldProject, body, options = {}) =>
 // ── Create project ────────────────────────────────────────────────────────────
 const createProject = async (req, res, next) => {
   try {
+    validateIncomingProjectDetailDates(req.body, {});
     validateIncomingPlanningStartDates(req.body, {});
     const body = sanitizeProjectPayload(req.body);
     assertTaskStartDateRole(req.user, {}, body);
@@ -2723,6 +2750,20 @@ const createProject = async (req, res, next) => {
     // non-critical side effects and must never keep the Create Project request
     // loading indefinitely when an external integration is slow or disconnected.
     const responseProject = populated || project;
+
+    // Dashboard delivery is part of project creation: persist it before the
+    // response so Admin and every active HOD/TL see the project immediately.
+    // Outlook and WhatsApp remain background work because they can be slow.
+    try {
+      await notifyProjectCreatedStakeholders(responseProject, req.user.name, {
+        sendInApp: true,
+        sendEmail: false,
+        sendWhatsApp: false,
+        actorId: req.user._id,
+      });
+    } catch (notificationError) {
+      console.error('[projectController] Dashboard project-created notification failed:', notificationError?.message || notificationError);
+    }
     res.status(201).json({ success: true, data: toPlainProjectResponse(responseProject) });
 
     const actingUser = {
@@ -2734,7 +2775,12 @@ const createProject = async (req, res, next) => {
       try {
         const groupMsg = buildProjectCreatedWhatsAppMessage(project);
         await Promise.allSettled([
-          notifyProjectCreatedStakeholders(responseProject, actingUser.name),
+          notifyProjectCreatedStakeholders(responseProject, actingUser.name, {
+            sendInApp: false,
+            sendEmail: true,
+            sendWhatsApp: true,
+            actorId: actingUser.id,
+          }),
           notifyAssignments(
             { assignedTo: null, planningTasks: [] },
             body,
@@ -2831,6 +2877,17 @@ const copyProject = async (req, res, next) => {
 
     const responseProject = toPlainProjectResponse(populated || copied);
 
+    try {
+      await notifyProjectCreatedStakeholders(populated || copied, req.user?.name || 'User', {
+        sendInApp: true,
+        sendEmail: false,
+        sendWhatsApp: false,
+        actorId: req.user?._id,
+      });
+    } catch (notificationError) {
+      console.error('[projectController] Dashboard copied-project notification failed:', notificationError?.message || notificationError);
+    }
+
     res.status(201).json({
       success: true,
       data: responseProject,
@@ -2838,7 +2895,12 @@ const copyProject = async (req, res, next) => {
     });
 
     setImmediate(() => {
-      notifyProjectCreatedStakeholders(populated || copied, req.user?.name || 'User')
+      notifyProjectCreatedStakeholders(populated || copied, req.user?.name || 'User', {
+        sendInApp: false,
+        sendEmail: true,
+        sendWhatsApp: true,
+        actorId: req.user?._id,
+      })
         .catch((error) => console.error('[projectController] Copy notification failed:', error?.message || error));
     });
   } catch (error) { next(error); }
@@ -2851,6 +2913,7 @@ const updateProject = async (req, res, next) => {
     if (!oldProject)
       return res.status(404).json({ success: false, message: 'Project not found' });
 
+    validateIncomingProjectDetailDates(req.body, oldProject);
     validateIncomingPlanningStartDates(req.body, oldProject);
     const body = sanitizeProjectPayload(req.body, { partial: true });
     preserveStoredStatusesForDerivedDelay(oldProject, body);

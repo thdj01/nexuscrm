@@ -39,7 +39,7 @@ const Modal = ({
   );
 
   const modalContent = (
-    <div className={`fixed ${offsetClass} z-50 overflow-y-auto`}>
+    <div className={`fixed ${offsetClass} z-[1200] overflow-y-auto`}>
       <div className={`fixed ${offsetClass} bg-black/50 transition-opacity`} onClick={onClose} />
       <div className={`flex min-h-full items-start justify-center p-3 sm:p-4 ${topOffset === 'topbar' ? 'py-4' : 'py-6 sm:py-8'}`}>
         <div className={`relative bg-white rounded-xl shadow-2xl w-full ${sizeClass} fade-in ${panelClassName}`}>

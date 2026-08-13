@@ -10,6 +10,50 @@ body {
   background-color: #f1f5f9;
 }
 
+/*
+ * One consistent visual language for controls the current user cannot edit.
+ * Keep values readable, but make the read-only state obvious before the user
+ * tries to change anything. Native `disabled` still provides the interaction
+ * lock; these rules are presentation only.
+ */
+:where(input:not([type='checkbox']):not([type='radio']), select, textarea):disabled {
+  cursor: not-allowed !important;
+  border-color: #e2e8f0 !important;
+  background-color: #f1f5f9 !important;
+  color: #94a3b8 !important;
+  opacity: 0.75 !important;
+  box-shadow: none !important;
+  filter: saturate(0.35);
+}
+
+:where(input:not([type='checkbox']):not([type='radio']), select, textarea):disabled::placeholder {
+  color: #cbd5e1 !important;
+}
+
+:where(input[type='checkbox'], input[type='radio']):disabled {
+  cursor: not-allowed !important;
+  opacity: 0.45 !important;
+  filter: grayscale(1);
+}
+
+label:has(> input[type='checkbox']:disabled),
+label:has(> input[type='radio']:disabled) {
+  cursor: not-allowed !important;
+  border-color: #e2e8f0 !important;
+  background-color: #f1f5f9 !important;
+  color: #94a3b8 !important;
+  opacity: 0.75;
+}
+
+[aria-disabled='true'] {
+  cursor: not-allowed !important;
+  border-color: #e2e8f0 !important;
+  background-color: #f1f5f9 !important;
+  color: #94a3b8 !important;
+  opacity: 0.75 !important;
+  box-shadow: none !important;
+}
+
 /* Scrollbar styling */
 ::-webkit-scrollbar {
   width: 6px;

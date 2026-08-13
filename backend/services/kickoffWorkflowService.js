@@ -7,6 +7,7 @@ const Customer = require('../models/Customer');
 const User = require('../models/User');
 const ProjectActivityLog = require('../models/ProjectActivityLog');
 const KickoffWorkflow = require('../models/KickoffWorkflow');
+const { assertUserCanCompleteKickoff } = require('./inquiryAccessService');
 const sendOutlookNotification = require('./outlookService');
 const {
   sendWhatsAppNotification,
@@ -17,8 +18,8 @@ const { dispatchNotificationsToUsers } = require('./userNotificationDispatchServ
 const {
   combineUsers,
   getAdminUsers,
+  getAllDepartmentLeadershipUsers,
   getSalesLeadershipUsers,
-  getProjectDepartmentUsers,
   idString,
 } = require('./notificationRecipientService');
 
@@ -307,6 +308,7 @@ async function sendKickoffNotifications({ inquiry, workflow, attendees, schedule
 
   await dispatchNotificationsToUsers({
     users: internalRecipients,
+    excludeUserIds: [scheduledBy?._id || scheduledBy?.id],
     title: `Kick-off Meeting Scheduled - ${inquiry.inquiryId || 'Inquiry'}`,
     message: `Kick-off Meeting for inquiry ${inquiry.inquiryId || '-'} was scheduled by ${kickoffScheduledByName}.`,
     type: 'kickoff_scheduled',
@@ -798,24 +800,25 @@ async function createProjectFromWorkflow(workflow, convertedBy = {}) {
   return project;
 }
 
-async function notifyProjectCreated({ project, inquiry, workflow, convertedByName }) {
+async function notifyProjectCreated({ project, inquiry, workflow, convertedByName, convertedById }) {
   const message = buildProjectCreatedMessage(project, inquiry, workflow, convertedByName);
 
   await sendWhatsAppGroupNotification(message);
 
   const attendeeIds = (workflow.attendees || []).map((item) => item?._id || item);
-  const [attendeeDocs, adminUsers, salesLeadershipUsers, departmentUsers] = await Promise.all([
+  const [attendeeDocs, adminUsers, salesLeadershipUsers, leadershipUsers] = await Promise.all([
     User.find({ _id: { $in: attendeeIds }, isActive: { $ne: false } })
       .select('_id name email phone mobileNumber whatsappNumber mobile role department hodDepartments teamId')
       .lean(),
     getAdminUsers(),
     getSalesLeadershipUsers(),
-    getProjectDepartmentUsers(project),
+    getAllDepartmentLeadershipUsers(),
   ]);
-  const recipients = combineUsers(attendeeDocs, adminUsers, salesLeadershipUsers, departmentUsers);
+  const recipients = combineUsers(attendeeDocs, adminUsers, salesLeadershipUsers, leadershipUsers);
 
   await dispatchNotificationsToUsers({
     users: recipients,
+    excludeUserIds: [convertedById],
     title: 'Project Created After Kick-off Meeting',
     message: dashboardMessages.projectCreatedAfterKickoff(project, convertedByName),
     type: 'project_created',
@@ -837,7 +840,7 @@ async function notifyProjectCreated({ project, inquiry, workflow, convertedByNam
     channel: 'System',
     recipientType: 'Internal Team',
     status: 'Sent',
-    message: `Admin, Sales leadership, assigned attendees and selected planning departments, if any, notified (${recipients.length} users)`,
+    message: `Admin, all department HOD/TL users, Sales leadership and assigned attendees notified (${recipients.length} users)`,
   });
   await workflow.save();
 }
@@ -853,6 +856,8 @@ async function completeKickoffMeetingAndCreateProject({ inquiryId, user }) {
     err.statusCode = 404;
     throw err;
   }
+
+  await assertUserCanCompleteKickoff(user, workflow.inquiry);
 
   if (workflow.status === 'Project Created' && workflow.projectReference) {
     const err = new Error('Project has already been created for this kickoff workflow');
@@ -891,7 +896,7 @@ async function completeKickoffMeetingAndCreateProject({ inquiryId, user }) {
   const inquiry = await Inquiry.findById(workflow.inquiry);
   const convertedByName = await getActionUserName(user, workflow.updatedBy);
   const project = await createProjectFromWorkflow(workflow, user);
-  await notifyProjectCreated({ project, inquiry, workflow, convertedByName });
+  await notifyProjectCreated({ project, inquiry, workflow, convertedByName, convertedById: user?._id || user?.id || workflow.updatedBy });
 
   return {
     workflow: await KickoffWorkflow.findById(workflow._id)

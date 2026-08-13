@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import {
   Plus,
@@ -10,6 +10,7 @@ import {
   Clock,
   Users,
   Check,
+  ChevronDown,
 } from 'lucide-react';
 
 import API from '../api/axios';
@@ -37,7 +38,6 @@ const STATUS_OPTIONS = [
   { value: 'Inquiry Hold', label: 'Inquiry Hold' },
 ];
 
-const STATUSES = STATUS_OPTIONS.map((option) => option.value);
 const getStatusLabel = (status = '') => {
   const normalized = normalizeInquiryStatus(status);
   return STATUS_OPTIONS.find((option) => option.value === normalized)?.label || normalized;
@@ -194,11 +194,13 @@ const FileDropInput = ({ file, onFileChange }) => {
   );
 };
 
-const PRODUCTS = [
-  { value: 'PLC', label: 'PLC' },
-  { value: 'MCC', label: 'MCC' },
-  { value: 'VFD', label: 'VFD' },
-  { value: 'PLC_MCC', label: 'MCC cum PLC' },
+const PANEL_TYPE_OPTIONS = [
+  { value: 'PLC', label: 'PLC Panel' },
+  { value: 'MCC', label: 'MCC Panel' },
+  { value: 'VFD', label: 'VFD Panel' },
+  { value: 'MCC cum PLC', label: 'MCC cum PLC Panel' },
+  { value: 'FLP', label: 'FLP Panel' },
+  { value: 'RIO Box', label: 'RI/O Box Panel' },
 ];
 
 const PANEL_TYPE_LABELS = {
@@ -265,6 +267,88 @@ const getPageSizeOptions = (total = 0, selectedLimit = 50) => {
   return [...new Set(options)].sort((a, b) => a - b);
 };
 
+const parseFilterValues = (value = '') => (
+  String(value || '')
+    .split(',')
+    .map((item) => item.trim())
+    .filter(Boolean)
+);
+
+const MultiSelectFilter = ({ label, options, values, onChange, className = '' }) => {
+  const [open, setOpen] = useState(false);
+  const rootRef = useRef(null);
+  const selected = new Set(values);
+
+  useEffect(() => {
+    if (!open) return undefined;
+
+    const closeOnOutsideClick = (event) => {
+      if (!rootRef.current?.contains(event.target)) setOpen(false);
+    };
+    const closeOnEscape = (event) => {
+      if (event.key === 'Escape') setOpen(false);
+    };
+
+    document.addEventListener('mousedown', closeOnOutsideClick);
+    document.addEventListener('keydown', closeOnEscape);
+    return () => {
+      document.removeEventListener('mousedown', closeOnOutsideClick);
+      document.removeEventListener('keydown', closeOnEscape);
+    };
+  }, [open]);
+
+  const buttonLabel = values.length === 0
+    ? label
+    : values.length === 1
+      ? options.find((option) => option.value === values[0])?.label || values[0]
+      : `${values.length} selected`;
+
+  const toggleValue = (value) => {
+    const next = selected.has(value)
+      ? values.filter((item) => item !== value)
+      : [...values, value];
+    onChange(next);
+  };
+
+  return (
+    <div ref={rootRef} className={`relative ${className}`}>
+      <button
+        type="button"
+        onClick={() => setOpen((current) => !current)}
+        aria-haspopup="listbox"
+        aria-expanded={open}
+        className="flex h-9 w-full items-center justify-between gap-2 rounded-lg border border-gray-300 bg-white px-3 text-left text-sm text-gray-700 outline-none transition focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20"
+      >
+        <span className="truncate">{buttonLabel}</span>
+        <ChevronDown size={14} className={`shrink-0 text-gray-400 transition-transform ${open ? 'rotate-180' : ''}`} />
+      </button>
+
+      {open && (
+        <div className="absolute left-0 z-50 mt-1 max-h-72 w-full min-w-[210px] overflow-y-auto rounded-lg border border-gray-200 bg-white p-1.5 shadow-xl" role="listbox" aria-multiselectable="true">
+          {options.map((option) => {
+            const checked = selected.has(option.value);
+            return (
+              <button
+                key={option.value}
+                type="button"
+                role="option"
+                aria-selected={checked}
+                onClick={() => toggleValue(option.value)}
+                className={`flex w-full items-center gap-2 rounded-md px-2.5 py-2 text-left text-sm ${checked ? 'bg-blue-50 font-semibold text-blue-700' : 'text-gray-700 hover:bg-gray-50'}`}
+              >
+                <span className={`flex h-4 w-4 shrink-0 items-center justify-center rounded border ${checked ? 'border-blue-600 bg-blue-600 text-white' : 'border-gray-300 bg-white'}`}>
+                  {checked && <Check size={11} strokeWidth={3} />}
+                </span>
+                <span>{option.label}</span>
+              </button>
+            );
+          })}
+        </div>
+      )}
+    </div>
+  );
+};
+
 const getInitialKickoffForm = () => ({
   date: '',
   time: '',
@@ -311,6 +395,43 @@ const getEntityId = (value) => {
   return String(value);
 };
 
+const isEstimationAccount = (account = {}) => {
+  const values = [
+    account.department,
+    account.departmentName,
+    account.departmentCode,
+    account.teamId?.name,
+    ...(Array.isArray(account.hodDepartmentNames) ? account.hodDepartmentNames : []),
+    ...(Array.isArray(account.hodDepartmentInfo)
+      ? account.hodDepartmentInfo.flatMap((department) => [department?.name, department?.code])
+      : []),
+  ];
+
+  return values.some((value) => {
+    const token = String(value || '').trim().toLowerCase().replace(/[^a-z0-9]/g, '');
+    return token === 'estimation' || token === 'estimator' ||
+      token.startsWith('estimation') || token.startsWith('estimator');
+  });
+};
+
+const isSalesAccount = (account = {}) => {
+  const values = [
+    account.department,
+    account.departmentName,
+    account.departmentCode,
+    account.teamId?.name,
+    ...(Array.isArray(account.hodDepartmentNames) ? account.hodDepartmentNames : []),
+    ...(Array.isArray(account.hodDepartmentInfo)
+      ? account.hodDepartmentInfo.flatMap((department) => [department?.name, department?.code])
+      : []),
+  ];
+
+  return values.some((value) => {
+    const token = String(value || '').trim().toLowerCase().replace(/[^a-z0-9]/g, '');
+    return token === 'sales' || token.startsWith('sales');
+  });
+};
+
 const getCreatedByName = (inquiry = {}) => {
   const createdBy = inquiry.createdBy;
   if (!createdBy || typeof createdBy === 'string') return '—';
@@ -327,6 +448,15 @@ const InquiriesPage = () => {
   const canEditInquiry = hasPermission(INQUIRY_PERMISSIONS.EDIT);
   const canManageFollowUp = hasPermission(INQUIRY_PERMISSIONS.FOLLOW_UP);
   const canCommercialSubmit = hasPermission(INQUIRY_PERMISSIONS.COMMERCIAL_SUBMIT);
+  const canCompleteKickoff = useCallback((inquiry = {}) => {
+    if (user?.role === 'admin' || isEstimationAccount(user)) return true;
+    const isSalesLeadership = ['hod', 'manager', 'team_lead'].includes(user?.role) &&
+      isSalesAccount(user);
+    if (isSalesLeadership) return true;
+    const currentUserId = getEntityId(user?._id || user?.id);
+    const creatorId = getEntityId(inquiry.createdBy);
+    return Boolean(currentUserId && creatorId && currentUserId === creatorId);
+  }, [user]);
   const canEditInquiryRecord = useCallback((inquiry = {}) => {
     if (!canEditInquiry) return false;
     if (typeof inquiry.canEdit === 'boolean') return inquiry.canEdit;
@@ -347,8 +477,8 @@ const InquiriesPage = () => {
   const [submitting, setSubmitting] = useState(false);
 
   const [search, setSearch] = useState('');
-  const [filterStatus, setFilterStatus] = useState(() => searchParams.get('status') || '');
-  const [filterProduct, setFilterProduct] = useState('');
+  const [filterStatuses, setFilterStatuses] = useState(() => parseFilterValues(searchParams.get('statuses') || searchParams.get('status')));
+  const [filterPanelTypes, setFilterPanelTypes] = useState(() => parseFilterValues(searchParams.get('panelTypes')));
   const [filterCreatedBy, setFilterCreatedBy] = useState(() => searchParams.get('createdBy') || '');
   const [creatorOptions, setCreatorOptions] = useState([]);
   const [financialYear, setFinancialYear] = useState(() => searchParams.get('financialYear') || getStoredFinancialYear() || getCurrentFinancialYear());
@@ -381,8 +511,8 @@ const InquiriesPage = () => {
     try {
       const params = { page, limit };
       if (search) params.search = search;
-      if (filterStatus) params.status = filterStatus;
-      if (filterProduct) params.productType = filterProduct;
+      if (filterStatuses.length > 0) params.statuses = filterStatuses.join(',');
+      if (filterPanelTypes.length > 0) params.panelTypes = filterPanelTypes.join(',');
       if (filterCreatedBy) params.createdBy = filterCreatedBy;
       if (financialYear) params.financialYear = financialYear;
 
@@ -400,7 +530,7 @@ const InquiriesPage = () => {
     } finally {
       setLoading(false);
     }
-  }, [page, limit, search, filterStatus, filterProduct, filterCreatedBy, financialYear, toast]);
+  }, [page, limit, search, filterStatuses, filterPanelTypes, filterCreatedBy, financialYear, toast]);
 
   useEffect(() => { fetchInquiries(); }, [fetchInquiries]);
   useEffect(() => {
@@ -420,7 +550,7 @@ const InquiriesPage = () => {
     setSearchParams(nextParams, { replace: true });
   };
 
-  useEffect(() => { setPage(1); }, [search, filterStatus, filterProduct, filterCreatedBy, financialYear, limit]);
+  useEffect(() => { setPage(1); }, [search, filterStatuses, filterPanelTypes, filterCreatedBy, financialYear, limit]);
 
   const fetchMeetingUsers = useCallback(async () => {
     try {
@@ -758,6 +888,10 @@ const InquiriesPage = () => {
 
   const handleKickoffMeetingDone = async () => {
     if (!pendingConversion) return;
+    if (!canCompleteKickoff(pendingConversion)) {
+      toast.error('Only Sales HOD/TL, the inquiry creator, an Estimation user, or an Admin can complete the kickoff');
+      return;
+    }
 
     if (!isKickoffTimeCompleted(pendingConversion)) {
       toast.error('Kick-off Meeting can be marked done only after the scheduled date/time is completed');
@@ -839,8 +973,8 @@ const InquiriesPage = () => {
 
   const clearFilters = () => {
     setSearch('');
-    setFilterStatus('');
-    setFilterProduct('');
+    setFilterStatuses([]);
+    setFilterPanelTypes([]);
     setFilterCreatedBy('');
   };
 
@@ -855,11 +989,14 @@ const InquiriesPage = () => {
       render: v => new Date(v).toLocaleDateString('en-IN'),
     },
     {
-      key: 'customerName', label: 'Customer',
+      key: 'customerName',
+      label: 'Customer / Project Name',
       render: (_v, row) => (
         <div>
           <p className="font-medium text-gray-800 text-sm">{getLiveCustomerName(row) || '—'}</p>
-          <p className="text-xs text-gray-400">{row.contactPerson || '—'}</p>
+          <p className="text-xs text-gray-400">
+            {row.projectName || row.projectReference?.projectName || '—'}
+          </p>
         </div>
       ),
     },
@@ -867,9 +1004,20 @@ const InquiriesPage = () => {
       key: 'createdBy',
       label: 'Created By',
       width: '150px',
-      render: (_value, row) => (
-        <span className="text-sm font-medium text-gray-700">{getCreatedByName(row)}</span>
-      ),
+      render: (_value, row) => {
+        const currentUserId = getEntityId(user?._id || user?.id);
+        const creatorId = getEntityId(row.createdBy);
+        const isCurrentUser = Boolean(currentUserId && creatorId && currentUserId === creatorId);
+
+        return (
+          <span className="text-sm font-medium text-gray-700">
+            {getCreatedByName(row)}
+            {isCurrentUser && (
+              <span className="ml-1 text-xs font-normal text-gray-400">(You)</span>
+            )}
+          </span>
+        );
+      },
     },
     { key: 'mobileNumber', label: 'Mobile', width: '120px' },
     {
@@ -975,7 +1123,7 @@ const InquiriesPage = () => {
             </span>
           )}
 
-          {canEditRow && isOrderWonStatus(row.status) && !row.convertedToProject && isKickoffScheduledOrReady(row) && (
+          {(canEditRow || canCompleteKickoff(row)) && isOrderWonStatus(row.status) && !row.convertedToProject && isKickoffScheduledOrReady(row) && (
             <button
               type="button"
               onClick={(e) => {
@@ -1004,7 +1152,7 @@ const InquiriesPage = () => {
   ];
 
   const limitOptions = getPageSizeOptions(pagination?.total || 0, limit);
-  const hasFilters = search || filterStatus || filterProduct || filterCreatedBy;
+  const hasFilters = search || filterStatuses.length > 0 || filterPanelTypes.length > 0 || filterCreatedBy;
   const existingKickoffUsers = Array.isArray(pendingConversion?.kickoffMeeting?.attendees)
     ? pendingConversion.kickoffMeeting.attendees.filter(user => typeof user === 'object' && user?._id)
     : [];
@@ -1055,7 +1203,7 @@ const InquiriesPage = () => {
             <Search size={15} className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
             <input
               type="text"
-              placeholder="Search Inquiry ID, Customer, Mobile.. "
+              placeholder="Search Inquiry ID, Customer, Mobile.."
               value={search}
               onChange={e => setSearch(e.target.value)}
               className="h-9 w-full rounded-lg border border-gray-300 py-2 pl-9 pr-8 text-base sm:text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
@@ -1072,17 +1220,21 @@ const InquiriesPage = () => {
           </div>
 
           <div className="grid w-full min-w-0 grid-cols-1 gap-2 min-[420px]:grid-cols-2 lg:w-auto lg:flex lg:flex-wrap lg:items-center">
-            <Select value={filterStatus} onChange={e => setFilterStatus(e.target.value)} className="h-9 w-full lg:w-[150px] lg:shrink-0">
-              <option value="">All Statuses</option>
-              {STATUS_OPTIONS.map(({ value, label }) => (
-                <option key={value} value={value}>{label}</option>
-              ))}
-            </Select>
+            <MultiSelectFilter
+              label="All Statuses"
+              options={STATUS_OPTIONS}
+              values={filterStatuses}
+              onChange={setFilterStatuses}
+              className="w-full lg:w-[180px] lg:shrink-0"
+            />
 
-            <Select value={filterProduct} onChange={e => setFilterProduct(e.target.value)} className="h-9 w-full lg:w-[145px] lg:shrink-0">
-              <option value="">All Products</option>
-              {PRODUCTS.map((product) => <option key={product.value} value={product.value}>{product.label}</option>)}
-            </Select>
+            <MultiSelectFilter
+              label="All Panel Types"
+              options={PANEL_TYPE_OPTIONS}
+              values={filterPanelTypes}
+              onChange={setFilterPanelTypes}
+              className="w-full lg:w-[180px] lg:shrink-0"
+            />
 
             <Select
               value={filterCreatedBy}
@@ -1552,7 +1704,9 @@ const InquiriesPage = () => {
           {kickoffMode === 'view' && pendingConversion && (
             <div className={`rounded-lg p-3 text-sm ${isKickoffTimeCompleted(pendingConversion) ? 'bg-amber-50 text-amber-800' : 'bg-blue-50 text-blue-800'}`}>
               {isKickoffTimeCompleted(pendingConversion)
-                ? 'Meeting time is completed. Click Kickoff Meeting Done to create the project.'
+                ? canCompleteKickoff(pendingConversion)
+                  ? 'Meeting time is completed. Click Kickoff Meeting Done to create the project.'
+                  : 'Meeting time is completed. Sales HOD/TL, the inquiry creator, an Estimation user, or an Admin must mark it done.'
                 : 'Kick-off Meeting is scheduled. The Done button will be available after the scheduled date/time.'}
             </div>
           )}
@@ -1578,13 +1732,15 @@ const InquiriesPage = () => {
                   Edit
                 </Button>
 
-                <Button
-                  type="button"
-                  onClick={handleKickoffMeetingDone}
-                  disabled={submitting || !pendingConversion || !isKickoffTimeCompleted(pendingConversion)}
-                >
-                  {submitting ? 'Creating Project...' : 'Kickoff Meeting Done'}
-                </Button>
+                {canCompleteKickoff(pendingConversion) && (
+                  <Button
+                    type="button"
+                    onClick={handleKickoffMeetingDone}
+                    disabled={submitting || !pendingConversion || !isKickoffTimeCompleted(pendingConversion)}
+                  >
+                    {submitting ? 'Creating Project...' : 'Kickoff Meeting Done'}
+                  </Button>
+                )}
               </>
             ) : (
               <Button type="button" onClick={handleScheduleKickoffMeeting} disabled={submitting || usersLoading}>

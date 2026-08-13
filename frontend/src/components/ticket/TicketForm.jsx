@@ -102,9 +102,21 @@ const dateOnly = (value) => {
   return parsed.toISOString().split('T')[0];
 };
 
-const isAssignableTicketEmployee = (user) => {
-  const role = String(user?.role || '').trim().toLowerCase().replace(/\s+/g, '_');
-  return role === 'employee';
+const TICKET_ASSIGNABLE_ROLES = new Set(['employee', 'team_lead', 'hod', 'manager']);
+
+const normaliseRole = (role = '') => String(role)
+  .trim()
+  .toLowerCase()
+  .replace(/[\s-]+/g, '_');
+
+const isAssignableTicketUser = (user) => TICKET_ASSIGNABLE_ROLES.has(normaliseRole(user?.role));
+
+const formatRole = (role = '') => {
+  const normalised = normaliseRole(role);
+  if (normalised === 'team_lead') return 'Team Lead';
+  if (normalised === 'hod' || normalised === 'manager') return 'HOD';
+  if (normalised === 'employee') return 'Employee';
+  return String(role || '').trim();
 };
 
 const buildDepartmentOption = (department) => {
@@ -118,6 +130,9 @@ const validate = (form) => {
   if (!form.customer) errors.customer = 'Customer is required';
   if (!form.contactPerson.trim()) errors.contactPerson = 'Contact person is required';
   if (!form.contactNumber.trim()) errors.contactNumber = 'Contact number is required';
+  else if (!/^\d{10}$/.test(form.contactNumber.trim())) {
+    errors.contactNumber = 'Contact number must contain exactly 10 digits';
+  }
   if (!form.title.trim()) errors.title = 'Subject is required';
   if (!form.ticketType) errors.ticketType = 'Ticket type is required';
   if (!form.source) errors.source = 'Source is required';
@@ -260,32 +275,50 @@ const TicketForm = ({ initialData, activeSection = 0, onSuccess, onCancel, onTic
   }, [departments, form.department]);
 
   const [assignableUsers, setAssignableUsers] = useState([]);
-  const [assignableUsersLoaded, setAssignableUsersLoaded] = useState(false);
+  const [assignableUsersLoading, setAssignableUsersLoading] = useState(false);
 
-  const loadAssignableUsers = useCallback(async () => {
-    if (assignableUsersLoaded) return;
+  useEffect(() => {
+    let active = true;
+
+    if (!form.department) {
+      setAssignableUsers([]);
+      setAssignableUsersLoading(false);
+      return () => {
+        active = false;
+      };
+    }
+
+    const loadAssignableUsers = async () => {
+      setAssignableUsersLoading(true);
     try {
-      const { data } = await API.get('/users/assignable');
+        const { data } = await API.get('/users/assignable', {
+          params: { department: form.department },
+        });
       const users = data.users ?? data.data ?? [];
+
+        if (!active) return;
 
       setAssignableUsers(
         users
-          .filter((user) => user?._id && user?.name && isAssignableTicketEmployee(user))
+            .filter((user) => user?._id && user?.name && isAssignableTicketUser(user))
           .map((user) => ({
             value: user._id,
-            label: user.teamId?.name ? `${user.name} — ${user.teamId.name}` : user.name,
+              label: `${user.name} — ${formatRole(user.role)}`,
           }))
       );
     } catch {
-      setAssignableUsers([]);
+        if (active) setAssignableUsers([]);
     } finally {
-      setAssignableUsersLoaded(true);
+        if (active) setAssignableUsersLoading(false);
     }
-  }, [assignableUsersLoaded]);
+    };
 
-  useEffect(() => {
     loadAssignableUsers();
-  }, [loadAssignableUsers]);
+
+    return () => {
+      active = false;
+    };
+  }, [form.department]);
 
   const clearError = (field) => {
     if (!errors[field]) return;
@@ -297,9 +330,24 @@ const TicketForm = ({ initialData, activeSection = 0, onSuccess, onCancel, onTic
   };
 
   const set = (field) => (e) => {
-    const value = typeof e === 'object' && e?.target ? e.target.value : e;
+    let value = typeof e === 'object' && e?.target ? e.target.value : e;
+    if (field === 'contactNumber') {
+      value = String(value || '').replace(/\D/g, '').slice(0, 10);
+    }
     setForm((prev) => ({ ...prev, [field]: value }));
     clearError(field);
+  };
+
+  const setDepartment = (e) => {
+    const department = typeof e === 'object' && e?.target ? e.target.value : e;
+
+    setForm((prev) => ({
+      ...prev,
+      department,
+      assignedTo: department === prev.department ? prev.assignedTo : '',
+    }));
+    clearError('department');
+    clearError('assignedTo');
   };
 
   const setRR = (field) => (e) => {
@@ -462,6 +510,10 @@ const TicketForm = ({ initialData, activeSection = 0, onSuccess, onCancel, onTic
 
   const handleSubmit = async () => {
     const errs = validate(form);
+    const departmentChanged = isEdit && form.department !== (initialData?.department ?? '');
+    if (departmentChanged && currentAssignedTo && !form.assignedTo) {
+      errs.assignedTo = 'Select a user from the new department';
+    }
     if (Object.keys(errs).length) {
       setErrors(errs);
       return;
@@ -606,8 +658,10 @@ const TicketForm = ({ initialData, activeSection = 0, onSuccess, onCancel, onTic
               <Input
                 value={form.contactNumber}
                 onChange={set('contactNumber')}
-                placeholder="e.g. +91 98765 43210"
-                inputMode="tel"
+                placeholder="10-digit mobile number"
+                inputMode="numeric"
+                maxLength={10}
+                pattern="[0-9]{10}"
                 error={errors.contactNumber}
               />
             </ExtendedFormField>
@@ -618,7 +672,7 @@ const TicketForm = ({ initialData, activeSection = 0, onSuccess, onCancel, onTic
       <div id="ticket-section-info" className="scroll-mt-32">
         <SectionCard number="2" title="Ticket Information" color="orange" active={isSectionActive(1)}>
           <div className="space-y-4">
-            <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+            <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
               <ExtendedFormField label="Ticket Type" required error={errors.ticketType}>
                 <Select value={form.ticketType} onChange={set('ticketType')}>
                   {TICKET_TYPE_OPTIONS.map((type) => (
@@ -627,12 +681,28 @@ const TicketForm = ({ initialData, activeSection = 0, onSuccess, onCancel, onTic
                 </Select>
               </ExtendedFormField>
 
-              <ExtendedFormField label="Assigned To">
+              <ExtendedFormField label="Department" required error={errors.department}>
+                <Select value={form.department} onChange={setDepartment}>
+                  <option value="">Select department…</option>
+                  {departmentOptions.map((department) => (
+                    <option key={department.value} value={department.value}>{department.label}</option>
+                  ))}
+                  {departmentOptions.length === 0 && (
+                    <option value="" disabled>No active departments found</option>
+                  )}
+                </Select>
+              </ExtendedFormField>
+
+              <ExtendedFormField label="Assigned To" error={errors.assignedTo}>
                 <SearchableSelect
                   value={form.assignedTo}
                   onChange={set('assignedTo')}
                   options={assignableUsers}
-                  placeholder="Assign employee later or select now…"
+                  placeholder={form.department
+                    ? (assignableUsersLoading ? 'Loading department users…' : 'Select user…')
+                    : 'Select department first…'}
+                  disabled={!form.department || assignableUsersLoading}
+                  error={errors.assignedTo}
                 />
               </ExtendedFormField>
             </div>
@@ -667,7 +737,7 @@ const TicketForm = ({ initialData, activeSection = 0, onSuccess, onCancel, onTic
               </ExtendedFormField>
             )}
 
-            <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
+            <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
               <ExtendedFormField label="Source" required error={errors.source}>
                 <Select value={form.source} onChange={set('source')}>
                   {TICKET_SOURCES.map((source) => (
@@ -684,17 +754,6 @@ const TicketForm = ({ initialData, activeSection = 0, onSuccess, onCancel, onTic
                 </Select>
               </ExtendedFormField>
 
-              <ExtendedFormField label="Department" required error={errors.department}>
-                <Select value={form.department} onChange={set('department')}>
-                  <option value="">Select department…</option>
-                  {departmentOptions.map((department) => (
-                    <option key={department.value} value={department.value}>{department.label}</option>
-                  ))}
-                  {departmentOptions.length === 0 && (
-                    <option value="" disabled>No active departments found</option>
-                  )}
-                </Select>
-              </ExtendedFormField>
             </div>
           </div>
         </SectionCard>

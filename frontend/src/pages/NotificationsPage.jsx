@@ -3,6 +3,7 @@ import React, {
   useEffect,
   useCallback,
 } from 'react';
+import { useNavigate } from 'react-router-dom';
 
 import {
   Bell,
@@ -58,8 +59,53 @@ const typeConfig = {
   },
 };
 
+const getModuleCardClass = (notification) => {
+  if (notification.relatedTicket) {
+    return notification.isRead
+      ? 'border-purple-400 bg-purple-50'
+      : 'border-purple-500 bg-purple-100/70';
+  }
+
+  if (notification.relatedProject) {
+    return notification.isRead
+      ? 'border-green-400 bg-green-50'
+      : 'border-green-500 bg-green-100/70';
+  }
+
+  if (notification.relatedInquiry) {
+    return notification.isRead
+      ? 'border-blue-400 bg-blue-50'
+      : 'border-blue-500 bg-blue-100/70';
+  }
+
+  return notification.isRead
+    ? 'border-gray-300 bg-gray-50'
+    : 'border-gray-400 bg-gray-100/70';
+};
+
+const getRelatedId = (relatedRecord) => {
+  if (!relatedRecord) return null;
+  return typeof relatedRecord === 'string'
+    ? relatedRecord
+    : relatedRecord._id || null;
+};
+
+const getNotificationDestination = (notification) => {
+  const ticketId = getRelatedId(notification.relatedTicket);
+  if (ticketId) return `/tickets/${ticketId}`;
+
+  const projectId = getRelatedId(notification.relatedProject);
+  if (projectId) return `/projects/${projectId}`;
+
+  const inquiryId = getRelatedId(notification.relatedInquiry);
+  if (inquiryId) return `/inquiries/${inquiryId}`;
+
+  return null;
+};
+
 const NotificationsPage = () => {
   const toast = useToast();
+  const navigate = useNavigate();
 
   const [notifications, setNotifications] =
     useState([]);
@@ -175,6 +221,17 @@ const NotificationsPage = () => {
     }
   };
 
+  const openNotification = async (notification) => {
+    const destination = getNotificationDestination(notification);
+    if (!destination) return;
+
+    if (!notification.isRead) {
+      await markRead(notification._id);
+    }
+
+    navigate(destination);
+  };
+
   // Mark All Read
   const markAllRead = async () => {
     try {
@@ -200,18 +257,6 @@ const NotificationsPage = () => {
         'Failed to update notifications'
       );
     }
-  };
-
-  // Priority Badge
-  const priorityBadge = {
-    High:
-      'bg-red-100 text-red-700',
-
-    Medium:
-      'bg-amber-100 text-amber-700',
-
-    Low:
-      'bg-green-100 text-green-700',
   };
 
   return (
@@ -317,7 +362,7 @@ const NotificationsPage = () => {
             </p>
           </div>
         ) : (
-          <div className="divide-y divide-gray-50">
+          <div className="space-y-3 p-4">
 
             {notifications.map(
               (notif) => {
@@ -330,19 +375,35 @@ const NotificationsPage = () => {
                 const Icon =
                   cfg.icon;
 
+                const moduleCardClass =
+                  getModuleCardClass(
+                    notif
+                  );
+
+                const destination =
+                  getNotificationDestination(
+                    notif
+                  );
+
                 return (
                   <div
                     key={
                       notif._id
                     }
-                    className={`flex items-start gap-4 px-6 py-4 transition-colors ${
-                      !notif.isRead
-                        ? 'bg-blue-50/40'
-                        : ''
-                    } ${
-                      notif.priority ===
-                      'High'
-                        ? 'border-l-4 border-red-400'
+                    role={destination ? 'link' : undefined}
+                    tabIndex={destination ? 0 : undefined}
+                    onClick={destination ? () => openNotification(notif) : undefined}
+                    onKeyDown={destination ? (event) => {
+                      if (event.currentTarget !== event.target) return;
+                      if (event.key === 'Enter' || event.key === ' ') {
+                        event.preventDefault();
+                        openNotification(notif);
+                      }
+                    } : undefined}
+                    title={destination ? 'Open related record' : undefined}
+                    className={`flex items-start gap-4 rounded-lg border px-5 py-4 transition-colors ${moduleCardClass} ${
+                      destination
+                        ? 'cursor-pointer hover:shadow-md focus:outline-none focus:ring-2 focus:ring-blue-400 focus:ring-offset-2'
                         : ''
                     }`}
                   >
@@ -377,21 +438,6 @@ const NotificationsPage = () => {
                         </p>
 
                         <div className="flex flex-shrink-0 items-center gap-1.5">
-
-                          {/* Priority */}
-                          <span
-                            className={`rounded-full px-2 py-0.5 text-xs font-medium ${
-                              priorityBadge[
-                                notif
-                                  .priority
-                              ] ||
-                              'bg-gray-100 text-gray-600'
-                            }`}
-                          >
-                            {
-                              notif.priority
-                            }
-                          </span>
 
                           {/* Unread Dot */}
                           {!notif.isRead && (
@@ -477,11 +523,13 @@ const NotificationsPage = () => {
                       {/* Mark Read */}
                       {!notif.isRead && (
                         <button
-                          onClick={() =>
+                          onClick={(event) => {
+                            event.stopPropagation();
                             markRead(
                               notif._id
-                            )
-                          }
+                            );
+                          }}
+                          onKeyDown={(event) => event.stopPropagation()}
                           className="rounded p-1.5 text-gray-400 hover:bg-blue-50 hover:text-blue-600"
                           title="Mark as read"
                         >

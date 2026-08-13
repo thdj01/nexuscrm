@@ -251,6 +251,11 @@ async function getDepartmentAudienceUsers(departmentValues = []) {
   });
 }
 
+async function getAllDepartmentLeadershipUsers() {
+  const users = await getActiveUsers();
+  return users.filter((user) => LEADERSHIP_ROLES.has(normalizeRole(user.role)));
+}
+
 async function getAdminUsers() {
   return User.find({ role: ADMIN_ROLE, isActive: { $ne: false } })
     .select(USER_NOTIFICATION_FIELDS)
@@ -263,6 +268,10 @@ async function getSalesLeadershipUsers() {
 
 async function getEstimationUsers() {
   return getDepartmentAudienceUsers(['estimation']);
+}
+
+async function getAutomationHodUsers() {
+  return getUsersByDepartments(['automation'], { roles: ['hod', 'manager'] });
 }
 
 /**
@@ -326,8 +335,10 @@ module.exports = {
   getAdminUsers,
   getSalesLeadershipUsers,
   getEstimationUsers,
+  getAutomationHodUsers,
   getInquiryCreatedRecipientUsers,
   getUsersByDepartments,
+  getAllDepartmentLeadershipUsers,
   getDepartmentLeadershipUsers,
   getDepartmentAudienceUsers,
   getProjectDepartmentValues,

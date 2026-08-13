@@ -15,6 +15,7 @@ function resolveValue(value, user) {
 
 async function dispatchNotificationsToUsers({
   users = [],
+  excludeUserIds = [],
   title,
   message,
   type = 'info',
@@ -31,7 +32,16 @@ async function dispatchNotificationsToUsers({
   emailAttachments = [],
   whatsappMessage = message,
 }) {
-  const recipients = combineUsers(users);
+  // The performer of an action must never receive their own notification.
+  // Apply the exclusion once, before any channel is dispatched, so the rule is
+  // consistent for dashboard, email and personal WhatsApp notifications.
+  const excludedIds = new Set(
+    (Array.isArray(excludeUserIds) ? excludeUserIds : [excludeUserIds])
+      .map((value) => idString(value))
+      .filter(Boolean)
+  );
+  const recipients = combineUsers(users)
+    .filter((user) => !excludedIds.has(idString(user)));
   const tasks = [];
 
   for (const user of recipients) {

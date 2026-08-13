@@ -95,6 +95,19 @@ const toDateStr = (value) => {
   return date.toISOString().slice(0, 10);
 };
 
+const isSundayDateStr = (value) => {
+  if (!value) return false;
+  const date = new Date(`${value}T00:00:00`);
+  return !Number.isNaN(date.getTime()) && date.getDay() === 0;
+};
+
+const editableDateError = (value, existingValue, label) => {
+  if (!value || value === existingValue) return '';
+  if (value < todayDateStr()) return `${label} cannot be a previous date.`;
+  if (isSundayDateStr(value)) return `${label} cannot be a Sunday.`;
+  return '';
+};
+
 const getInquiryNumber = (project) => {
   if (!project || typeof project !== 'object') return '';
 
@@ -296,6 +309,7 @@ const buildInitialState = (initialData = null) => {
       projectQuantity: Number(source.projectQuantity || source.quantity || 1),
       orderDate: toDateStr(source.orderDate) || todayDateStr(),
       projectEndDate: toDateStr(source.projectEndDate),
+      delayedEndDate: toDateStr(source.delayedEndDate || source.projectEndDate),
     },
     selectedDepartments,
     panelSelections,
@@ -320,7 +334,15 @@ const ProjectForm = ({
   activePlanningGridId = '',
   isDocumentsActive = false,
 }) => {
-  const { hasPermission, user } = useAuth();
+  const {
+    hasPermission,
+    canManagePlanningDepartment,
+    isAdmin,
+    isHod,
+    isManagerRole,
+    isTeamLead,
+    user,
+  } = useAuth();
   const canCreateCustomer = hasPermission(CUSTOMER_PERMISSIONS.CREATE);
   const canViewCustomer = hasPermission(CUSTOMER_PERMISSIONS.VIEW);
   const initial = useMemo(() => buildInitialState(initialData), [initialData]);
@@ -365,7 +387,18 @@ const ProjectForm = ({
   const draftKeyRef = useRef(draftKey);
 
   const detailsReadOnly = readOnly || !canEditProject;
-  const documentsReadOnly = readOnly || !canManageDocuments;
+  const canManageDepartmentPlanning = (department) => Boolean(
+    canManagePlanning && canManagePlanningDepartment?.(department)
+  );
+  // Panel types may be selected by every authorized planning leader. The
+  // department controls and planning grids remain separately restricted by
+  // canManagePlanningDepartment, so this does not grant cross-department edits.
+  const isPlanningLeader = isAdmin || isHod || isManagerRole || isTeamLead;
+  const canManagePanelTypes = canManagePlanning && isPlanningLeader;
+  // Existing-project document upload is intentionally independent from the
+  // main Edit mode. The user still needs Project Edit permission, enforced by
+  // both this flag and the upload API route.
+  const documentsReadOnly = !canManageDocuments;
   const inquirySnapshot = initialData?.sourceInquirySnapshot;
   const hasInquirySource = Boolean(initialData?.inquiryReference || (inquirySnapshot && typeof inquirySnapshot === 'object' && Object.keys(inquirySnapshot).length));
 
@@ -425,7 +458,11 @@ const ProjectForm = ({
     const latestEndDate = endDates[endDates.length - 1] || '';
     setForm((current) => current.projectEndDate === latestEndDate
       ? current
-      : { ...current, projectEndDate: latestEndDate });
+      : {
+          ...current,
+          projectEndDate: latestEndDate,
+          delayedEndDate: latestEndDate,
+        });
   }, [planningGrids]);
 
   useEffect(() => {
@@ -600,7 +637,7 @@ const ProjectForm = ({
   };
 
   const togglePanelSelection = (panelType) => {
-    if (!canManagePlanning || readOnly) return;
+    if (!canManagePanelTypes || readOnly) return;
     if (selectedPanelTypes.includes(panelType)) {
       setSelectedPanelTypes((current) => current.filter((item) => item !== panelType));
       updateSelections(panelSelections.filter((selection) => selection.panelType !== panelType));
@@ -610,7 +647,7 @@ const ProjectForm = ({
   };
 
   const toggleDepartmentForPanel = (panelType, department) => {
-    if (!canManagePlanning || readOnly) return;
+    if (!canManageDepartmentPlanning(department) || readOnly) return;
     if (!isDepartmentAllowedForPanel(department, panelType, planningOptions.disallowedDepartmentsByPanel)) return;
     const key = selectionKey(department, panelType);
     const exists = panelSelections.some((selection) => selectionKey(selection.department, selection.panelType) === key);
@@ -621,6 +658,7 @@ const ProjectForm = ({
   };
 
   const updatePanelSelection = (department, panelType, patch) => {
+    if (!canManageDepartmentPlanning(department) || readOnly) return;
     const next = panelSelections.map((selection) => {
       if (selection.department !== department || selection.panelType !== panelType) return selection;
       const updated = { ...selection, ...patch };
@@ -631,7 +669,7 @@ const ProjectForm = ({
   };
 
   const addSeparateGrid = (selection) => {
-    if (!canAddPlanningGrid || readOnly || selection.quantity <= 1 || selection.planningMode !== 'separate') return;
+    if (!canAddPlanningGrid || !canManageDepartmentPlanning(selection.department) || readOnly || selection.quantity <= 1 || selection.planningMode !== 'separate') return;
     const used = new Set(planningGrids.filter((grid) => grid.department === selection.department && grid.panelType === selection.panelType).map((grid) => Number(grid.unitNumber)));
     let unitNumber = 1;
     while (used.has(unitNumber) && unitNumber <= selection.quantity) unitNumber += 1;
@@ -640,6 +678,7 @@ const ProjectForm = ({
   };
 
   const onDepartmentPlanningGridChange = (department, panelType, nextDepartmentGrids) => {
+    if (!canManageDepartmentPlanning(department) || readOnly) return;
     setPlanningGrids((current) => {
       const replacements = new Map(
         nextDepartmentGrids.map((grid, index) => [String(grid.gridId || index), grid])
@@ -670,6 +709,8 @@ const ProjectForm = ({
     if (!form.customerRef || !form.customerName.trim()) nextErrors.customer = 'Customer is required.';
     if (!form.projectName.trim()) nextErrors.projectName = 'Project name is required.';
     if (!Number.isInteger(Number(form.projectQuantity)) || Number(form.projectQuantity) < 1) nextErrors.projectQuantity = 'Project Quantity must be a positive whole number.';
+    const orderDateError = editableDateError(form.orderDate, initial.form.orderDate, 'Order Date');
+    if (orderDateError) nextErrors.orderDate = orderDateError;
     if (!selectedPanelTypes.length) nextErrors.panelTypes = 'Select at least one panel type.';
 
     selectedPanelTypes.forEach((panelType) => {
@@ -799,11 +840,30 @@ const ProjectForm = ({
               <FormField label="Project Quantity" required error={errors.projectQuantity}>
                 <Input type="number" min="1" step="1" value={form.projectQuantity} onChange={(event) => setForm((prev) => ({ ...prev, projectQuantity: event.target.value }))} />
               </FormField>
-              <FormField label="Order Date">
-                <Input type="date" value={form.orderDate} onChange={(event) => setForm((prev) => ({ ...prev, orderDate: event.target.value }))} />
+              <FormField label="Order Date" error={errors.orderDate}>
+                <Input
+                  type="date"
+                  min={todayDateStr()}
+                  value={form.orderDate}
+                  onChange={(event) => {
+                    const value = event.target.value;
+                    const dateError = editableDateError(value, initial.form.orderDate, 'Order Date');
+                    setForm((prev) => ({ ...prev, orderDate: value }));
+                    setErrors((prev) => ({ ...prev, orderDate: dateError || undefined }));
+                  }}
+                  title="Previous dates and Sundays are blocked."
+                />
               </FormField>
-              <FormField label="Project End Date">
+              <FormField label="Actual End Date">
                 <Input type="date" value={form.projectEndDate} disabled className="bg-gray-50" />
+              </FormField>
+              <FormField label="Delayed End Date">
+                <Input
+                  type="date"
+                  value={form.delayedEndDate || form.projectEndDate}
+                  disabled
+                  className={Number(initialData?.delayedDays || 0) > 0 ? 'border-red-200 bg-red-50 text-red-700' : 'bg-gray-50'}
+                />
               </FormField>
               <div>
                 <span className="mb-1.5 block text-sm font-medium text-gray-700">Overall Completion</span>
@@ -851,7 +911,7 @@ const ProjectForm = ({
               <div className="grid grid-cols-2 gap-2 sm:grid-cols-3 lg:grid-cols-6">
                 {planningOptions.panelTypes.map((panelType) => (
                   <label key={panelType} className={`flex cursor-pointer items-center gap-2 rounded-lg border px-3 py-2 text-sm font-semibold ${selectedPanelTypes.includes(panelType) ? 'border-blue-400 bg-blue-50 text-blue-700' : 'border-gray-200 bg-white text-gray-600'}`}>
-                    <input type="checkbox" checked={selectedPanelTypes.includes(panelType)} disabled={readOnly || !canManagePlanning || planningLoading} onChange={() => togglePanelSelection(panelType)} /> {panelType}
+                    <input type="checkbox" checked={selectedPanelTypes.includes(panelType)} disabled={readOnly || !canManagePanelTypes || planningLoading} onChange={() => togglePanelSelection(panelType)} /> {panelType}
                   </label>
                 ))}
               </div>
@@ -876,9 +936,10 @@ const ProjectForm = ({
                       <div className="grid grid-cols-2 gap-2 sm:grid-cols-3 lg:grid-cols-6">
                         {availableDepartments.map((department) => {
                           const selected = panelDepartmentSelections.some((selection) => selection.department === department);
+                          const canManageThisDepartment = canManageDepartmentPlanning(department);
                           return (
                             <label key={department} className={`flex cursor-pointer items-center gap-2 rounded-lg border px-3 py-2 text-xs font-semibold ${selected ? 'border-indigo-400 bg-indigo-50 text-indigo-700' : 'border-gray-200 bg-white text-gray-600'}`}>
-                              <input type="checkbox" checked={selected} disabled={readOnly || !canManagePlanning || planningLoading} onChange={() => toggleDepartmentForPanel(panelType, department)} /> {department}
+                              <input type="checkbox" checked={selected} disabled={readOnly || !canManageThisDepartment || planningLoading} onChange={() => toggleDepartmentForPanel(panelType, department)} /> {department}
                             </label>
                           );
                         })}
@@ -890,6 +951,7 @@ const ProjectForm = ({
                       const department = selection.department;
                       const key = selectionKey(department, panelType);
                       const relatedGrids = planningGrids.filter((grid) => grid.department === department && grid.panelType === panelType);
+                      const canManageThisDepartment = canManageDepartmentPlanning(department);
                       return (
                         <details key={key} className="group/department overflow-hidden rounded-xl border border-indigo-100 bg-white">
                           <summary className="flex cursor-pointer list-none items-center gap-2 bg-indigo-50/60 px-3 py-3 text-indigo-700 [&::-webkit-details-marker]:hidden">
@@ -903,16 +965,16 @@ const ProjectForm = ({
                           <div className="border-t border-indigo-100 p-3">
                             <div className="grid grid-cols-1 items-end gap-3 lg:grid-cols-[minmax(150px,0.5fr)_minmax(280px,1fr)_auto]">
                               <FormField label="Panel Quantity" required error={errors[`quantity-${key}`]}>
-                                <Input type="number" min="1" step="1" value={selection.quantity} disabled={readOnly || !canManagePlanning || planningLoading} onChange={(event) => updatePanelSelection(department, panelType, { quantity: event.target.value })} />
+                                <Input type="number" min="1" step="1" value={selection.quantity} disabled={readOnly || !canManageThisDepartment || planningLoading} onChange={(event) => updatePanelSelection(department, panelType, { quantity: event.target.value })} />
                               </FormField>
                               <FormField label={Number(selection.quantity) > 1 ? 'Your planning grid should be' : 'Planning Mode'} error={errors[`mode-${key}`]}>
                                 {Number(selection.quantity) > 1 ? (
                                   <div className="flex h-10 items-center gap-5 rounded-lg border border-gray-200 px-3">
-                                    {['common', 'separate'].map((mode) => <label key={mode} className="flex items-center gap-2 text-sm font-medium capitalize"><input type="radio" name={`mode-${key}`} checked={selection.planningMode === mode} disabled={readOnly || !canManagePlanning || planningLoading} onChange={() => updatePanelSelection(department, panelType, { planningMode: mode })} /> {mode}</label>)}
+                                    {['common', 'separate'].map((mode) => <label key={mode} className="flex items-center gap-2 text-sm font-medium capitalize"><input type="radio" name={`mode-${key}`} checked={selection.planningMode === mode} disabled={readOnly || !canManageThisDepartment || planningLoading} onChange={() => updatePanelSelection(department, panelType, { planningMode: mode })} /> {mode}</label>)}
                                   </div>
                                 ) : <div className="flex h-10 items-center rounded-lg border border-gray-200 bg-gray-50 px-3 text-sm text-gray-500">One planning grid</div>}
                               </FormField>
-                              {Number(selection.quantity) > 1 && selection.planningMode === 'separate' && canAddPlanningGrid && (
+                              {Number(selection.quantity) > 1 && selection.planningMode === 'separate' && canAddPlanningGrid && canManageThisDepartment && (
                                 <Button type="button" variant="outline" disabled={readOnly || planningLoading || relatedGrids.length >= Number(selection.quantity)} onClick={() => addSeparateGrid(selection)}><Plus size={14} /> Add Planning Grid ({relatedGrids.length}/{selection.quantity})</Button>
                               )}
                             </div>
@@ -924,7 +986,7 @@ const ProjectForm = ({
                                 planningGrids={relatedGrids}
                                 onChange={(nextGrids) => onDepartmentPlanningGridChange(department, panelType, nextGrids)}
                                 readOnly={readOnly}
-                                canManagePlanning={canManagePlanning}
+                                canManagePlanning={canManageThisDepartment}
                                 canUpdateCompletion={canUpdateCompletion}
                                 activeGridId={activePlanningGridId}
                                 projectId={initialData?._id || ''}

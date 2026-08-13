@@ -259,6 +259,7 @@ async function notifyInquiryStakeholdersOfChange({
 
     await dispatchNotificationsToUsers({
       users: recipientUsers,
+      excludeUserIds: [actor?._id || actor?.id],
       title: `Inquiry ${inquiryId} Updated`,
       message,
       type: statusChanged ? 'status' : 'info',
