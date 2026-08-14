@@ -385,6 +385,23 @@ const ProjectForm = ({
   const [draftRestoredAt, setDraftRestoredAt] = useState('');
   const [draftSavedAt, setDraftSavedAt] = useState('');
   const draftKeyRef = useRef(draftKey);
+  const draftSnapshotRef = useRef(null);
+  const skipDraftPersistRef = useRef(false);
+
+  const persistDraftSnapshot = useCallback((updateIndicator = false) => {
+    if (skipDraftPersistRef.current) return;
+    const snapshot = draftSnapshotRef.current;
+    if (!snapshot || snapshot.draftKey !== draftKeyRef.current) return;
+
+    if (snapshot.isUnchanged) {
+      removeProjectDraft(snapshot.draftKey);
+      if (updateIndicator) setDraftSavedAt('');
+      return;
+    }
+
+    const savedAt = writeProjectDraft(snapshot.draftKey, snapshot.data);
+    if (updateIndicator && savedAt) setDraftSavedAt(savedAt);
+  }, []);
 
   const detailsReadOnly = readOnly || !canEditProject;
   const canManageDepartmentPlanning = (department) => Boolean(
@@ -404,6 +421,7 @@ const ProjectForm = ({
 
   useEffect(() => {
     setDraftReady(false);
+    skipDraftPersistRef.current = false;
     draftKeyRef.current = draftKey;
     const restored = readOnly ? null : readProjectDraft(draftKey, initialData?.updatedAt);
     const next = restored?.data || initialDraftData;
@@ -421,8 +439,6 @@ const ProjectForm = ({
   }, [draftKey, initial, initialData?.updatedAt, initialDraftData, initialSelectedPanelTypes, readOnly]);
 
   useEffect(() => {
-    if (!draftReady || readOnly || draftKeyRef.current !== draftKey) return undefined;
-
     const data = {
       form,
       selectedDepartments,
@@ -430,28 +446,31 @@ const ProjectForm = ({
       panelSelections,
       planningGrids,
     };
-    const isUnchanged = JSON.stringify(data) === JSON.stringify(initialDraftData);
-
-    const persist = (updateIndicator = false) => {
-      if (isUnchanged) {
-        removeProjectDraft(draftKey);
-        if (updateIndicator) setDraftSavedAt('');
-        return;
-      }
-      const savedAt = writeProjectDraft(draftKey, data);
-      if (updateIndicator && savedAt) setDraftSavedAt(savedAt);
+    draftSnapshotRef.current = {
+      draftKey,
+      data,
+      isUnchanged: JSON.stringify(data) === JSON.stringify(initialDraftData),
     };
+  }, [draftKey, form, initialDraftData, panelSelections, planningGrids, selectedDepartments, selectedPanelTypes]);
 
-    const timer = window.setTimeout(() => persist(true), 350);
-    const handleBeforeUnload = () => persist(false);
+  useEffect(() => {
+    if (!draftReady || readOnly || draftKeyRef.current !== draftKey) return undefined;
+
+    const timer = window.setTimeout(() => persistDraftSnapshot(true), 350);
+    return () => window.clearTimeout(timer);
+  }, [draftKey, draftReady, form, initialDraftData, panelSelections, persistDraftSnapshot, planningGrids, readOnly, selectedDepartments, selectedPanelTypes]);
+
+  useEffect(() => {
+    if (!draftReady || readOnly || draftKeyRef.current !== draftKey) return undefined;
+
+    const handleBeforeUnload = () => persistDraftSnapshot(false);
     window.addEventListener('beforeunload', handleBeforeUnload);
 
     return () => {
-      window.clearTimeout(timer);
       window.removeEventListener('beforeunload', handleBeforeUnload);
-      persist(false);
+      persistDraftSnapshot(false);
     };
-  }, [draftKey, draftReady, form, initialDraftData, panelSelections, planningGrids, readOnly, selectedDepartments, selectedPanelTypes]);
+  }, [draftKey, draftReady, persistDraftSnapshot, readOnly]);
 
   useEffect(() => {
     const endDates = planningGrids.map((grid) => toDateStr(grid.projectEndDate)).filter(Boolean).sort();
@@ -781,6 +800,7 @@ const ProjectForm = ({
     if (pendingDocuments.length) payload._pendingDocuments = pendingDocuments;
     const result = await onSubmit(payload);
     if (result !== false) {
+      skipDraftPersistRef.current = true;
       removeProjectDraft(draftKey);
       setDraftRestoredAt('');
       setDraftSavedAt('');

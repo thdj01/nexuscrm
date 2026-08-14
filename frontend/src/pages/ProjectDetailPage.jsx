@@ -95,6 +95,7 @@ const ProjectDetailPage = () => {
   const [planningGridNavigation, setPlanningGridNavigation] = useState([]);
   const [selectedPlanningGridId, setSelectedPlanningGridId] = useState('');
   const sectionRefs = useRef([]);
+  const lastAutomaticallyLoadedProjectRef = useRef('');
 
   const loadProject = useCallback(async () => {
     if (isNewProject) {
@@ -122,8 +123,11 @@ const ProjectDetailPage = () => {
   }, [startsEditable, id]);
 
   useEffect(() => {
+    const loadKey = isNewProject ? 'new' : String(id || '');
+    if (lastAutomaticallyLoadedProjectRef.current === loadKey) return;
+    lastAutomaticallyLoadedProjectRef.current = loadKey;
     loadProject();
-  }, [loadProject]);
+  }, [id, isNewProject, loadProject]);
 
   const planningGridSteps = useMemo(() => {
     if (planningGridNavigation.length > 0) {
@@ -278,10 +282,22 @@ const ProjectDetailPage = () => {
 
     setSubmitting(true);
     try {
-      const updated = await apiUpdateProject(project._id, formData);
-      toast.success('Project updated successfully');
-      setProject({ ...updated, ...computeDelay(updated) });
-      setReadOnly(true);
+      // Planning-only HOD/TL users must not submit read-only Project Details.
+      // Live customer snapshots or normalized dates can differ from the stored
+      // project even though the user never edited them, which would otherwise
+      // incorrectly require Projects - Edit Project. The planning structure is
+      // still checked against the user's managed department by the backend.
+      const updatePayload = canEditProject
+        ? formData
+        : {
+            selectedDepartments: formData.selectedDepartments,
+            panelSelections: formData.panelSelections,
+            planningGrids: formData.planningGrids,
+            planningTasks: formData.planningTasks,
+          };
+
+      await apiUpdateProject(project._id, updatePayload);
+      toast.success(canEditProject ? 'Project updated successfully' : 'Project planning updated successfully');
       navigate('/projects', { replace: true });
       return true;
     } catch (err) {

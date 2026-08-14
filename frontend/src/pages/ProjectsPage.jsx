@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import {
   Plus, Search, RefreshCw, X,
@@ -139,6 +139,7 @@ const ProjectsPage = () => {
   const [detailModal, setDetailModal] = useState(false);
   const [activityModal, setActivityModal] = useState(false);
   const [selected, setSelected] = useState(null);
+  const lastAutomaticFetchKeyRef = useRef('');
 
   const fetchProjects = useCallback(async () => {
     setLoading(true);
@@ -178,7 +179,12 @@ const ProjectsPage = () => {
     }
   }, [page, limit, search, filterOrderDate, financialYear, riskFilter, toast]);
 
-  useEffect(() => { fetchProjects(); }, [fetchProjects]);
+  useEffect(() => {
+    const fetchKey = JSON.stringify({ page, limit, search, filterOrderDate, financialYear, riskFilter });
+    if (lastAutomaticFetchKeyRef.current === fetchKey) return;
+    lastAutomaticFetchKeyRef.current = fetchKey;
+    fetchProjects();
+  }, [fetchProjects, page, limit, search, filterOrderDate, financialYear, riskFilter]);
   useEffect(() => {
     if (!searchParams.has('projectStatus')) return;
     const nextParams = new URLSearchParams(searchParams);
