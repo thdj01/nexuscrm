@@ -26,7 +26,7 @@ tags:
 - name: Authentication
   description: Login and current-user profile
 - name: Inquiries
-  description: Inquiry CRUD, status, follow-up and PDF
+  description: Inquiry CRUD, status and PDF
 - name: Kickoff Workflows
   description: Kick-off scheduling and inquiry conversion workflow
 - name: Projects
@@ -819,30 +819,6 @@ paths:
           $ref: '#/components/responses/NotFound'
         '500':
           $ref: '#/components/responses/ServerError'
-  /api/inquiries/follow-ups:
-    get:
-      tags:
-      - Inquiries
-      summary: Get due inquiry follow-ups
-      operationId: GET_api_inquiries_follow_ups
-      responses:
-        '200':
-          description: Successful response
-          content:
-            application/json:
-              schema:
-                type: object
-                additionalProperties: true
-        '400':
-          $ref: '#/components/responses/BadRequest'
-        '401':
-          $ref: '#/components/responses/Unauthorized'
-        '403':
-          $ref: '#/components/responses/Forbidden'
-        '404':
-          $ref: '#/components/responses/NotFound'
-        '500':
-          $ref: '#/components/responses/ServerError'
   /api/inquiries:
     get:
       tags:
@@ -1135,51 +1111,6 @@ paths:
                     type: string
                     format: binary
                   description: Up to 10 BOM files, 15 MB each
-      responses:
-        '200':
-          description: Successful response
-          content:
-            application/json:
-              schema:
-                type: object
-                additionalProperties: true
-        '400':
-          $ref: '#/components/responses/BadRequest'
-        '401':
-          $ref: '#/components/responses/Unauthorized'
-        '403':
-          $ref: '#/components/responses/Forbidden'
-        '404':
-          $ref: '#/components/responses/NotFound'
-        '500':
-          $ref: '#/components/responses/ServerError'
-  /api/inquiries/{id}/follow-up:
-    patch:
-      tags:
-      - Inquiries
-      summary: Set or clear follow-up reminder
-      operationId: PATCH_api_inquiries_id_follow_up
-      parameters:
-      - name: id
-        in: path
-        required: true
-        description: MongoDB document ID unless otherwise noted
-        schema:
-          type: string
-      requestBody:
-        required: true
-        description: Request payload
-        content:
-          application/json:
-            schema:
-              type: object
-              properties:
-                nextFollowUpDate:
-                  type: string
-                  format: date
-                  nullable: true
-                remarks:
-                  type: string
       responses:
         '200':
           description: Successful response
@@ -4992,6 +4923,10 @@ components:
         deliveryDate:
           type: string
           format: date
+        orderEndDate:
+          type: string
+          format: date
+          nullable: true
         programmingScope:
           type: string
         onsiteSupport:
@@ -5042,9 +4977,6 @@ components:
           - Low
         status:
           type: string
-        nextFollowUpDate:
-          type: string
-          format: date
         existingAttachments:
           type: array
           items:
@@ -5310,6 +5242,11 @@ components:
         orderDate:
           type: string
           format: date
+        orderEndDate:
+          type: string
+          format: date
+          nullable: true
+          readOnly: true
         expectedDeliveryDate:
           type: string
           format: date

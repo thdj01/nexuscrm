@@ -42,8 +42,11 @@ const {
   archiveProjectTimesheetTasksForProject,
 } = require('../services/projectTimesheetSyncService');
 const { PROJECT_PERMISSIONS } = require('../constants/permissions');
-const { getNextInquiryNumber } = require('../utils/inquiryNumber');
 const { userHasPermission } = require('../utils/accessControl');
+const {
+  getProjectLockStateFromProject,
+  resolveProjectLockState,
+} = require('../services/projectLockService');
 const {
   attachmentMatchesKey,
   sendProtectedFile,
@@ -207,6 +210,10 @@ function toPlainProjectResponse(doc) {
     }));
     obj.planningTasks = obj.planningGrids.flatMap((grid) => grid.planningTasks || []);
   }
+
+  // A project converted from an Inquiry becomes read-only while the live
+  // Inquiry status is Lost/Hold. Direct projects are never affected.
+  obj.projectLock = getProjectLockStateFromProject(obj);
 
   return obj;
 }
@@ -714,6 +721,7 @@ const TRACKED_FIELDS = [
   { key: 'projectStatus',     label: 'Status' },
   { key: 'projectEndDate',    label: 'End Date',       format: fmtDate, actionType: 'end_date_changed' },
   { key: 'orderDate',         label: 'Order Date',     format: fmtDate, actionType: 'start_date_changed' },
+  { key: 'orderEndDate',      label: 'Order Expected End Date', format: fmtDate },
   { key: 'quantity',          label: 'Project Quantity' },
   { key: 'productionStatus',  label: 'Production Status' },
   { key: 'dispatchStatus',    label: 'Dispatch Status' },
@@ -1010,6 +1018,7 @@ async function recalcDelay(project) {
 
 const DATE_FIELDS = new Set([
   'orderDate',
+  'orderEndDate',
   'expectedDeliveryDate',
   'actualDeliveryDate',
   'projectEndDate',
@@ -1308,6 +1317,9 @@ function sanitizeProjectPayload(input = {}, options = {}) {
   delete body.team;
   delete body.teamId;
   delete body.companyName;
+  // Inquiry-linked projects inherit this value from the Inquiry. Directly
+  // created projects may manage their own Order Expected End Date.
+  if (!options.allowOrderEndDate) delete body.orderEndDate;
   // Removed fields are ignored during the backward-compatibility window.
   delete body.projectType;
   delete body.projectScopes;
@@ -1398,8 +1410,6 @@ function sanitizeProjectPayload(input = {}, options = {}) {
 }
 
 async function attachInquiryNumber(body = {}, options = {}) {
-  if (body.inquiryNumber) return body;
-
   const inquiryId = normalizeObjectIdRef(body.inquiryReference);
   if (inquiryId) {
     const inquiry = await Inquiry.findById(inquiryId).select('inquiryId').lean();
@@ -1409,12 +1419,21 @@ async function attachInquiryNumber(body = {}, options = {}) {
     }
   }
 
-  if (options.generateIfMissing) {
-    // Projects created directly from the Project screen still need a traceable
-    // inquiry reference. Use the same atomic counter as the Inquiry module so
-    // manually-created projects and inquiry-created projects never collide.
-    body.inquiryNumber = await getNextInquiryNumber();
+  // A Project created directly from the New Project page is not an Inquiry and
+  // must never allocate/consume an INQ number. The Inquiry model is the sole
+  // owner of Inquiry-number generation.
+  if (options.clearWhenUnlinked) {
+    body.inquiryNumber = '';
   }
+  return body;
+}
+
+async function attachInquiryOrderEndDate(body = {}) {
+  const inquiryId = normalizeObjectIdRef(body.inquiryReference);
+  if (!inquiryId) return body;
+
+  const inquiry = await Inquiry.findById(inquiryId).select('orderEndDate').lean();
+  body.orderEndDate = inquiry?.orderEndDate || undefined;
   return body;
 }
 
@@ -1911,7 +1930,7 @@ function applyProjectRiskFilter(query, riskFilter) {
 // ── Get all projects ──────────────────────────────────────────────────────────
 const getProjects = async (req, res, next) => {
   try {
-    const { page = 1, limit = 10, search, paymentStatus, orderDate, financialYear, riskFilter } = req.query;
+    const { page = 1, limit = 10, search, paymentStatus, orderDate, projectEndDate, createdBy, financialYear, riskFilter } = req.query;
     const query = {};
     applyFinancialYearFilter(query, financialYear);
     if (paymentStatus) query.paymentStatus = paymentStatus;
@@ -1924,6 +1943,22 @@ const getProjects = async (req, res, next) => {
         end.setHours(23, 59, 59, 999);
         query.orderDate = { $gte: start, $lte: end };
       }
+    }
+    if (projectEndDate) {
+      const selectedDate = new Date(projectEndDate);
+      if (!Number.isNaN(selectedDate.getTime())) {
+        const start = new Date(selectedDate);
+        start.setHours(0, 0, 0, 0);
+        const end = new Date(selectedDate);
+        end.setHours(23, 59, 59, 999);
+        query.projectEndDate = { $gte: start, $lte: end };
+      }
+    }
+    if (createdBy) {
+      if (!mongoose.Types.ObjectId.isValid(createdBy)) {
+        return res.status(400).json({ success: false, message: 'Invalid project creator filter' });
+      }
+      query.createdBy = createdBy;
     }
     applyProjectRiskFilter(query, riskFilter);
     if (search) {
@@ -1938,13 +1973,13 @@ const getProjects = async (req, res, next) => {
       ];
     }
     const skip = (Number(page) - 1) * Number(limit);
-    const [projects, total] = await Promise.all([
+    const [projects, total, creatorIds] = await Promise.all([
       Project.find(query)
         .populate('assignedTo', 'name email phone')
         .populate('assignedTeamMembers', 'name email role phone')
         .populate('createdBy', 'name')
         .populate('customerRef', 'customerId customerName companyType contacts contactPerson email mobileNumber city address gstNumber notes')
-        .populate('inquiryReference', 'inquiryId')
+        .populate('inquiryReference', 'inquiryId status')
         .populate('kickoffMeeting.attendees', 'name email role')
         .populate('documents.uploadedBy', 'name email')
         .populate('planningTasks.assignedTo', 'name email phone')
@@ -1953,7 +1988,15 @@ const getProjects = async (req, res, next) => {
         .skip(skip)
         .limit(Number(limit)),
       Project.countDocuments(query),
+      Project.distinct('createdBy', { createdBy: { $ne: null } }),
     ]);
+
+    const creators = creatorIds.length
+      ? await User.find({ _id: { $in: creatorIds } })
+          .select('name email role department isActive')
+          .sort({ name: 1, email: 1 })
+          .lean()
+      : [];
 
     // Live recalculate delay for incomplete projects and preserve/freeze delay for completed projects.
     for (const p of projects) {
@@ -1973,14 +2016,32 @@ const getProjects = async (req, res, next) => {
       }
     }
 
+    const responseProjects = await Promise.all(projects.map(async (item) => {
+      const plain = toPlainProjectResponse(getLiveCustomerSnapshot(item.toObject ? item.toObject() : item));
+      if (plain?.projectLock?.source === 'INQUIRY' && !plain.projectLock.status) {
+        plain.projectLock = await resolveProjectLockState(plain);
+      }
+      return plain;
+    }));
+
     res.json({
       success: true,
-      data: projects.map((item) => toPlainProjectResponse(getLiveCustomerSnapshot(item.toObject ? item.toObject() : item))),
+      data: responseProjects,
       pagination: {
         total,
         page:  Number(page),
         pages: Math.ceil(total / Number(limit)),
         limit: Number(limit),
+      },
+      filters: {
+        creators: creators.map((creator) => ({
+          _id: creator._id,
+          name: creator.name || creator.email || 'Unknown User',
+          email: creator.email || '',
+          role: creator.role || '',
+          department: creator.department || '',
+          isActive: creator.isActive !== false,
+        })),
       },
     });
   } catch (error) { next(error); }
@@ -2017,7 +2078,12 @@ const getProject = async (req, res, next) => {
       await Project.findByIdAndUpdate(project._id, delayFields);
     }
 
-    return res.json({ success: true, data: toPlainProjectResponse(getLiveCustomerSnapshot(project.toObject ? project.toObject() : project)) });
+    const responseProject = toPlainProjectResponse(getLiveCustomerSnapshot(project.toObject ? project.toObject() : project));
+    if (responseProject?.projectLock?.source === 'INQUIRY' && !responseProject.projectLock.status) {
+      responseProject.projectLock = await resolveProjectLockState(responseProject);
+    }
+
+    return res.json({ success: true, data: responseProject });
   } catch (error) { next(error); }
 };
 
@@ -2377,6 +2443,7 @@ const PROJECT_GENERAL_EDIT_FIELDS = Object.freeze([
   'panelSelections',
   'orderValue',
   'orderDate',
+  'orderEndDate',
   'expectedDeliveryDate',
   'actualDeliveryDate',
   'productionStatus',
@@ -2697,7 +2764,10 @@ const createProject = async (req, res, next) => {
   try {
     validateIncomingProjectDetailDates(req.body, {});
     validateIncomingPlanningStartDates(req.body, {});
-    const body = sanitizeProjectPayload(req.body);
+    const body = sanitizeProjectPayload(req.body, {
+      allowOrderEndDate: !normalizeObjectIdRef(req.body.inquiryReference),
+    });
+    await attachInquiryOrderEndDate(body);
     assertTaskStartDateRole(req.user, {}, body);
     await assertTaskStatusOwnership(req.user, {}, body);
     await attachUniversalCustomer(body, req.user._id);
@@ -2709,7 +2779,7 @@ const createProject = async (req, res, next) => {
     body.createdBy = req.user._id;
     await assertPlanningDepartmentScope(req.user, {}, body);
     await validatePlanningAssignments(body.planningGrids, {});
-    await attachInquiryNumber(body, { generateIfMissing: true });
+    await attachInquiryNumber(body, { clearWhenUnlinked: true });
     const project = await Project.create(body);
 
     if (body.inquiryReference) {
@@ -2732,7 +2802,7 @@ const createProject = async (req, res, next) => {
         .populate('assignedTeamMembers', 'name email role phone')
       .populate('createdBy', 'name')
       .populate('customerRef', 'customerId customerName companyType contacts contactPerson email mobileNumber city address gstNumber notes')
-      .populate('inquiryReference', 'inquiryId')
+      .populate('inquiryReference', 'inquiryId status')
       .populate('documents.uploadedBy', 'name email')
       .populate('planningTasks.assignedTo', 'name email phone')
         .populate('planningGrids.planningTasks.assignedTo', 'name email phone');
@@ -2831,7 +2901,8 @@ const copyProject = async (req, res, next) => {
     }
 
     const copyPayload = buildCopiedProjectPayload(sourceProject, req.user._id);
-    const body = sanitizeProjectPayload(copyPayload);
+    const body = sanitizeProjectPayload(copyPayload, { allowOrderEndDate: true });
+    await attachInquiryOrderEndDate(body);
     await attachUniversalCustomer(body, req.user._id, sourceProject);
     applyActualCompletedDates(body);
     applyProjectDelayFields(body);
@@ -2852,7 +2923,7 @@ const copyProject = async (req, res, next) => {
       .populate('assignedTeamMembers', 'name email role phone')
       .populate('createdBy', 'name')
       .populate('customerRef', 'customerId customerName companyType contacts contactPerson email mobileNumber city address gstNumber notes')
-      .populate('inquiryReference', 'inquiryId')
+      .populate('inquiryReference', 'inquiryId status')
       .populate('documents.uploadedBy', 'name email')
       .populate('planningTasks.assignedTo', 'name email phone')
       .populate('planningGrids.planningTasks.assignedTo', 'name email phone');
@@ -2915,7 +2986,19 @@ const updateProject = async (req, res, next) => {
 
     validateIncomingProjectDetailDates(req.body, oldProject);
     validateIncomingPlanningStartDates(req.body, oldProject);
-    const body = sanitizeProjectPayload(req.body, { partial: true });
+    const hasInquirySource = Boolean(
+      normalizeObjectIdRef(oldProject.inquiryReference)
+      || (oldProject.sourceInquirySnapshot
+        && typeof oldProject.sourceInquirySnapshot === 'object'
+        && Object.keys(oldProject.sourceInquirySnapshot).length > 0)
+    );
+    const body = sanitizeProjectPayload(req.body, {
+      partial: true,
+      allowOrderEndDate: !hasInquirySource,
+    });
+    // Projects converted from an Inquiry keep both order dates controlled by
+    // the Inquiry conversion flow. Direct/new Projects can edit both fields.
+    if (hasInquirySource) delete body.orderDate;
     preserveStoredStatusesForDerivedDelay(oldProject, body);
     [
       '_id', 'id', 'projectId', 'createdBy', 'createdAt', 'updatedAt', '__v',
@@ -3075,7 +3158,7 @@ const updateProject = async (req, res, next) => {
         .populate('assignedTeamMembers', 'name email role phone')
       .populate('createdBy', 'name')
       .populate('customerRef', 'customerId customerName companyType contacts contactPerson email mobileNumber city address gstNumber notes')
-      .populate('inquiryReference', 'inquiryId')
+      .populate('inquiryReference', 'inquiryId status')
       .populate('documents.uploadedBy', 'name email')
       .populate('planningTasks.assignedTo', 'name email phone')
       .populate('planningGrids.planningTasks.assignedTo', 'name email phone');

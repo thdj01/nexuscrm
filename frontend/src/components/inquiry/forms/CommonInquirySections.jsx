@@ -325,6 +325,13 @@ const buildPastInquiryOptions = (pastInquiries = [], currentValue = '') => {
 
 const getError = (errors = {}, key) => errors?.[key] || '';
 
+const getLocalDateInputValue = (date = new Date()) => {
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, '0');
+  const day = String(date.getDate()).padStart(2, '0');
+  return `${year}-${month}-${day}`;
+};
+
 const setValue = (setForm, field, value) => {
   setForm((prev) => ({
     ...prev,
@@ -940,7 +947,7 @@ const CommonInquirySections = ({
           color="blue"
           active={activeSection === 1}
         >
-          <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
+          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
             <FormField
               label="Inquiry Date"
               error={getError(errors, 'inquiryDate')}
@@ -955,6 +962,28 @@ const CommonInquirySections = ({
                   min={new Date().toISOString().split('T')[0]}
                   value={form?.inquiryDate || ''}
                   onChange={(event) => setValue(setForm, 'inquiryDate', event.target.value)}
+                  disabled={disabled}
+                  className="pl-9"
+                />
+              </div>
+            </FormField>
+
+            <FormField
+              label="Order Expected End Date"
+              required
+              error={getError(errors, 'orderEndDate')}
+            >
+              <div className="relative">
+                <Calendar
+                  size={16}
+                  className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-gray-400"
+                />
+                <Input
+                  type="date"
+                  min={getLocalDateInputValue()}
+                  required
+                  value={form?.orderEndDate || ''}
+                  onChange={(event) => setValue(setForm, 'orderEndDate', event.target.value)}
                   disabled={disabled}
                   className="pl-9"
                 />
@@ -995,7 +1024,7 @@ const CommonInquirySections = ({
 
             <FormField
               label="Panel Area Classification"
-              required={requiresCommonTechnicalFields}
+              required
               error={getError(errors, 'panelAreaClassification')}
             >
               <SearchableSelect
@@ -1017,7 +1046,7 @@ const CommonInquirySections = ({
 
             <FormField
               label={showFlpSection ? "Installation" : "Installation Type"}
-              required={requiresCommonTechnicalFields}
+              required
               error={getError(errors, 'installationType')}
             >
               <SearchableSelect
@@ -1034,6 +1063,7 @@ const CommonInquirySections = ({
             {showFlpSection && (
               <FormField
                 label="Hazardous Area"
+                required
                 error={getError(errors, 'hazardousArea')}
               >
                 <SearchableSelect
@@ -1051,6 +1081,7 @@ const CommonInquirySections = ({
             {showFlpSection && (
               <FormField
                 label="Outdoor Installation"
+                required
                 error={getError(errors, 'outdoorInstallation')}
               >
                 <SearchableSelect
@@ -1067,6 +1098,7 @@ const CommonInquirySections = ({
 
             <FormField
               label="IP Rating"
+              required
               error={getError(errors, 'ipRating')}
             >
               <SearchableSelect
@@ -1082,7 +1114,7 @@ const CommonInquirySections = ({
 
             <FormField
               label="Enclosure Type"
-              required={requiresCommonTechnicalFields}
+              required
               error={getError(errors, 'enclosureType')}
             >
               <SearchableSelect
@@ -1140,6 +1172,7 @@ const CommonInquirySections = ({
 
             <FormField
               label="Panel Structure"
+              required
               error={getError(errors, 'panelStructure') || getError(errors, 'mccDetails.layoutPreferences.panelStructure')}
             >
               <SearchableSelect
@@ -1155,7 +1188,7 @@ const CommonInquirySections = ({
 
             <FormField
               label="Cable Entry"
-              required={requiresCommonTechnicalFields}
+              required
               error={getError(errors, 'cableEntry')}
             >
               <SearchableSelect
@@ -1189,6 +1222,7 @@ const CommonInquirySections = ({
 
             <FormField
               label="Switchgear Make"
+              required
               error={switchgearMakeError}
             >
               <SearchableSelect
@@ -1364,6 +1398,7 @@ const CommonInquirySections = ({
 
                 <FormField
                   label="Supply Voltage"
+                  required
                   error={getError(errors, 'supplyVoltage')}
                 >
                   <SearchableSelect
@@ -1424,6 +1459,7 @@ const CommonInquirySections = ({
 
                 <FormField
                   label="Control Voltage"
+                  required
                   error={getError(errors, 'controlVoltage')}
                 >
                   <SearchableSelect
@@ -1439,6 +1475,7 @@ const CommonInquirySections = ({
 
                 <FormField
                   label="Frequency"
+                  required
                   error={getError(errors, 'frequency')}
                 >
                   <SearchableSelect
@@ -1454,6 +1491,7 @@ const CommonInquirySections = ({
 
                 <FormField
                   label="Short Circuit Withstand"
+                  required
                   error={getError(errors, 'shortCircuitCapacity')}
                 >
                   <SearchableSelect

@@ -3,7 +3,7 @@
 //
 // Timesheet → Project reverse sync for PROJECT-linked task status only.
 // Keeps project planning task status aligned when a user changes the
-// corresponding Timesheet task to In Progress or Completed.
+// corresponding Timesheet task status changes.
 // ─────────────────────────────────────────────────────────────────────────────
 
 'use strict';
@@ -17,7 +17,10 @@ const {
 const SYNC_LOG_PREFIX = '[TimesheetProjectReverseSync]';
 
 const TIMESHEET_TO_PROJECT_STATUS = Object.freeze({
+  Backlog: 'Pending',
+  Planned: 'Pending',
   'In Progress': 'In Progress',
+  Review: 'In Progress',
   Completed: 'Completed',
 });
 

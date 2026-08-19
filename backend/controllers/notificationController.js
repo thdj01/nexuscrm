@@ -1,5 +1,7 @@
 const Notification = require('../models/Notification');
 
+const VISIBLE_NOTIFICATION_TYPES = Notification.schema.path('type').enumValues;
+
 // @desc Get notifications
 // @route GET /api/notifications
 // @access Private
@@ -29,6 +31,7 @@ const getNotifications = async (
           recipient: null,
         },
       ],
+      type: { $in: VISIBLE_NOTIFICATION_TYPES },
     };
 
     // Filter Read / Unread
@@ -97,7 +100,7 @@ const getNotifications = async (
 
         pages: Math.ceil(
           total /
-            Number(limit)
+          Number(limit)
         ),
       },
     });
@@ -165,6 +168,7 @@ const markAllAsRead = async (
           },
         ],
 
+        type: { $in: VISIBLE_NOTIFICATION_TYPES },
         isRead: false,
       },
 

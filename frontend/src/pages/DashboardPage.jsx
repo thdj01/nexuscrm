@@ -5,7 +5,6 @@ import {
   CheckCircle,
   XCircle,
   FolderKanban,
-  Bell,
   ArrowUpRight,
   AlertTriangle,
   CalendarClock,
@@ -661,18 +660,26 @@ const RecentInquiryRows = ({ recent, navigate }) => (
       <div
         key={inq._id}
         onClick={() => navigate(`/inquiries/${inq._id}`)}
-        className="flex w-full min-w-0 cursor-pointer flex-col items-start gap-2 px-3 py-3 transition-colors hover:bg-gray-50 sm:flex-row sm:flex-wrap sm:items-center sm:px-5"
+        className="grid w-full min-w-0 cursor-pointer grid-cols-1 items-center gap-x-4 gap-y-2 px-3 py-3 transition-colors hover:bg-gray-50 sm:grid-cols-2 sm:px-5 lg:grid-cols-[minmax(0,1.35fr)_minmax(0,1fr)_minmax(0,1fr)_minmax(140px,0.8fr)]"
       >
-        <div className="w-full min-w-0 sm:min-w-[150px] sm:flex-1">
-          <p className="break-words text-sm font-semibold text-gray-800">{inq.customerName || inq.companyName || 'Untitled Inquiry'}</p>
+        <div className="min-w-0">
+          <p
+            className="break-words text-sm font-semibold text-gray-800 sm:truncate"
+            title={inq.customerName || inq.companyName || 'Untitled Inquiry'}
+          >
+            {inq.customerName || inq.companyName || 'Untitled Inquiry'}
+          </p>
         </div>
 
-        <div className="flex w-full min-w-0 flex-wrap items-center gap-1.5 sm:flex-1">
+        <div className="flex min-w-0 items-center">
           <InfoPill tone="blue">Inquiry No: {inq.inquiryId || '—'}</InfoPill>
+        </div>
+
+        <div className="flex min-w-0 items-center">
           <InfoPill tone="violet">Panel: {getInquiryPanelLabel(inq)}</InfoPill>
         </div>
 
-        <div className="flex w-full min-w-0 flex-wrap items-center gap-1.5 sm:ml-auto sm:w-auto sm:justify-end">
+        <div className="flex min-w-0 items-center sm:justify-end lg:justify-end">
           <StatusBadge status={inq.status} size="xs" />
         </div>
       </div>
@@ -839,15 +846,6 @@ const InquirySection = ({ stats, charts, recent, navigate, taskReminders, showTa
     />
 
     <InquiryStatusCards charts={charts} navigate={navigate} financialYear={financialYear} />
-
-    {stats?.pendingFollowUps > 0 && (
-      <div className="bg-amber-50 border border-amber-200 rounded-xl p-4 flex items-center gap-3">
-        <Bell size={18} className="text-amber-600 flex-shrink-0" />
-        <p className="text-sm text-amber-800">
-          <strong>{stats.pendingFollowUps}</strong> pending follow-up{stats.pendingFollowUps > 1 ? 's' : ''} require your attention.
-        </p>
-      </div>
-    )}
 
     {showTaskReminder ? (
       <div className="grid grid-cols-1 xl:grid-cols-2 gap-6">

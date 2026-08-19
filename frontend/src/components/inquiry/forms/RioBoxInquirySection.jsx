@@ -34,6 +34,8 @@ import {
   setPanelMainIncomerDetails,
 } from '../../../utils/mainIncomerUtils';
 
+const getError = (errors = {}, key = '') => errors?.[key] || '';
+
 const Subsection = ({ title, children }) => (
   <div className="rounded-2xl border border-slate-200 bg-slate-50/60 p-4 sm:p-5">
     <h4 className="mb-4 text-sm font-semibold text-slate-800">{title}</h4>
@@ -231,7 +233,7 @@ const RioBoxInquirySection = ({
                 />
               </FormField>
 
-              <FormField label="Mounting">
+              <FormField label="Mounting" required error={getError(errors, 'rioBoxDetails.application.mounting')}>
                 <SearchableSelect
                   includeNotApplicable
                   value={application.mounting || ''}
@@ -260,7 +262,7 @@ const RioBoxInquirySection = ({
                 />
               </FormField>
 
-              <FormField label="System Voltage">
+              <FormField label="System Voltage" required error={getError(errors, 'rioBoxDetails.application.systemVoltage')}>
                 <SearchableSelect
                   includeNotApplicable
                   value={application.systemVoltage || ''}
@@ -271,7 +273,7 @@ const RioBoxInquirySection = ({
                 />
               </FormField>
 
-              <FormField label="Communication Protocol">
+              <FormField label="Communication Protocol" required error={getError(errors, 'rioBoxDetails.application.communicationProtocol')}>
                 <SearchableSelect
                   includeNotApplicable
                   value={application.communicationProtocol || ''}
@@ -282,7 +284,7 @@ const RioBoxInquirySection = ({
                 />
               </FormField>
 
-              <FormField label="Network Medium">
+              <FormField label="Network Medium" required error={getError(errors, 'rioBoxDetails.application.networkMedium')}>
                 <SearchableSelect
                   includeNotApplicable
                   value={application.networkMedium || ''}
@@ -293,7 +295,7 @@ const RioBoxInquirySection = ({
                 />
               </FormField>
 
-              <FormField label="Topology">
+              <FormField label="Topology" required error={getError(errors, 'rioBoxDetails.application.topology')}>
                 <SearchableSelect
                   includeNotApplicable
                   value={application.topology || ''}
@@ -313,7 +315,7 @@ const RioBoxInquirySection = ({
                 />
               </FormField>
 
-              <FormField label="Redundancy Required">
+              <FormField label="Redundancy Required" required error={getError(errors, 'rioBoxDetails.application.redundancyRequired')}>
                 <SearchableSelect
                   includeNotApplicable
                   value={application.redundancyRequired || ''}
@@ -324,7 +326,7 @@ const RioBoxInquirySection = ({
                 />
               </FormField>
 
-              <FormField label="Local HMI Required">
+              <FormField label="Local HMI Required" required error={getError(errors, 'rioBoxDetails.application.localHmiRequired')}>
                 <SearchableSelect
                   includeNotApplicable
                   value={application.localHmiRequired || ''}
@@ -418,7 +420,7 @@ const RioBoxInquirySection = ({
 
           <Subsection title="Enclosure & Installation Conditions">
             <div className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-3">
-              <FormField label="Enclosure Material">
+              <FormField label="Enclosure Material" required error={getError(errors, 'rioBoxDetails.enclosureConditions.enclosureMaterial')}>
                 <SearchableSelect
                   includeNotApplicable
                   value={enclosureConditions.enclosureMaterial || ''}
@@ -429,7 +431,7 @@ const RioBoxInquirySection = ({
                 />
               </FormField>
 
-              <FormField label="IP Rating">
+              <FormField label="IP Rating" required error={getError(errors, 'rioBoxDetails.enclosureConditions.ipRating')}>
                 <SearchableSelect
                   includeNotApplicable
                   value={enclosureConditions.ipRating || ''}
@@ -440,7 +442,7 @@ const RioBoxInquirySection = ({
                 />
               </FormField>
 
-              <FormField label="Area Classification">
+              <FormField label="Area Classification" required error={getError(errors, 'rioBoxDetails.enclosureConditions.areaClassification')}>
                 <SearchableSelect
                   includeNotApplicable
                   value={enclosureConditions.areaClassification || ''}
@@ -451,7 +453,7 @@ const RioBoxInquirySection = ({
                 />
               </FormField>
 
-              <FormField label="Indoor / Outdoor">
+              <FormField label="Indoor / Outdoor" required error={getError(errors, 'rioBoxDetails.enclosureConditions.indoorOutdoor')}>
                 <SearchableSelect
                   includeNotApplicable
                   value={enclosureConditions.indoorOutdoor || ''}
@@ -471,7 +473,7 @@ const RioBoxInquirySection = ({
                 />
               </FormField>
 
-              <FormField label="Canopy Required">
+              <FormField label="Canopy Required" required error={getError(errors, 'rioBoxDetails.enclosureConditions.canopyRequired')}>
                 <SearchableSelect
                   includeNotApplicable
                   value={enclosureConditions.canopyRequired || ''}
@@ -482,7 +484,7 @@ const RioBoxInquirySection = ({
                 />
               </FormField>
 
-              <FormField label="Cable Entry">
+              <FormField label="Cable Entry" required error={getError(errors, 'rioBoxDetails.enclosureConditions.cableEntry')}>
                 <SearchableSelect
                   includeNotApplicable
                   value={enclosureConditions.cableEntry || ''}
@@ -504,7 +506,7 @@ const RioBoxInquirySection = ({
                 />
               </FormField>
 
-              <FormField label="Gland Plate Required">
+              <FormField label="Gland Plate Required" required error={getError(errors, 'rioBoxDetails.enclosureConditions.glandPlateRequired')}>
                 <SearchableSelect
                   includeNotApplicable
                   value={enclosureConditions.glandPlateRequired || ''}
@@ -515,7 +517,7 @@ const RioBoxInquirySection = ({
                 />
               </FormField>
 
-              <FormField label="Power Supply Available">
+              <FormField label="Power Supply Available" required error={getError(errors, 'rioBoxDetails.enclosureConditions.powerSupplyAvailable')}>
                 <SearchableSelect
                   includeNotApplicable
                   value={enclosureConditions.powerSupplyAvailable || ''}
@@ -526,7 +528,7 @@ const RioBoxInquirySection = ({
                 />
               </FormField>
 
-              <FormField label="UPS Supply Available">
+              <FormField label="UPS Supply Available" required error={getError(errors, 'rioBoxDetails.enclosureConditions.upsSupplyAvailable')}>
                 <SearchableSelect
                   includeNotApplicable
                   value={enclosureConditions.upsSupplyAvailable || ''}
@@ -537,7 +539,7 @@ const RioBoxInquirySection = ({
                 />
               </FormField>
 
-              <FormField label="Space Heater Required">
+              <FormField label="Space Heater Required" required error={getError(errors, 'rioBoxDetails.enclosureConditions.spaceHeaterRequired')}>
                 <SearchableSelect
                   includeNotApplicable
                   value={enclosureConditions.spaceHeaterRequired || ''}
@@ -552,7 +554,7 @@ const RioBoxInquirySection = ({
 
           <Subsection title="Accessories / Special Requirements">
             <div className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-4">
-              <FormField label="Network Switch">
+              <FormField label="Network Switch" required error={getError(errors, 'rioBoxDetails.accessories.networkSwitch')}>
                 <SearchableSelect
                   includeNotApplicable
                   value={accessories.networkSwitch || ''}
@@ -563,7 +565,7 @@ const RioBoxInquirySection = ({
                 />
               </FormField>
 
-              <FormField label="Fiber Converter">
+              <FormField label="Fiber Converter" required error={getError(errors, 'rioBoxDetails.accessories.fiberConverter')}>
                 <SearchableSelect
                   includeNotApplicable
                   value={accessories.fiberConverter || ''}
@@ -574,7 +576,7 @@ const RioBoxInquirySection = ({
                 />
               </FormField>
 
-              <FormField label="24 VDC Power Supply">
+              <FormField label="24 VDC Power Supply" required error={getError(errors, 'rioBoxDetails.accessories.powerSupply24Vdc')}>
                 <SearchableSelect
                   includeNotApplicable
                   value={accessories.powerSupply24Vdc || ''}
@@ -585,7 +587,7 @@ const RioBoxInquirySection = ({
                 />
               </FormField>
 
-              <FormField label="Redundant PSU">
+              <FormField label="Redundant PSU" required error={getError(errors, 'rioBoxDetails.accessories.redundantPsu')}>
                 <SearchableSelect
                   includeNotApplicable
                   value={accessories.redundantPsu || ''}
@@ -596,7 +598,7 @@ const RioBoxInquirySection = ({
                 />
               </FormField>
 
-              <FormField label="Marshalling Terminals">
+              <FormField label="Marshalling Terminals" required error={getError(errors, 'rioBoxDetails.accessories.marshallingTerminals')}>
                 <SearchableSelect
                   includeNotApplicable
                   value={accessories.marshallingTerminals || ''}
@@ -607,7 +609,7 @@ const RioBoxInquirySection = ({
                 />
               </FormField>
 
-              <FormField label="Interposing Relays">
+              <FormField label="Interposing Relays" required error={getError(errors, 'rioBoxDetails.accessories.interposingRelays')}>
                 <SearchableSelect
                   includeNotApplicable
                   value={accessories.interposingRelays || ''}
@@ -618,7 +620,7 @@ const RioBoxInquirySection = ({
                 />
               </FormField>
 
-              <FormField label="Intrinsic Safety Barriers">
+              <FormField label="Intrinsic Safety Barriers" required error={getError(errors, 'rioBoxDetails.accessories.intrinsicSafetyBarriers')}>
                 <SearchableSelect
                   includeNotApplicable
                   value={accessories.intrinsicSafetyBarriers || ''}
@@ -629,7 +631,7 @@ const RioBoxInquirySection = ({
                 />
               </FormField>
 
-              <FormField label="Local Isolator">
+              <FormField label="Local Isolator" required error={getError(errors, 'rioBoxDetails.accessories.localIsolator')}>
                 <SearchableSelect
                   includeNotApplicable
                   value={accessories.localIsolator || ''}

@@ -49,11 +49,13 @@ const unwrapTicketList = (response) => ({
     Void: 0,
   },
   pagination: normalizePagination(response.data.pagination),
+  filters: response.data.filters ?? { creators: [] },
 });
 
 // ── List tickets ─────────────────────────────────────────────────────────────
-export const fetchTickets = (params = {}) =>
-  API.get('/tickets', { params: normalizeTicketListParams(params) }).then(unwrapTicketList);
+export async function fetchTickets(params = {}) {
+  return API.get('/tickets', { params: normalizeTicketListParams(params) }).then(unwrapTicketList);
+}
 
 // ── Single ticket ────────────────────────────────────────────────────────────
 export const fetchTicket = (id) =>

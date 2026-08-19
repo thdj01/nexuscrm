@@ -115,9 +115,12 @@ const RequiredSelector = ({ value, onChange, disabled = false, error = '' }) => 
 );
 
 // Stacked label + control used by the mobile card layout.
-const MobileField = ({ label, children }) => (
+const MobileField = ({ label, required = false, children }) => (
   <div className="flex flex-col gap-1">
-    <span className="text-xs font-medium text-gray-600">{label}</span>
+    <span className="text-xs font-medium text-gray-600">
+      {label}
+      {required && <span className="ml-1 text-red-500">*</span>}
+    </span>
     {children}
   </div>
 );
@@ -144,12 +147,12 @@ const ComponentRequirementTable = ({
 
   const tableRows = sourceComponents.length > 0
     ? sourceComponents
-        .slice(0, visibleCount)
-        .map((component, index) => normaliseRow(sourceRows[index], component))
+      .slice(0, visibleCount)
+      .map((component, index) => normaliseRow(sourceRows[index], component))
     : Array.from(
-        { length: Math.max(1, sourceRows.length) },
-        (_, index) => normaliseRow(sourceRows[index])
-      ).slice(0, Math.max(1, visibleCount));
+      { length: Math.max(1, sourceRows.length) },
+      (_, index) => normaliseRow(sourceRows[index])
+    ).slice(0, Math.max(1, visibleCount));
 
   const canAddRow = allowAddRow && (sourceComponents.length > 0
     ? tableRows.length < sourceComponents.length
@@ -364,7 +367,7 @@ const ComponentRequirementTable = ({
               </div>
 
               <div className="space-y-3">
-                <MobileField label="Required">
+                <MobileField label="Required" required>
                   <RequiredSelector
                     value={row.required}
                     onChange={(value) => updateRequired(index, value)}
@@ -374,7 +377,7 @@ const ComponentRequirementTable = ({
                   <ErrorText>{err.required}</ErrorText>
                 </MobileField>
 
-                <MobileField label="Preferred Brand">
+                <MobileField label="Preferred Brand" required={useBrandDropdown && row.required === 'Yes'}>
                   {renderPreferredBrandField(row, index, err.preferredBrand)}
                   <ErrorText>{err.preferredBrand}</ErrorText>
                 </MobileField>
@@ -415,10 +418,10 @@ const ComponentRequirementTable = ({
                 Component
               </th>
               <th className="w-[12%] border-b border-gray-200 px-2 py-3 text-center">
-                Required
+                Required <span className="text-red-500">*</span>
               </th>
               <th className="w-[18%] border-b border-gray-200 px-2 py-3">
-                Preferred Brand
+                Preferred Brand {useBrandDropdown && <span className="text-red-500">*</span>}
               </th>
               <th className="w-[23%] border-b border-gray-200 px-2 py-3">
                 Suggested Model / Range

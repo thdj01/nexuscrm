@@ -95,7 +95,7 @@ const cleanPermissionList = (value) => {
   }
 
   // Customer Master is required specifically for creating an Inquiry.
-  // Edit, follow-up, commercial-submit, and universal view permissions do not
+  // Edit, commercial-submit, and universal view permissions do not
   // automatically grant Customer access.
   if (normalized.has(INQUIRY_PERMISSIONS.CREATE)) {
     ALL_CUSTOMER_PERMISSIONS.forEach((permission) => normalized.add(permission));

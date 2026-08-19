@@ -72,74 +72,75 @@ const DEFAULT_CONTACT = () => ({
 
 const defaultForm = () => ({
   // Section 1 — Client & Project Information
-  inquiryDate:    new Date().toISOString().split('T')[0],
-  customerRef:    '',
-  customerName:   '',
-  companyType:    '',
+  inquiryDate: new Date().toISOString().split('T')[0],
+  customerRef: '',
+  customerName: '',
+  companyType: '',
   customCompanyType: '',
-  contacts:       [DEFAULT_CONTACT()],
-  siteAddress:    '',
-  city:           '',
+  contacts: [DEFAULT_CONTACT()],
+  siteAddress: '',
+  city: '',
 
   // Project details are included in Section 1 (Budget + Priority are managed by estimator)
-  projectName:          '',
-  industryType:         '',
-  customIndustryType:   '',   // shown when industryType === 'Other'
-  offerType:            '',
+  projectName: '',
+  industryType: '',
+  customIndustryType: '',   // shown when industryType === 'Other'
+  offerType: '',
   previousOrderRef: '',
 
   // Sprint 2 — Inquiry Type
   inquiryType: '',
 
   // Section 3 — Panel Type
-  panelTypes:             [],
-  customPanelType:        '',   // shown when panelTypes includes 'OTHER'
+  panelTypes: [],
+  customPanelType: '',   // shown when panelTypes includes 'OTHER'
   applicationDescription: '',
-  applicationProcess:     '',
+  applicationProcess: '',
 
   // Section 4 — Technical Specs
-  supplyVoltage:              '',
-  controlVoltage:             '',
-  controlFeeder:              false,
-  frequency:                  '50 Hz',
-  panelAreaClassification:    '',
-  panelAreaClass:             '',
-  ipRating:                   'IP65',
-  installationType:           '',
-  hazardousArea:              'Yes',
-  outdoorInstallation:        '',
-  shortCircuitCapacity:       '',
-  busbarMaterial:             'Aluminium',
-  enclosureType:              '',
-  enclosureMake:              '',
-  panelStructure:             '',
-  switchgearMake:             '',
-  customSwitchgearMake:       '',
-  panelColourRal:             '',
-  cableEntry:                 '',
-  cableGlandMaterial:         '',
+  supplyVoltage: '',
+  controlVoltage: '',
+  controlFeeder: false,
+  frequency: '50 Hz',
+  panelAreaClassification: '',
+  panelAreaClass: '',
+  ipRating: 'IP65',
+  installationType: '',
+  hazardousArea: 'Yes',
+  outdoorInstallation: '',
+  shortCircuitCapacity: '',
+  busbarMaterial: 'Aluminium',
+  enclosureType: '',
+  enclosureMake: '',
+  panelStructure: '',
+  switchgearMake: '',
+  customSwitchgearMake: '',
+  panelColourRal: '',
+  cableEntry: '',
+  cableGlandMaterial: '',
 
   // Section 5 — Variant
-  barrierVariant:             '',
+  barrierVariant: '',
 
   // Section 5 — Load Details
   loadDetails: [DEFAULT_LOAD_ROW()],
 
   // Section 6 — Control & Monitoring
-  controlType:   'Automatic',
+  controlType: 'Automatic',
   controlMatrix: {},
 
   // Section 7 — Standards & Compliance
-  panelMounting:             '',
-  certificationRequired:     false,
-  certificationDetails:      '',
-  drawingsSldAttached:       '',
-  equipmentListAttached:     '',
-  referenceBomAttached:      '',
-  commissioningScope:        false,
-  deliveryDate:              '',
-  programmingScope:          'Customer Scope',
-  onsiteSupport:             null,
+  panelMounting: '',
+  certificationRequired: false,
+  certificationDetails: '',
+  drawingsSldAttached: '',
+  equipmentListAttached: '',
+  referenceBomAttached: '',
+  commissioningScope: false,
+  deliveryDate: '',
+  orderEndDate: '',
+  programmingScope: 'Customer Scope',
+  onsiteSupport: null,
 
   // Sprint 2 — Type-specific Details
   plcDetails: defaultPlcDetails(),
@@ -149,17 +150,16 @@ const defaultForm = () => ({
   rioBoxDetails: defaultRioBoxDetails(),
 
   // Section 8 — Notes & Review
-  additionalNotes:  '',
-  internalRemarks:  '',
+  additionalNotes: '',
+  internalRemarks: '',
 
   // Meta (kept for backend compat — not editable by salesperson)
-  status:           'New',
-  statusDetails:    {},
-  remarks:          '',
+  status: 'New',
+  statusDetails: {},
+  remarks: '',
   bomSubmissionRemarks: '',
-  productType:      '',
-  nextFollowUpDate: '',
-  reviewStatus:     '',
+  productType: '',
+  reviewStatus: '',
 });
 
 
@@ -303,8 +303,8 @@ const STICKY_STEPPER_TOP_OFFSET = '-20px';
 
 const formatBytes = (bytes = 0) => {
   if (!bytes) return '';
-  if (bytes < 1024)           return `${bytes} B`;
-  if (bytes < 1024 * 1024)    return `${(bytes / 1024).toFixed(0)} KB`;
+  if (bytes < 1024) return `${bytes} B`;
+  if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(0)} KB`;
   return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
 };
 
@@ -694,33 +694,33 @@ const ensureNestedDefaults = (record = {}) => {
       : defaultPlc.automationRequirements,
     mainIncomerFeeder: hasNewMainIncomerData
       ? {
-          ...defaultPlc.mainIncomerFeeder,
-          ...existingMainIncomer,
-        }
+        ...defaultPlc.mainIncomerFeeder,
+        ...existingMainIncomer,
+      }
       : {
-          ...defaultPlc.mainIncomerFeeder,
-          supplyVoltage: record.supplyVoltage || defaultPlc.mainIncomerFeeder.supplyVoltage,
-          frequency: record.frequency || defaultPlc.mainIncomerFeeder.frequency,
-          make: record.switchgearMake || defaultPlc.mainIncomerFeeder.make,
-          customMake: record.customSwitchgearMake || defaultPlc.mainIncomerFeeder.customMake,
-          kaRating: record.shortCircuitCapacity || defaultPlc.mainIncomerFeeder.kaRating,
-          controlFeeder: record.controlFeeder ? 'Required' : defaultPlc.mainIncomerFeeder.controlFeeder,
-        },
+        ...defaultPlc.mainIncomerFeeder,
+        supplyVoltage: record.supplyVoltage || defaultPlc.mainIncomerFeeder.supplyVoltage,
+        frequency: record.frequency || defaultPlc.mainIncomerFeeder.frequency,
+        make: record.switchgearMake || defaultPlc.mainIncomerFeeder.make,
+        customMake: record.customSwitchgearMake || defaultPlc.mainIncomerFeeder.customMake,
+        kaRating: record.shortCircuitCapacity || defaultPlc.mainIncomerFeeder.kaRating,
+        controlFeeder: record.controlFeeder ? 'Required' : defaultPlc.mainIncomerFeeder.controlFeeder,
+      },
     plcSystem: hasNewPlcSystemData
       ? {
-          ...defaultPlc.plcSystem,
-          ...existingPlcSystem,
-        }
+        ...defaultPlc.plcSystem,
+        ...existingPlcSystem,
+      }
       : {
-          ...defaultPlc.plcSystem,
-          communicationProtocol: legacyPlcIoDetails.communicationProtocol || '',
-          networkTopology: legacyPlcIoDetails.networkTopology || '',
-          hmiRequired: legacyHmiRow.required === 'Yes',
-          hmiMake: legacyHmiRow.preferredBrand || '',
-          hmiSize: legacyHmiRow.suggestedModelRange || '',
-          ethernetSwitchRequired: legacyNetworkSwitchRow.required === 'Yes',
-          ethernetSwitchType: legacyNetworkSwitchRow.suggestedModelRange || '',
-        },
+        ...defaultPlc.plcSystem,
+        communicationProtocol: legacyPlcIoDetails.communicationProtocol || '',
+        networkTopology: legacyPlcIoDetails.networkTopology || '',
+        hmiRequired: legacyHmiRow.required === 'Yes',
+        hmiMake: legacyHmiRow.preferredBrand || '',
+        hmiSize: legacyHmiRow.suggestedModelRange || '',
+        ethernetSwitchRequired: legacyNetworkSwitchRow.required === 'Yes',
+        ethernetSwitchType: legacyNetworkSwitchRow.suggestedModelRange || '',
+      },
     servoDetails: {
       ...defaultPlc.servoDetails,
       ...(record.plcDetails?.servoDetails || {}),
@@ -775,7 +775,7 @@ const ensureNestedDefaults = (record = {}) => {
         : defaultVfd.loadDetails,
     additionalComponents:
       Array.isArray(record.vfdDetails?.additionalComponents) &&
-      record.vfdDetails.additionalComponents.length > 0
+        record.vfdDetails.additionalComponents.length > 0
         ? record.vfdDetails.additionalComponents
         : defaultVfd.additionalComponents,
   };
@@ -812,18 +812,18 @@ const ensureNestedDefaults = (record = {}) => {
       ...(record.mccDetails?.outgoingFeederDetails || {}),
       feederTypes: Array.isArray(record.mccDetails?.outgoingFeederDetails?.feederTypes)
         ? Array.from(new Set(
-            record.mccDetails.outgoingFeederDetails.feederTypes
-              .map(normalizeMccFeederType)
-              .filter(Boolean)
-          ))
+          record.mccDetails.outgoingFeederDetails.feederTypes
+            .map(normalizeMccFeederType)
+            .filter(Boolean)
+        ))
         : defaultMcc.outgoingFeederDetails.feederTypes,
     },
     loadDetails: hasMccLoadRows
       ? record.mccDetails.loadDetails
       : (
-          inquiryType === INQUIRY_TYPES.MCC_PANEL ||
-          inquiryType === INQUIRY_TYPES.MCC_CUM_PLC
-        ) && legacyLoadRows.length > 0
+        inquiryType === INQUIRY_TYPES.MCC_PANEL ||
+        inquiryType === INQUIRY_TYPES.MCC_CUM_PLC
+      ) && legacyLoadRows.length > 0
         ? normaliseInquiryLoadRows(legacyLoadRows, 'MCC')
         : defaultMcc.loadDetails,
     layoutPreferences: {
@@ -977,9 +977,9 @@ const ensureNestedDefaults = (record = {}) => {
       : inquiryType === INQUIRY_TYPES.VFD_PANEL
         ? normaliseInquiryLoadRows(vfdDetails.loadDetails, 'VFD')
         : (
-            inquiryType === INQUIRY_TYPES.MCC_PANEL ||
-            inquiryType === INQUIRY_TYPES.MCC_CUM_PLC
-          )
+          inquiryType === INQUIRY_TYPES.MCC_PANEL ||
+          inquiryType === INQUIRY_TYPES.MCC_CUM_PLC
+        )
           ? normaliseInquiryLoadRows(mccDetails.loadDetails, 'MCC')
           : [DEFAULT_LOAD_ROW()],
 
@@ -999,8 +999,8 @@ const ensureNestedDefaults = (record = {}) => {
 const ElectricalPanelInquiryPage = () => {
   const navigate = useNavigate();
   const location = useLocation();
-  const { id }   = useParams();
-  const toast    = useToast();
+  const { id } = useParams();
+  const toast = useToast();
   const { hasPermission, user } = useAuth();
 
   const canCreateInquiry = hasPermission(INQUIRY_PERMISSIONS.CREATE);
@@ -1016,10 +1016,10 @@ const ElectricalPanelInquiryPage = () => {
   const isEdit = isExistingInquiry && location.pathname.endsWith('/edit');
   const isView = isExistingInquiry && !isEdit;
 
-  const [form,        setForm]        = useState(() => ensureNestedDefaults(defaultForm()));
+  const [form, setForm] = useState(() => ensureNestedDefaults(defaultForm()));
   const [draftLoaded, setDraftLoaded] = useState(false);
-  const [errors,      setErrors]      = useState({});
-  const [submitting,  setSubmitting]  = useState(false);
+  const [errors, setErrors] = useState({});
+  const [submitting, setSubmitting] = useState(false);
   const [pageLoading, setPageLoading] = useState(isExistingInquiry);
   const [downloadingPdf, setDownloadingPdf] = useState(false);
 
@@ -1037,7 +1037,7 @@ const ElectricalPanelInquiryPage = () => {
   // ── Attachment state ─────────────────────────────────────────────────────────
   // stagedFiles   : File objects selected by user, not yet on server
   // savedAttachments : attachment sub-docs already persisted on the server
-  const [stagedFiles,      setStagedFiles]      = useState([]);
+  const [stagedFiles, setStagedFiles] = useState([]);
   const [dragActive, setDragActive] = useState(false);
   const [savedAttachments, setSavedAttachments] = useState([]);
   const [bomStagedFiles, setBomStagedFiles] = useState([]);
@@ -1054,9 +1054,9 @@ const ElectricalPanelInquiryPage = () => {
   const [updatingCustomer, setUpdatingCustomer] = useState(false);
 
   // Autocomplete suggestion pools kept for backward-compatible data hydration
-  const [companySuggestions,     setCompanySuggestions]     = useState([]);
+  const [companySuggestions, setCompanySuggestions] = useState([]);
   const [contactNameSuggestions, setContactNameSuggestions] = useState([]);
-  const [citySuggestions,        setCitySuggestions]        = useState([]);
+  const [citySuggestions, setCitySuggestions] = useState([]);
 
   // Past inquiries for "Repeat Order" selector
   const [pastInquiries, setPastInquiries] = useState([]);
@@ -1065,33 +1065,33 @@ const ElectricalPanelInquiryPage = () => {
   const [activeSection, setActiveSection] = useState(0);
   const sectionRefs = useRef([]);
 
-const setSprint2Form = useCallback((updater) => {
-  setForm((prev) => {
-    const next = typeof updater === 'function'
-      ? updater(prev)
-      : { ...prev, ...(updater || {}) };
+  const setSprint2Form = useCallback((updater) => {
+    setForm((prev) => {
+      const next = typeof updater === 'function'
+        ? updater(prev)
+        : { ...prev, ...(updater || {}) };
 
-    return ensureNestedDefaults(next);
-  });
-}, []);
+      return ensureNestedDefaults(next);
+    });
+  }, []);
 
-  
+
 
   // const selectedDate = new Date(form.inquiryDate);
 
-useEffect(() => {
-  if (!draftLoaded) return;
-  if (isExistingInquiry) return;
+  useEffect(() => {
+    if (!draftLoaded) return;
+    if (isExistingInquiry) return;
 
-  const timer = setTimeout(() => {
-    localStorage.setItem(
-      DRAFT_KEY,
-      JSON.stringify(ensureNestedDefaults(form))
-    );
-  }, 1000);
+    const timer = setTimeout(() => {
+      localStorage.setItem(
+        DRAFT_KEY,
+        JSON.stringify(ensureNestedDefaults(form))
+      );
+    }, 1000);
 
-  return () => clearTimeout(timer);
-}, [form, draftLoaded, isExistingInquiry]);
+    return () => clearTimeout(timer);
+  }, [form, draftLoaded, isExistingInquiry]);
 
 
   // ── Load existing inquiry (view/edit mode) ──────────────────────────────────────
@@ -1119,8 +1119,8 @@ useEffect(() => {
           ? VOLTAGE_OPTIONS.map(o => (typeof o === 'string' ? o : o.value))
           : [];
         const isCustomVoltage = d.supplyVoltage && !knownVoltages.includes(d.supplyVoltage) && d.supplyVoltage !== 'Custom';
-        const displayVoltage  = isCustomVoltage ? 'Custom' : (d.supplyVoltage || '');
-        const customVoltage   = isCustomVoltage ? (d.supplyVoltage || '') : '';
+        const displayVoltage = isCustomVoltage ? 'Custom' : (d.supplyVoltage || '');
+        const customVoltage = isCustomVoltage ? (d.supplyVoltage || '') : '';
 
         const knownPanelTypes = Array.isArray(PANEL_TYPES)
           ? PANEL_TYPES.map(o => (typeof o === 'string' ? o : o.value))
@@ -1132,13 +1132,13 @@ useEffect(() => {
         // Resolve industryType "Other" back-fill for edit mode.
         // If the stored value is not in the known INDUSTRY_TYPES list (excluding 'Other'),
         // it was a custom value saved as industryType — restore it into customIndustryType.
-        const knownIndustryTypes = ['Automotive','Chemical & Pharma','Construction','Data Centre',
-          'Food & Beverage','Infrastructure','Metal & Fabrication','Mining','Oil & Gas',
-          'Paper & Pulp','Power Generation','Renewable Energy','Sugar & Distillery',
-          'Textile','Water Treatment','Other'];
-        const isCustomIndustry    = d.industryType && !knownIndustryTypes.includes(d.industryType);
+        const knownIndustryTypes = ['Automotive', 'Chemical & Pharma', 'Construction', 'Data Centre',
+          'Food & Beverage', 'Infrastructure', 'Metal & Fabrication', 'Mining', 'Oil & Gas',
+          'Paper & Pulp', 'Power Generation', 'Renewable Energy', 'Sugar & Distillery',
+          'Textile', 'Water Treatment', 'Other'];
+        const isCustomIndustry = d.industryType && !knownIndustryTypes.includes(d.industryType);
         const displayIndustryType = isCustomIndustry ? 'Other' : (d.industryType || '');
-        const customIndustryType  = isCustomIndustry ? d.industryType : (d.customIndustryType || '');
+        const customIndustryType = isCustomIndustry ? d.industryType : (d.customIndustryType || '');
 
         const knownCompanyTypes = ['End User', 'OEM', 'Consultant', 'Contractor',
           'System Integrator', 'Panel Builder', 'Dealer / Trader', 'Other'];
@@ -1150,20 +1150,20 @@ useEffect(() => {
           ...prev,
           ...d,
           customerRef: getLiveCustomerId(d),
-          customerName: getLiveCustomerName(d),
-          inquiryDate:      d.inquiryDate      ? new Date(d.inquiryDate).toISOString().split('T')[0]      : prev.inquiryDate,
-          city:             d.city || d.location || '',
-          companyType:      displayCompanyType,
+          customerName: d.customerName || getLiveCustomerName(d),
+          inquiryDate: d.inquiryDate ? new Date(d.inquiryDate).toISOString().split('T')[0] : prev.inquiryDate,
+          city: d.city || d.location || '',
+          companyType: displayCompanyType,
           customCompanyType,
-          deliveryDate:     d.deliveryDate      ? new Date(d.deliveryDate).toISOString().split('T')[0]     : '',
-          nextFollowUpDate: d.nextFollowUpDate  ? new Date(d.nextFollowUpDate).toISOString().split('T')[0] : '',
-          loadDetails:      d.loadDetails?.length ? d.loadDetails : [DEFAULT_LOAD_ROW()],
-          controlMatrix:    d.controlMatrix || {},
+          deliveryDate: d.deliveryDate ? new Date(d.deliveryDate).toISOString().split('T')[0] : '',
+          orderEndDate: d.orderEndDate ? new Date(d.orderEndDate).toISOString().split('T')[0] : '',
+          loadDetails: d.loadDetails?.length ? d.loadDetails : [DEFAULT_LOAD_ROW()],
+          controlMatrix: d.controlMatrix || {},
           panelTypes,
           customPanelType,
-          supplyVoltage:    displayVoltage,
+          supplyVoltage: displayVoltage,
           customVoltage,
-          industryType:     displayIndustryType,
+          industryType: displayIndustryType,
           customIndustryType,
           contacts,
         }));
@@ -1433,84 +1433,84 @@ useEffect(() => {
     };
   }, [form.panelTypes]);
 
-useEffect(() => {
-  if (isEdit) {
-    setDraftLoaded(true);
-    return;
-  }
-
-  try {
-    const savedDraft = localStorage.getItem(DRAFT_KEY);
-
-    if (savedDraft) {
-      const draft = JSON.parse(savedDraft);
-
-      setForm(prev => ensureNestedDefaults({
-        ...prev,
-        ...draft,
-        inquiryType: inferInquiryTypeFromRecord(draft),
-        contacts: Array.isArray(draft.contacts) && draft.contacts.length > 0
-          ? draft.contacts
-          : prev.contacts,
-        loadDetails: Array.isArray(draft.loadDetails) && draft.loadDetails.length > 0
-          ? draft.loadDetails
-          : prev.loadDetails,
-        controlMatrix: draft.controlMatrix || prev.controlMatrix || {},
-      }));
+  useEffect(() => {
+    if (isEdit) {
+      setDraftLoaded(true);
+      return;
     }
-  } catch (err) {
-    console.error('Draft restore failed', err);
-  }
 
-  setDraftLoaded(true);
-}, [isEdit]);
+    try {
+      const savedDraft = localStorage.getItem(DRAFT_KEY);
+
+      if (savedDraft) {
+        const draft = JSON.parse(savedDraft);
+
+        setForm(prev => ensureNestedDefaults({
+          ...prev,
+          ...draft,
+          inquiryType: inferInquiryTypeFromRecord(draft),
+          contacts: Array.isArray(draft.contacts) && draft.contacts.length > 0
+            ? draft.contacts
+            : prev.contacts,
+          loadDetails: Array.isArray(draft.loadDetails) && draft.loadDetails.length > 0
+            ? draft.loadDetails
+            : prev.loadDetails,
+          controlMatrix: draft.controlMatrix || prev.controlMatrix || {},
+        }));
+      }
+    } catch (err) {
+      console.error('Draft restore failed', err);
+    }
+
+    setDraftLoaded(true);
+  }, [isEdit]);
 
   // ── Generic field setter ────────────────────────────────────────────────────
- const set = useCallback((field) => (val) => {
-  const value = val?.target !== undefined ? val.target.value : val;
-  setSprint2Form(prev => ({ ...prev, [field]: value }));
-  setErrors(prev => ({ ...prev, [field]: '' }));
-}, [setSprint2Form]);
+  const set = useCallback((field) => (val) => {
+    const value = val?.target !== undefined ? val.target.value : val;
+    setSprint2Form(prev => ({ ...prev, [field]: value }));
+    setErrors(prev => ({ ...prev, [field]: '' }));
+  }, [setSprint2Form]);
 
   // ── Contacts helpers ────────────────────────────────────────────────────────
-const addContact = () => {
-  setSprint2Form(prev => ({
-    ...prev,
-    contacts: [...(Array.isArray(prev.contacts) ? prev.contacts : []), DEFAULT_CONTACT()],
-  }));
-};
-
-const removeContact = (idOrIndex) => {
-  setSprint2Form(prev => {
-    const contacts = Array.isArray(prev.contacts) ? prev.contacts : [];
-
-    const nextContacts = typeof idOrIndex === 'number'
-      ? contacts.filter((_, index) => index !== idOrIndex)
-      : contacts.filter(c => c.id !== idOrIndex);
-
-    return {
+  const addContact = () => {
+    setSprint2Form(prev => ({
       ...prev,
-      contacts: nextContacts.length > 0 ? nextContacts : [DEFAULT_CONTACT()],
-    };
-  });
-};
+      contacts: [...(Array.isArray(prev.contacts) ? prev.contacts : []), DEFAULT_CONTACT()],
+    }));
+  };
 
-const updateContact = (idOrIndex, field, value) => {
-  setSprint2Form(prev => {
-    const contacts = Array.isArray(prev.contacts) ? prev.contacts : [];
+  const removeContact = (idOrIndex) => {
+    setSprint2Form(prev => {
+      const contacts = Array.isArray(prev.contacts) ? prev.contacts : [];
 
-    return {
-      ...prev,
-      contacts: contacts.map((contact, index) => {
-        const matched = typeof idOrIndex === 'number'
-          ? index === idOrIndex
-          : contact.id === idOrIndex;
+      const nextContacts = typeof idOrIndex === 'number'
+        ? contacts.filter((_, index) => index !== idOrIndex)
+        : contacts.filter(c => c.id !== idOrIndex);
 
-        return matched ? { ...contact, [field]: value } : contact;
-      }),
-    };
-  });
-};
+      return {
+        ...prev,
+        contacts: nextContacts.length > 0 ? nextContacts : [DEFAULT_CONTACT()],
+      };
+    });
+  };
+
+  const updateContact = (idOrIndex, field, value) => {
+    setSprint2Form(prev => {
+      const contacts = Array.isArray(prev.contacts) ? prev.contacts : [];
+
+      return {
+        ...prev,
+        contacts: contacts.map((contact, index) => {
+          const matched = typeof idOrIndex === 'number'
+            ? index === idOrIndex
+            : contact.id === idOrIndex;
+
+          return matched ? { ...contact, [field]: value } : contact;
+        }),
+      };
+    });
+  };
 
   // ── File attachment helpers ─────────────────────────────────────────────────
   const handleFileSelect = (e) => {
@@ -1525,42 +1525,42 @@ const updateContact = (idOrIndex, field, value) => {
     // Reset input so same file can be re-added after removal
     if (fileInputRef.current) fileInputRef.current.value = '';
   };
-  
+
   const handleDrag = (e) => {
-  e.preventDefault();
-  e.stopPropagation();
+    e.preventDefault();
+    e.stopPropagation();
 
-  if (e.type === 'dragenter' || e.type === 'dragover') {
-    setDragActive(true);
-  }
+    if (e.type === 'dragenter' || e.type === 'dragover') {
+      setDragActive(true);
+    }
 
-  if (e.type === 'dragleave') {
+    if (e.type === 'dragleave') {
+      setDragActive(false);
+    }
+  };
+
+  const handleDrop = (e) => {
+    e.preventDefault();
+    e.stopPropagation();
+
     setDragActive(false);
-  }
-};
 
-const handleDrop = (e) => {
-  e.preventDefault();
-  e.stopPropagation();
+    const files = Array.from(e.dataTransfer.files || []);
 
-  setDragActive(false);
+    if (!files.length) return;
 
-  const files = Array.from(e.dataTransfer.files || []);
+    const totalCount =
+      savedAttachments.length +
+      stagedFiles.length +
+      files.length;
 
-  if (!files.length) return;
+    if (totalCount > 10) {
+      toast.error('Maximum 10 attachments allowed');
+      return;
+    }
 
-  const totalCount =
-    savedAttachments.length +
-    stagedFiles.length +
-    files.length;
-
-  if (totalCount > 10) {
-    toast.error('Maximum 10 attachments allowed');
-    return;
-  }
-
-  setStagedFiles(prev => [...prev, ...files]);
-};
+    setStagedFiles(prev => [...prev, ...files]);
+  };
 
   const removeStagedFile = (index) => {
     setStagedFiles(prev => prev.filter((_, i) => i !== index));
@@ -1611,7 +1611,7 @@ const handleDrop = (e) => {
       ) return indexes.client;
       if (
         [
-          'inquiryType', 'panelTypes', 'inquiryDate', 'status',
+          'inquiryType', 'panelTypes', 'inquiryDate', 'orderEndDate', 'status',
           'panelAreaClassification', 'panelAreaClass', 'installationType',
           'ipRating', 'enclosureType', 'enclosureMake',
           'panelStructure', 'cableEntry', 'switchgearMake', 'customSwitchgearMake',
@@ -1745,8 +1745,8 @@ const handleDrop = (e) => {
       // Resolve "Other/Custom" field values before sending
       const resolvedCompanyType = form.companyType === 'Other' ? form.customCompanyType : form.companyType;
       const resolvedIndustryType = form.industryType === 'Other' ? form.customIndustryType : form.industryType;
-      const resolvedVoltage  = form.supplyVoltage === 'Custom' ? form.customVoltage  : form.supplyVoltage;
-      const resolvedIpRating = form.ipRating      === 'OTHER'  ? form.ipRatingCustom : form.ipRating;
+      const resolvedVoltage = form.supplyVoltage === 'Custom' ? form.customVoltage : form.supplyVoltage;
+      const resolvedIpRating = form.ipRating === 'OTHER' ? form.ipRatingCustom : form.ipRating;
 
       // Build FormData so files can be sent alongside JSON fields
       const fd = new FormData();
@@ -1756,7 +1756,7 @@ const handleDrop = (e) => {
       bomStagedFiles.forEach(f => fd.append('bomAttachments', f));
 
       // Build JSON payload — all scalar/array fields
-            // Build JSON payload — Sprint 2 nested inquiry payload + legacy compatibility
+      // Build JSON payload — Sprint 2 nested inquiry payload + legacy compatibility
       const compatibilityPanelTypes = normalizeInquiryPanelTypes(form.panelTypes || []);
       const resolvedInquiryType = getInquiryTypeFromPanelTypes(compatibilityPanelTypes);
       const compatibilityProductType = getProductTypeFromPanelTypes(compatibilityPanelTypes);
@@ -1817,11 +1817,11 @@ const handleDrop = (e) => {
 
       const sanitizedRioBoxDetails = includesRio
         ? {
-            ...(form.rioBoxDetails || defaultRioBoxDetails()),
-            mainIncomer: sanitizeMainIncomerForSubmit(
-              form.rioBoxDetails?.mainIncomer || defaultRioBoxDetails().mainIncomer
-            ),
-          }
+          ...(form.rioBoxDetails || defaultRioBoxDetails()),
+          mainIncomer: sanitizeMainIncomerForSubmit(
+            form.rioBoxDetails?.mainIncomer || defaultRioBoxDetails().mainIncomer
+          ),
+        }
         : undefined;
 
       const sanitizedMccDetails = sanitizeMccDetailsForSubmit({
@@ -1863,13 +1863,13 @@ const handleDrop = (e) => {
       const shouldSubmitPanelColour = Boolean(resolvedEnclosureType) &&
         !['SS304', 'SS316'].includes(resolvedEnclosureType.toUpperCase());
 
-     const compatibilityControlMatrix =
+      const compatibilityControlMatrix =
         includesPlc
           ? {
-              ...(form.controlMatrix || {}),
-              automationRequirements: sanitizedPlcDetails.automationRequirements || [],
-              ioDetails: sanitizedPlcDetails.ioDetails || {},
-            }
+            ...(form.controlMatrix || {}),
+            automationRequirements: sanitizedPlcDetails.automationRequirements || [],
+            ioDetails: sanitizedPlcDetails.ioDetails || {},
+          }
           : (form.controlMatrix || {});
 
       const preparedPayload = ensureNestedDefaults({
@@ -2095,7 +2095,13 @@ const handleDrop = (e) => {
   const customerOptions = customers
     .map((customer) => {
       const value = customer?._id || customer?.id || '';
-      const label = customer?.customerName || customer?.companyName || customer?.name || customer?.customerId || '';
+      const liveLabel = customer?.customerName || customer?.companyName || customer?.name || customer?.customerId || '';
+      const isSelectedExistingCustomer =
+        isExistingInquiry &&
+        form.customerRef &&
+        String(value) === String(form.customerRef) &&
+        Boolean(form.customerName);
+      const label = isSelectedExistingCustomer ? form.customerName : liveLabel;
       return value && label ? { value, label } : null;
     })
     .filter(Boolean);
@@ -2120,11 +2126,11 @@ const handleDrop = (e) => {
 
   const createdByDisplayName = isExistingInquiry
     ? (
-        form?.createdBy?.name ||
-        form?.createdBy?.email ||
-        form?.createdByName ||
-        '-'
-      )
+      form?.createdBy?.name ||
+      form?.createdBy?.email ||
+      form?.createdByName ||
+      '-'
+    )
     : (user?.name || user?.email || '-');
 
   const currentUserId = String(user?._id || user?.id || '');
@@ -2161,252 +2167,252 @@ const handleDrop = (e) => {
     <RequiredIndicatorProvider>
       <div className="fade-in min-w-0 max-w-none space-y-0 overflow-x-visible pb-0">
 
-      {/* ── Sticky Page Header + Step Progress Bar ───────────────────────────── */}
-      <PageHeader bleed="main" bleedTop={false} contentClassName="px-1 sm:px-2">
-        <div className="flex min-w-0 flex-col items-start justify-between gap-2 xl:flex-row xl:items-start xl:gap-4">
-          <div className="w-full min-w-0 xl:w-auto">
-            <button
-              onClick={() => navigate(inquiryReturnPath)}
-              className="flex items-center gap-1.5 text-sm text-gray-500 hover:text-gray-800 mb-2 transition-colors"
-            >
-              <ChevronLeft size={16} /> {canViewInquiry ? 'Back to Inquiries' : 'Back to Dashboard'}
-            </button>
-            <div className="flex min-w-0 items-center gap-2">
-              <ClipboardCheck size={18} className="text-blue-600 shrink-0" />
-              <h2 className="min-w-0 break-words text-lg font-bold text-gray-900 sm:text-xl">
-                {isView ? 'View Inquiry' : isEdit ? 'Edit Inquiry' : 'New Electrical Panel Inquiry'}
-              </h2>
-            </div>
-            <p className="mt-0.5 text-sm text-gray-500">
-              {isView
-                ? 'Review the inquiry details below'
-                : isEdit
-                  ? 'Update the inquiry details below'
-                  : 'Complete all required sections before submitting.'}
-            </p>
-          </div>
-
-          {isExistingInquiry && (
-            <div className="flex w-full flex-col gap-2 sm:flex-row lg:w-auto">
-              <Button
-                type="button"
-                variant="outline"
-                loading={downloadingPdf}
-                onClick={handleDownloadPdf}
-                className="w-full justify-center lg:w-auto"
+        {/* ── Sticky Page Header + Step Progress Bar ───────────────────────────── */}
+        <PageHeader bleed="main" bleedTop={false} contentClassName="px-1 sm:px-2">
+          <div className="flex min-w-0 flex-col items-start justify-between gap-2 xl:flex-row xl:items-start xl:gap-4">
+            <div className="w-full min-w-0 xl:w-auto">
+              <button
+                onClick={() => navigate(inquiryReturnPath)}
+                className="flex items-center gap-1.5 text-sm text-gray-500 hover:text-gray-800 mb-2 transition-colors"
               >
-                {!downloadingPdf && <Download size={16} />}
-                {downloadingPdf ? 'Generating PDF...' : 'Download PDF'}
-              </Button>
+                <ChevronLeft size={16} /> {canViewInquiry ? 'Back to Inquiries' : 'Back to Dashboard'}
+              </button>
+              <div className="flex min-w-0 items-center gap-2">
+                <ClipboardCheck size={18} className="text-blue-600 shrink-0" />
+                <h2 className="min-w-0 break-words text-lg font-bold text-gray-900 sm:text-xl">
+                  {isView ? 'View Inquiry' : isEdit ? 'Edit Inquiry' : 'New Electrical Panel Inquiry'}
+                </h2>
+              </div>
+              <p className="mt-0.5 text-sm text-gray-500">
+                {isView
+                  ? 'Review the inquiry details below'
+                  : isEdit
+                    ? 'Update the inquiry details below'
+                    : 'Complete all required sections before submitting.'}
+              </p>
+            </div>
 
-              {isView && canEditCurrentInquiry && (
+            {isExistingInquiry && (
+              <div className="flex w-full flex-col gap-2 sm:flex-row lg:w-auto">
                 <Button
                   type="button"
-                  variant="primary"
-                  onClick={() => navigate(`/inquiries/${id}/edit`)}
+                  variant="outline"
+                  loading={downloadingPdf}
+                  onClick={handleDownloadPdf}
                   className="w-full justify-center lg:w-auto"
                 >
-                  <Edit2 size={16} /> Edit
+                  {!downloadingPdf && <Download size={16} />}
+                  {downloadingPdf ? 'Generating PDF...' : 'Download PDF'}
+                </Button>
+
+                {isView && canEditCurrentInquiry && (
+                  <Button
+                    type="button"
+                    variant="primary"
+                    onClick={() => navigate(`/inquiries/${id}/edit`)}
+                    className="w-full justify-center lg:w-auto"
+                  >
+                    <Edit2 size={16} /> Edit
+                  </Button>
+                )}
+              </div>
+            )}
+
+            <div className="w-full min-w-0 overflow-hidden xl:flex-1">
+              <StepProgressBar
+                steps={getSectionsForPanelTypes(form.panelTypes)}
+                currentStep={getCurrentStepperIndex(form.panelTypes, activeSection)}
+                onStepClick={scrollToSection}
+              />
+            </div>
+          </div>
+        </PageHeader>
+
+        <form onSubmit={handleSubmit} className="min-w-0 space-y-4" noValidate>
+
+          <div>
+            <CommonInquirySections
+              inquiryId={id}
+              form={form}
+              setForm={setSprint2Form}
+              errors={errors}
+              disabled={formDisabled}
+              statusDisabled={statusDisabled}
+              statusOptions={statusOptions}
+              setSectionRef={(index, el) => {
+                sectionRefs.current[index] = el;
+              }}
+              activeSection={activeSection}
+
+              companySuggestions={companySuggestions}
+              contactNameSuggestions={contactNameSuggestions}
+              citySuggestions={citySuggestions}
+              pastInquiries={pastInquiries}
+              customerOptions={customerOptions}
+              createdByName={createdByDisplayName}
+              canCreateCustomer={canCreateCustomer}
+              canViewCustomer={canViewCustomer}
+              onCustomerSelect={handleCustomerSelect}
+              onCreateCustomerClick={() => setCustomerCreateOpen(true)}
+              onViewCustomerClick={() => {
+                setCustomerDetailsEditing(false);
+                setCustomerDetailsOpen(true);
+              }}
+
+              addContact={addContact}
+              removeContact={removeContact}
+              updateContact={updateContact}
+
+              stagedFiles={stagedFiles}
+              savedAttachments={savedAttachments}
+              bomStagedFiles={bomStagedFiles}
+              savedBomAttachments={savedBomAttachments}
+              dragActive={dragActive}
+              fileInputRef={fileInputRef}
+              bomFileInputRef={bomFileInputRef}
+
+              handleFileSelect={handleFileSelect}
+              handleDrag={handleDrag}
+              handleDrop={handleDrop}
+
+              removeStagedFile={removeStagedFile}
+              removeSavedAttachment={removeSavedAttachment}
+              handleBomFileSelect={handleBomFileSelect}
+              removeBomStagedFile={removeBomStagedFile}
+              removeSavedBomAttachment={removeSavedBomAttachment}
+
+              formatBytes={formatBytes}
+              fileEmoji={fileEmoji}
+
+              vfdPanelContent={hasInquiryPanelType(form.panelTypes, 'VFD') ? (
+                <VfdInquirySections
+                  form={form}
+                  setForm={setSprint2Form}
+                  errors={errors}
+                  disabled={formDisabled}
+                  mode="panel"
+                />
+              ) : null}
+
+              technicalContent={null}
+
+              engineeringContent={(
+                <div className="space-y-4">
+                  {hasInquiryPanelType(form.panelTypes, 'VFD') && (
+                    <VfdInquirySections
+                      form={form}
+                      setForm={setSprint2Form}
+                      errors={errors}
+                      disabled={formDisabled}
+                      mode="engineering"
+                    />
+                  )}
+                </div>
+              )}
+            />
+          </div>
+
+
+          {/* ── Sticky Submit Bar ─────────────────────────────────────────────── */}
+          {!isView && (
+            <StickyActionBar
+              fullBleed
+              bleedBottom={false}
+              status={
+                Object.keys(errors).length > 0 ? (
+                  <>
+                    <AlertCircle size={16} className="text-red-500" />
+                    <span className="text-red-600 font-medium">
+                      {Object.keys(errors).length} error(s) to fix
+                      {getFirstValidationMessage(errors) ? ` — ${getFirstValidationMessage(errors)}` : ''}
+                    </span>
+                  </>
+                ) : (
+                  <>
+                    <CheckCircle2 size={16} className="text-emerald-500" />
+                    <span className="text-gray-400">
+                      {stagedFiles.length + bomStagedFiles.length > 0
+                        ? `${stagedFiles.length + bomStagedFiles.length} file(s) ready to upload`
+                        : 'All sections ready to submit'}
+                    </span>
+                  </>
+                )
+              }
+            >
+              <Button type="button" variant="outline" className="w-full justify-center sm:w-auto" onClick={() => {
+                localStorage.removeItem(DRAFT_KEY);
+                navigate(inquiryReturnPath);
+              }}>
+                Cancel
+              </Button>
+              <Button type="submit" variant="primary" loading={submitting} className="h-8 w-full justify-center sm:w-auto sm:min-w-[145px]">
+                {submitting
+                  ? (isEdit ? 'Updating…' : 'Submitting…')
+                  : (isEdit ? 'Update Inquiry' : 'Submit Inquiry')}
+              </Button>
+            </StickyActionBar>
+          )}
+
+        </form>
+
+        <Modal
+          isOpen={canCreateCustomer && customerCreateOpen}
+          onClose={() => {
+            if (!creatingCustomer) setCustomerCreateOpen(false);
+          }}
+          title="Create New Customer"
+          size="customer"
+          topOffset="topbar"
+          bodyMaxHeight="calc(100vh - 11rem)"
+        >
+          <CustomerForm
+            onSubmit={handleCreateCustomerFromInquiry}
+            loading={creatingCustomer}
+          />
+        </Modal>
+
+        <Modal
+          isOpen={canViewCustomer && customerDetailsOpen && Boolean(form.customerRef)}
+          onClose={() => {
+            if (updatingCustomer) return;
+            setCustomerDetailsEditing(false);
+            setCustomerDetailsOpen(false);
+          }}
+          title={customerDetailsEditing ? 'Edit Customer' : 'Customer Details'}
+          size="xl"
+          topOffset="topbar"
+          bodyMaxHeight="none"
+          bodyClassName="!overflow-visible"
+        >
+          {canEditSelectedCustomer && (
+            <div className="mb-4 flex justify-end">
+              {customerDetailsEditing ? (
+                <Button
+                  type="button"
+                  variant="outline"
+                  onClick={() => setCustomerDetailsEditing(false)}
+                  disabled={updatingCustomer}
+                >
+                  Cancel Editing
+                </Button>
+              ) : (
+                <Button
+                  type="button"
+                  onClick={() => setCustomerDetailsEditing(true)}
+                >
+                  <Edit2 size={14} /> Edit Customer
                 </Button>
               )}
             </div>
           )}
-
-          <div className="w-full min-w-0 overflow-hidden xl:flex-1">
-            <StepProgressBar
-              steps={getSectionsForPanelTypes(form.panelTypes)}
-              currentStep={getCurrentStepperIndex(form.panelTypes, activeSection)}
-              onStepClick={scrollToSection}
-            />
-          </div>
-        </div>
-      </PageHeader>
-
-      <form onSubmit={handleSubmit} className="min-w-0 space-y-4" noValidate>
-
-<div>
-  <CommonInquirySections
-    inquiryId={id}
-    form={form}
-    setForm={setSprint2Form}
-    errors={errors}
-    disabled={formDisabled}
-    statusDisabled={statusDisabled}
-    statusOptions={statusOptions}
-    setSectionRef={(index, el) => {
-      sectionRefs.current[index] = el;
-    }}
-    activeSection={activeSection}
-
-    companySuggestions={companySuggestions}
-    contactNameSuggestions={contactNameSuggestions}
-    citySuggestions={citySuggestions}
-    pastInquiries={pastInquiries}
-    customerOptions={customerOptions}
-    createdByName={createdByDisplayName}
-    canCreateCustomer={canCreateCustomer}
-    canViewCustomer={canViewCustomer}
-    onCustomerSelect={handleCustomerSelect}
-    onCreateCustomerClick={() => setCustomerCreateOpen(true)}
-    onViewCustomerClick={() => {
-      setCustomerDetailsEditing(false);
-      setCustomerDetailsOpen(true);
-    }}
-
-    addContact={addContact}
-    removeContact={removeContact}
-    updateContact={updateContact}
-
-    stagedFiles={stagedFiles}
-    savedAttachments={savedAttachments}
-    bomStagedFiles={bomStagedFiles}
-    savedBomAttachments={savedBomAttachments}
-    dragActive={dragActive}
-    fileInputRef={fileInputRef}
-    bomFileInputRef={bomFileInputRef}
-
-    handleFileSelect={handleFileSelect}
-    handleDrag={handleDrag}
-    handleDrop={handleDrop}
-
-    removeStagedFile={removeStagedFile}
-    removeSavedAttachment={removeSavedAttachment}
-    handleBomFileSelect={handleBomFileSelect}
-    removeBomStagedFile={removeBomStagedFile}
-    removeSavedBomAttachment={removeSavedBomAttachment}
-
-    formatBytes={formatBytes}
-    fileEmoji={fileEmoji}
-
-    vfdPanelContent={hasInquiryPanelType(form.panelTypes, 'VFD') ? (
-      <VfdInquirySections
-        form={form}
-        setForm={setSprint2Form}
-        errors={errors}
-        disabled={formDisabled}
-        mode="panel"
-      />
-    ) : null}
-
-    technicalContent={null}
-
-    engineeringContent={(
-      <div className="space-y-4">
-        {hasInquiryPanelType(form.panelTypes, 'VFD') && (
-          <VfdInquirySections
-            form={form}
-            setForm={setSprint2Form}
-            errors={errors}
-            disabled={formDisabled}
-            mode="engineering"
+          <CustomerForm
+            initialData={selectedCustomerForDetails}
+            onSubmit={handleUpdateCustomerFromInquiry}
+            loading={updatingCustomer}
+            readOnly={!customerDetailsEditing}
+            canChangeCreatedBy={canEditCustomer}
           />
-        )}
-      </div>
-    )}
-  />
-</div>
-
-
-        {/* ── Sticky Submit Bar ─────────────────────────────────────────────── */}
-        {!isView && (
-        <StickyActionBar
-          fullBleed
-          bleedBottom={false}
-          status={
-            Object.keys(errors).length > 0 ? (
-              <>
-                <AlertCircle size={16} className="text-red-500" />
-                <span className="text-red-600 font-medium">
-                  {Object.keys(errors).length} error(s) to fix
-                  {getFirstValidationMessage(errors) ? ` — ${getFirstValidationMessage(errors)}` : ''}
-                </span>
-              </>
-            ) : (
-              <>
-                <CheckCircle2 size={16} className="text-emerald-500" />
-                <span className="text-gray-400">
-                  {stagedFiles.length + bomStagedFiles.length > 0
-                    ? `${stagedFiles.length + bomStagedFiles.length} file(s) ready to upload`
-                    : 'All sections ready to submit'}
-                </span>
-              </>
-            )
-          }
-        >
-            <Button type="button" variant="outline" className="w-full justify-center sm:w-auto" onClick={() => {
-            localStorage.removeItem(DRAFT_KEY);
-            navigate(inquiryReturnPath);
-            }}>
-              Cancel
-            </Button>
-            <Button type="submit" variant="primary" loading={submitting} className="h-8 w-full justify-center sm:w-auto sm:min-w-[145px]">
-              {submitting
-                ? (isEdit ? 'Updating…' : 'Submitting…')
-                : (isEdit ? 'Update Inquiry' : 'Submit Inquiry')}
-            </Button>
-        </StickyActionBar>
-        )}
-
-      </form>
-
-      <Modal
-        isOpen={canCreateCustomer && customerCreateOpen}
-        onClose={() => {
-          if (!creatingCustomer) setCustomerCreateOpen(false);
-        }}
-        title="Create New Customer"
-        size="customer"
-        topOffset="topbar"
-        bodyMaxHeight="calc(100vh - 11rem)"
-      >
-        <CustomerForm
-          onSubmit={handleCreateCustomerFromInquiry}
-          loading={creatingCustomer}
-        />
-      </Modal>
-
-      <Modal
-        isOpen={canViewCustomer && customerDetailsOpen && Boolean(form.customerRef)}
-        onClose={() => {
-          if (updatingCustomer) return;
-          setCustomerDetailsEditing(false);
-          setCustomerDetailsOpen(false);
-        }}
-        title={customerDetailsEditing ? 'Edit Customer' : 'Customer Details'}
-        size="xl"
-        topOffset="topbar"
-        bodyMaxHeight="none"
-        bodyClassName="!overflow-visible"
-      >
-        {canEditSelectedCustomer && (
-          <div className="mb-4 flex justify-end">
-            {customerDetailsEditing ? (
-              <Button
-                type="button"
-                variant="outline"
-                onClick={() => setCustomerDetailsEditing(false)}
-                disabled={updatingCustomer}
-              >
-                Cancel Editing
-              </Button>
-            ) : (
-              <Button
-                type="button"
-                onClick={() => setCustomerDetailsEditing(true)}
-              >
-                <Edit2 size={14} /> Edit Customer
-              </Button>
-            )}
-          </div>
-        )}
-        <CustomerForm
-          initialData={selectedCustomerForDetails}
-          onSubmit={handleUpdateCustomerFromInquiry}
-          loading={updatingCustomer}
-          readOnly={!customerDetailsEditing}
-          canChangeCreatedBy={canEditCustomer}
-        />
-      </Modal>
+        </Modal>
       </div>
     </RequiredIndicatorProvider>
   );

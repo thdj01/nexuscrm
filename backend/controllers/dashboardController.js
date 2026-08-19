@@ -4,6 +4,14 @@ const Customer = require('../models/Customer');
 const Ticket = require('../models/Ticket');
 const { getLiveCustomerSnapshot } = require('../utils/customerUniversal');
 
+function getInquiryCustomerSnapshot(record = {}) {
+  const raw = record && typeof record.toObject === 'function' ? record.toObject() : { ...record };
+  const storedCustomerName = String(raw?.customerName || raw?.companyName || '').trim();
+  const data = getLiveCustomerSnapshot(raw);
+  if (storedCustomerName) data.customerName = storedCustomerName;
+  return data;
+}
+
 const monthNames = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
 
 const INQUIRY_STATUS_OPTIONS = [
@@ -285,13 +293,13 @@ const getTaskDueDate = (task = {}, project = {}) => (
 const getProjectPlanningTasks = (project = {}) => {
   const gridTasks = Array.isArray(project.planningGrids)
     ? project.planningGrids.flatMap((grid) => (
-        (grid.planningTasks || []).map((task, index) => ({
-          ...task,
-          gridId: task.gridId || grid.gridId || 'A',
-          gridName: task.gridName || grid.gridName || grid.name || 'Project Planning Grid',
-          _taskIndex: index,
-        }))
-      ))
+      (grid.planningTasks || []).map((task, index) => ({
+        ...task,
+        gridId: task.gridId || grid.gridId || 'A',
+        gridName: task.gridName || grid.gridName || grid.name || 'Project Planning Grid',
+        _taskIndex: index,
+      }))
+    ))
     : [];
 
   if (gridTasks.length > 0) return gridTasks;
@@ -633,7 +641,7 @@ const getDashboardStats = async (req, res, next) => {
     ]);
 
     // =========================
-    // SALES FUNNEL / FOLLOWUPS
+    // SALES FUNNEL
     // =========================
 
     const technicalBomSubmissionCount = await Inquiry.countDocuments({
@@ -649,16 +657,10 @@ const getDashboardStats = async (req, res, next) => {
       { stage: 'Order Won', count: wonProjects },
     ];
 
-    const followUpEnd = endOfDay(new Date());
-
-    const [pendingFollowUps, taskReminders] = await Promise.all([
-      Inquiry.countDocuments({
-        ...inquiryFYFilter,
-        nextFollowUpDate: { $lte: followUpEnd },
-        status: { $nin: [...statusIn('Order Won').$in, ...statusIn('Order Lost').$in] },
-      }),
-      getTaskRemindersForUser(req.user?._id || req.user?.id, fyRange),
-    ]);
+    const taskReminders = await getTaskRemindersForUser(
+      req.user?._id || req.user?.id,
+      fyRange
+    );
 
     // =========================
     // RESPONSE
@@ -685,7 +687,6 @@ const getDashboardStats = async (req, res, next) => {
           totalCustomers,
           monthlyRevenue,
           totalRevenue,
-          pendingFollowUps,
           delayedProjects,
           totalDelayedDays,
           delayedTasks,
@@ -762,7 +763,7 @@ const getRecentActivity = async (req, res, next) => {
           startDate: fyRange.start,
           endDate: fyRange.end ? new Date(fyRange.end.getTime() - 1) : null,
         },
-        recentInquiries: recentInquiries.map((item) => getLiveCustomerSnapshot(item.toObject ? item.toObject() : item)),
+        recentInquiries: recentInquiries.map((item) => getInquiryCustomerSnapshot(item)),
         recentProjects: recentProjects.map((item) => getLiveCustomerSnapshot(item.toObject ? item.toObject() : item)),
         recentTickets,
       },

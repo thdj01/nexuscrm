@@ -35,6 +35,12 @@ const User          = require('../models/User');
 const {
   updateLinkedProjectTaskStatusFromTimesheet,
 } = require('../services/timesheetProjectReverseSyncService');
+const { resolveProjectLockState } = require('../services/projectLockService');
+const {
+  normalizeTimeTo24Hour,
+  timeToMinutes,
+  parseDurationToDecimalHours,
+} = require('../utils/timesheetTime');
 const {
   canEditTask,
   canReadTask,
@@ -108,13 +114,41 @@ async function runTimesheetProjectReverseSyncSafe({ task, req } = {}) {
 }
 
 const shouldRunProjectReverseStatusSync = (previousStatus, nextStatus) => (
-  previousStatus !== nextStatus && ['In Progress', 'Completed'].includes(nextStatus)
+  previousStatus !== nextStatus
 );
 
-const timeToMinutes = (value) => {
-  if (!value || !/^([01]\d|2[0-3]):[0-5]\d$/.test(String(value))) return null;
-  const [hours, minutes] = String(value).split(':').map(Number);
-  return hours * 60 + minutes;
+async function getLockedProjectStatusChangeMessage(task, previousStatus, nextStatus) {
+  if (!task || task.taskSource !== 'PROJECT' || previousStatus === nextStatus) return '';
+
+  const projectId = task.sourceProject || task.project;
+  if (!projectId) return '';
+
+  const lockState = await resolveProjectLockState(projectId);
+  return lockState.locked ? lockState.reason : '';
+}
+
+const normalizeOptionalTimeInput = (value, fieldName) => {
+  if (value === undefined) return undefined;
+  if (value === null || value === '') return '';
+  const normalized = normalizeTimeTo24Hour(value);
+  if (!normalized) {
+    const error = new Error(`${fieldName} must be a valid time, for example 02:25 PM or 14:25`);
+    error.statusCode = 400;
+    throw error;
+  }
+  return normalized;
+};
+
+const normalizeOptionalHoursInput = (value) => {
+  if (value === undefined) return undefined;
+  if (value === null || value === '') return 0;
+  const normalized = parseDurationToDecimalHours(value);
+  if (normalized === null || normalized < 0 || normalized > 24) {
+    const error = new Error('Hours must use H.MM or H:MM with minutes from 00 to 59 (for example 1.15 or 1:30)');
+    error.statusCode = 400;
+    throw error;
+  }
+  return normalized;
 };
 
 const getTimeRangeError = (startTime, endTime) => {
@@ -161,8 +195,8 @@ function buildSafeProjectTaskUpdatePayload(req, existing) {
  * Returns {} when neither param is present so callers can always safely spread.
  *
  * Both values are treated as INCLUSIVE boundaries.
- * `from` is normalised to the start of the day (00:00:00.000 UTC).
- * `to`   is normalised to the end   of the day (23:59:59.999 UTC).
+ * Date-only values are interpreted in the application timezone (Asia/Kolkata)
+ * and converted to UTC boundaries for MongoDB comparisons.
  *
  * @param  {string|undefined} from  — ISO date string, e.g. "2025-01-01"
  * @param  {string|undefined} to    — ISO date string, e.g. "2025-01-31"
@@ -171,26 +205,38 @@ function buildSafeProjectTaskUpdatePayload(req, existing) {
 function buildDateFilter(from, to) {
   if (!from && !to) return {};
 
+  const parseBoundary = (value, endOfDay = false) => {
+    if (!value) return null;
+    const text = String(value).trim();
+    const dateOnly = text.match(/^(\d{4}-\d{2}-\d{2})$/);
+    const parsed = dateOnly
+      ? new Date(`${dateOnly[1]}T${endOfDay ? '23:59:59.999' : '00:00:00.000'}+05:30`)
+      : new Date(text);
+    return Number.isNaN(parsed.getTime()) ? null : parsed;
+  };
+
+  const fromDate = parseBoundary(from, false);
+  const toDate = parseBoundary(to, true);
   const dateFilter = {};
+  if (fromDate) dateFilter.$gte = fromDate;
+  if (toDate) dateFilter.$lte = toDate;
+  if (!Object.keys(dateFilter).length) return {};
 
-  if (from) {
-    const d = new Date(from);
-    if (!isNaN(d.getTime())) {
-      d.setUTCHours(0, 0, 0, 0);
-      dateFilter.$gte = d;
-    }
-  }
+  // Normal/user tasks are matched by their single date. Project-linked tasks
+  // are matched when their assigned planning range overlaps the requested
+  // range, so a 17-19 Aug task is visible when viewing 17th, 18th or 19th.
+  const rangeOverlap = { taskSource: 'PROJECT' };
+  if (toDate) rangeOverlap.sourcePlannedStartDate = { $lte: toDate };
+  if (fromDate) rangeOverlap.sourcePlannedEndDate = { $gte: fromDate };
 
-  if (to) {
-    const d = new Date(to);
-    if (!isNaN(d.getTime())) {
-      d.setUTCHours(23, 59, 59, 999);
-      dateFilter.$lte = d;
-    }
-  }
-
-  return Object.keys(dateFilter).length ? { date: dateFilter } : {};
+  return {
+    $or: [
+      { date: dateFilter },
+      rangeOverlap,
+    ],
+  };
 }
+
 
 // ─────────────────────────────────────────────────────────────────────────────
 // buildAggregateEmployeeMatch
@@ -546,7 +592,18 @@ const createTask = async (req, res) => {
     if (!date)          return fail(res, 'Date is required');
     if (!taskType)      return fail(res, 'Task type is required');
 
-    const timeRangeError = getTimeRangeError(startTime, endTime);
+    let normalizedStartTime;
+    let normalizedEndTime;
+    let normalizedHours;
+    try {
+      normalizedStartTime = normalizeOptionalTimeInput(startTime, 'Start time');
+      normalizedEndTime = normalizeOptionalTimeInput(endTime, 'End time');
+      normalizedHours = normalizeOptionalHoursInput(hours);
+    } catch (error) {
+      return fail(res, error.message, error.statusCode || 400);
+    }
+
+    const timeRangeError = getTimeRangeError(normalizedStartTime, normalizedEndTime);
     if (timeRangeError) return fail(res, timeRangeError);
 
     const taskData = {
@@ -564,10 +621,10 @@ const createTask = async (req, res) => {
       if (!isValidId(project)) return fail(res, 'Invalid project ID');
       taskData.project = project;
     }
-    if (startTime) taskData.startTime = startTime;
-    if (endTime)   taskData.endTime   = endTime;
-    if (hours !== undefined && !(startTime && endTime)) {
-      taskData.hours = Number(hours);
+    if (normalizedStartTime) taskData.startTime = normalizedStartTime;
+    if (normalizedEndTime)   taskData.endTime   = normalizedEndTime;
+    if (normalizedHours !== undefined && !(normalizedStartTime && normalizedEndTime)) {
+      taskData.hours = normalizedHours;
     }
 
     const task = await TimesheetTask.create(taskData);
@@ -682,6 +739,20 @@ const updateTask = async (req, res) => {
     }
     if (payload.date) payload.date = new Date(payload.date);
 
+    try {
+      if (payload.startTime !== undefined) {
+        payload.startTime = normalizeOptionalTimeInput(payload.startTime, 'Start time');
+      }
+      if (payload.endTime !== undefined) {
+        payload.endTime = normalizeOptionalTimeInput(payload.endTime, 'End time');
+      }
+      if (payload.hours !== undefined) {
+        payload.hours = normalizeOptionalHoursInput(payload.hours);
+      }
+    } catch (error) {
+      return fail(res, error.message, error.statusCode || 400);
+    }
+
     const effectiveStartTime = payload.startTime !== undefined ? payload.startTime : existing.startTime;
     const effectiveEndTime = payload.endTime !== undefined ? payload.endTime : existing.endTime;
     const timeRangeError = getTimeRangeError(effectiveStartTime, effectiveEndTime);
@@ -695,6 +766,10 @@ const updateTask = async (req, res) => {
       }
       delete payload.remarks;
     }
+
+    const nextStatus = payload.status !== undefined ? payload.status : existing.status;
+    const lockedProjectMessage = await getLockedProjectStatusChangeMessage(existing, previousStatus, nextStatus);
+    if (lockedProjectMessage) return fail(res, lockedProjectMessage, 423);
 
     Object.assign(existing, payload);
     await existing.save();
@@ -748,6 +823,9 @@ const updateTaskStatus = async (req, res) => {
     }
 
     const previousStatus = task.status;
+    const lockedProjectMessage = await getLockedProjectStatusChangeMessage(task, previousStatus, status);
+    if (lockedProjectMessage) return fail(res, lockedProjectMessage, 423);
+
     task.status = status;
     await task.save();
 
@@ -791,6 +869,10 @@ const updateKanbanPosition = async (req, res) => {
     }
 
     const previousStatus = task.status;
+    if (status !== undefined) {
+      const lockedProjectMessage = await getLockedProjectStatusChangeMessage(task, previousStatus, status);
+      if (lockedProjectMessage) return fail(res, lockedProjectMessage, 423);
+    }
 
     if (status !== undefined)     task.status      = status;
     if (kanbanOrder !== undefined) task.kanbanOrder = Number(kanbanOrder);

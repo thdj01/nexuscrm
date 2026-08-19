@@ -20,6 +20,7 @@ import {
 } from '../../../data/inquiryMasterData';
 
 const NOT_APPLICABLE = 'NA - Not Applicable';
+const getError = (errors = {}, key = '') => errors?.[key] || '';
 
 const Subsection = ({ title, children }) => (
   <div className="rounded-2xl border border-slate-200 bg-slate-50/60 p-4 sm:p-5">
@@ -262,6 +263,7 @@ const MultiSelectDropdown = ({
 const FlpEnclosureInquirySection = ({
   form,
   setForm,
+  errors = {},
   disabled = false,
   number,
   sectionIndex,
@@ -442,7 +444,11 @@ const FlpEnclosureInquirySection = ({
                 'md:grid-cols-2 xl:grid-cols-3',
               ].join(' ')}
             >
-              <FormField label="Material">
+              <FormField
+                label="Material"
+                required
+                error={getError(errors, 'flpEnclosureDetails.weatherproof.material')}
+              >
                 <SearchableSelect
                   includeNotApplicable
                   value={weatherproof.material || ''}
@@ -459,7 +465,11 @@ const FlpEnclosureInquirySection = ({
                 />
               </FormField>
 
-              <FormField label="IP Rating">
+              <FormField
+                label="IP Rating"
+                required
+                error={getError(errors, 'flpEnclosureDetails.weatherproof.ipRating')}
+              >
                 <SearchableSelect
                   includeNotApplicable
                   value={
@@ -479,7 +489,11 @@ const FlpEnclosureInquirySection = ({
                 />
               </FormField>
 
-              <FormField label="Mounting">
+              <FormField
+                label="Mounting"
+                required
+                error={getError(errors, 'flpEnclosureDetails.weatherproof.mounting')}
+              >
                 <SearchableSelect
                   includeNotApplicable
                   value={weatherproof.mounting || ''}
@@ -511,7 +525,11 @@ const FlpEnclosureInquirySection = ({
                 />
               </FormField>
 
-              <FormField label="Window Required">
+              <FormField
+                label="Window Required"
+                required
+                error={getError(errors, 'flpEnclosureDetails.weatherproof.windowRequired')}
+              >
                 <SearchableSelect
                   includeNotApplicable
                   value={
@@ -581,7 +599,11 @@ const FlpEnclosureInquirySection = ({
                 />
               </FormField>
 
-              <FormField label="Zone / Division">
+              <FormField
+                label="Zone / Division"
+                required
+                error={getError(errors, 'flpEnclosureDetails.flameproof.zoneDivision')}
+              >
                 <MultiSelectDropdown
                   values={flameproof.zoneDivision}
                   options={[
@@ -600,7 +622,11 @@ const FlpEnclosureInquirySection = ({
                 />
               </FormField>
 
-              <FormField label="Gas Group">
+              <FormField
+                label="Gas Group"
+                required
+                error={getError(errors, 'flpEnclosureDetails.flameproof.gasGroup')}
+              >
                 <MultiSelectDropdown
                   values={flameproof.gasGroup}
                   options={[
@@ -619,7 +645,11 @@ const FlpEnclosureInquirySection = ({
                 />
               </FormField>
 
-              <FormField label="Temperature Class">
+              <FormField
+                label="Temperature Class"
+                required
+                error={getError(errors, 'flpEnclosureDetails.flameproof.temperatureClass')}
+              >
                 <SearchableSelect
                   includeNotApplicable
                   value={
@@ -641,7 +671,11 @@ const FlpEnclosureInquirySection = ({
                 />
               </FormField>
 
-              <FormField label="Certification">
+              <FormField
+                label="Certification"
+                required
+                error={getError(errors, 'flpEnclosureDetails.flameproof.certification')}
+              >
                 <MultiSelectDropdown
                   values={flameproof.certification}
                   options={[
@@ -678,7 +712,11 @@ const FlpEnclosureInquirySection = ({
                 />
               </FormField>
 
-              <FormField label="Material">
+              <FormField
+                label="Material"
+                required
+                error={getError(errors, 'flpEnclosureDetails.flameproof.material')}
+              >
                 <SearchableSelect
                   includeNotApplicable
                   value={flameproof.material || ''}
@@ -695,7 +733,11 @@ const FlpEnclosureInquirySection = ({
                 />
               </FormField>
 
-              <FormField label="IP Rating">
+              <FormField
+                label="IP Rating"
+                required
+                error={getError(errors, 'flpEnclosureDetails.flameproof.ipRating')}
+              >
                 <SearchableSelect
                   includeNotApplicable
                   value={

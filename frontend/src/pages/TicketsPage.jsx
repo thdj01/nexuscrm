@@ -158,6 +158,14 @@ const getAssignedId = (ticket) =>
   ticket?.assignedTo ||
   '';
 
+const getEntityId = (value) => String(value?._id || value?.id || value || '');
+
+const getCreatedByName = (ticket = {}) => {
+  const createdBy = ticket.createdBy;
+  if (!createdBy || typeof createdBy === 'string') return '—';
+  return createdBy.name || createdBy.email || '—';
+};
+
 const getTicketList = (result) =>
   result?.tickets ||
   result?.data ||
@@ -311,6 +319,8 @@ const TicketsPage = () => {
   const [departmentFilter, setDepartmentFilter] = useState([]);
   const [typeFilter, setTypeFilter] = useState([]);
   const [assigneeFilter, setAssigneeFilter] = useState([]);
+  const [filterCreatedBy, setFilterCreatedBy] = useState('');
+  const [creatorOptions, setCreatorOptions] = useState([]);
 
   const [page, setPage] = useState(1);
   const [limit, setLimit] = useState(25);
@@ -364,8 +374,10 @@ const TicketsPage = () => {
     try {
       const requestParams = { page: 1, limit: 100 };
       if (financialYear) requestParams.financialYear = financialYear;
+      if (filterCreatedBy) requestParams.createdBy = filterCreatedBy;
 
       const firstResult = await fetchTickets(requestParams);
+      setCreatorOptions(Array.isArray(firstResult.filters?.creators) ? firstResult.filters.creators : []);
 
       const firstTickets = getTicketList(firstResult);
       const pagination = getPagination(firstResult);
@@ -398,7 +410,7 @@ const TicketsPage = () => {
     } finally {
       setLoading(false);
     }
-  }, [financialYear, toast]);
+  }, [financialYear, filterCreatedBy, toast]);
 
   useEffect(() => {
     loadTickets();
@@ -540,6 +552,7 @@ const TicketsPage = () => {
     departmentFilter,
     typeFilter,
     assigneeFilter,
+    filterCreatedBy,
     financialYear,
     limit,
   ]);
@@ -550,7 +563,8 @@ const TicketsPage = () => {
     priorityFilter.length ||
     departmentFilter.length ||
     typeFilter.length ||
-    assigneeFilter.length;
+    assigneeFilter.length ||
+    filterCreatedBy;
 
   const clearFilters = () => {
     setSearch('');
@@ -559,6 +573,7 @@ const TicketsPage = () => {
     setDepartmentFilter([]);
     setTypeFilter([]);
     setAssigneeFilter([]);
+    setFilterCreatedBy('');
   };
 
   const openCreatePage = () => {
@@ -631,6 +646,25 @@ const TicketsPage = () => {
           {value === 'Repairing & Replacement' ? 'R&R' : value || 'N/A'}
         </span>
       ),
+    },
+    {
+      key: 'createdBy',
+      label: 'Created By',
+      width: '135px',
+      render: (_, row) => {
+        const creatorId = getEntityId(row.createdBy);
+        const currentUserId = getEntityId(user?._id || user?.id);
+        const isCurrentUser = Boolean(creatorId && currentUserId && creatorId === currentUserId);
+
+        return (
+          <span className="text-sm text-gray-700">
+            {getCreatedByName(row)}
+            {isCurrentUser && (
+              <span className="ml-1 text-[11px] font-normal text-gray-400">(you)</span>
+            )}
+          </span>
+        );
+      },
     },
     {
       key: 'assignedTo',
@@ -819,6 +853,20 @@ const TicketsPage = () => {
     />
 
     <select
+      value={filterCreatedBy}
+      onChange={(event) => setFilterCreatedBy(event.target.value)}
+      className="h-8 w-full lg:w-[135px] lg:shrink-0 rounded-md border border-gray-300 bg-white px-2 text-base lg:text-xs text-gray-700 focus:outline-none focus:ring-2 focus:ring-blue-500"
+      aria-label="Filter tickets by creator"
+    >
+      <option value="">All Created By</option>
+      {creatorOptions.map((creator) => (
+        <option key={creator._id} value={creator._id}>
+          {creator.name || creator.email || 'Unknown User'}
+        </option>
+      ))}
+    </select>
+
+    <select
       value={financialYear}
       onChange={(event) => handleFinancialYearChange(event.target.value)}
       className="h-8 w-full lg:w-[92px] lg:shrink-0 rounded-md border border-gray-300 bg-white px-2 text-base lg:text-xs text-gray-700 focus:outline-none focus:ring-2 focus:ring-blue-500"
@@ -827,19 +875,6 @@ const TicketsPage = () => {
       {financialYearOptions.map((year) => <option key={year} value={year}>{year === ALL_YEARS_VALUE ? 'All Years' : year}</option>)}
     </select>
 
-    <select
-      value={limit}
-      onChange={(event) => {
-        setLimit(Number(event.target.value));
-        setPage(1);
-      }}
-      className="h-8 w-full lg:w-[92px] lg:shrink-0 rounded-md border border-gray-300 bg-white px-2 text-base lg:text-xs text-gray-700 focus:outline-none focus:ring-2 focus:ring-blue-500"
-    >
-      <option value={10}>10 / page</option>
-      <option value={25}>25 / page</option>
-      <option value={50}>50 / page</option>
-      <option value={100}>100 / page</option>
-    </select>
 
     <div className="col-span-2 flex items-center justify-end gap-1 sm:col-span-3 lg:col-span-1 lg:contents">
       {hasFilters && (
@@ -866,13 +901,15 @@ const TicketsPage = () => {
 </Card>
 
 
-      <Card>
+      <Card className="min-w-0 max-w-full overflow-hidden">
         <Table
           columns={columns}
           data={visibleTickets}
           loading={loading}
           pagination={pagination}
           onPageChange={setPage}
+          onPageSizeChange={(value) => { setLimit(value); setPage(1); }}
+          paginationTotalLabel="records"
           onRowClick={openViewPage}
           emptyMessage="No tickets found. Click 'New Ticket' to create one."
         />

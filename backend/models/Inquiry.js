@@ -701,6 +701,10 @@ const inquirySchema = new mongoose.Schema(
       type: Date,
     },
 
+    orderEndDate: {
+      type: Date,
+    },
+
     programmingScope: {                   // [FIX H1] was missing
       type:    String,
       trim:    true,
@@ -835,8 +839,6 @@ const inquirySchema = new mongoose.Schema(
       type: [bomAttachmentSchema],
       default: [],
     },
-
-    nextFollowUpDate: { type: Date },
 
     createdBy: {
       type:     mongoose.Schema.Types.ObjectId,

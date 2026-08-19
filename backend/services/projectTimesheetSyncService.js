@@ -75,7 +75,7 @@ const describeValue = (value) => {
   }
 };
 
-const logSync = () => {};
+const logSync = () => { };
 
 const logSyncError = (event, details = {}) => {
   console.error(SYNC_LOG_PREFIX, event, details);
@@ -143,6 +143,33 @@ const safeDate = (value) => {
   return Number.isNaN(date.getTime()) ? null : date;
 };
 
+const APP_TIME_ZONE = 'Asia/Kolkata';
+
+const toAppDateOnlyUtc = (value) => {
+  if (!value) return null;
+
+  // Raw YYYY-MM-DD values are already calendar dates; do not run them through
+  // a timezone conversion that can shift the day.
+  if (typeof value === 'string') {
+    const match = value.trim().match(/^(\d{4})-(\d{2})-(\d{2})(?:$|T)/);
+    if (match && !value.includes('T')) {
+      return new Date(`${match[1]}-${match[2]}-${match[3]}T00:00:00.000Z`);
+    }
+  }
+
+  const date = safeDate(value);
+  if (!date) return null;
+
+  const parts = new Intl.DateTimeFormat('en-US', {
+    timeZone: APP_TIME_ZONE,
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+  }).formatToParts(date);
+  const values = Object.fromEntries(parts.map((part) => [part.type, part.value]));
+  return new Date(`${values.year}-${values.month}-${values.day}T00:00:00.000Z`);
+};
+
 const sanitizeKeyPart = (value, fallback = 'NA') => {
   const text = String(value || fallback).trim();
   return text.replace(/\s+/g, '_').replace(/[:|]/g, '_') || fallback;
@@ -199,8 +226,8 @@ const buildSourceTaskKey = ({ project, planningTask, gridId, gridIndex = 0, inde
   const stableGridId = sanitizeKeyPart(gridId || planningTask?.gridId || 'A');
   const stableTaskId = sanitizeKeyPart(
     planningTask?.taskId ||
-      planningTask?.id ||
-      `${planningTask?.taskName || 'TASK'}_${planningTask?.plannedStartDate || ''}_${index}`
+    planningTask?.id ||
+    `${planningTask?.taskName || 'TASK'}_${planningTask?.plannedStartDate || ''}_${index}`
   );
 
   // Positional discriminators (grid index + task index) guarantee a globally
@@ -295,9 +322,9 @@ const getSourceTaskLogDetails = (sourceTask = {}) => ({
 const mapProjectTaskToTimesheetPayload = (sourceTask) => {
   const { project, planningTask, gridId, gridName, sourceTaskKey, assignedTo } = sourceTask;
   const projectObjectId = toObjectIdOrNull(project?._id);
-  const plannedStartDate = safeDate(planningTask?.plannedStartDate);
-  const plannedEndDate = safeDate(planningTask?.plannedEndDate);
-  const taskDate = plannedStartDate || plannedEndDate || safeDate(project?.orderDate) || new Date();
+  const plannedStartDate = toAppDateOnlyUtc(planningTask?.plannedStartDate || planningTask?.plannedEndDate);
+  const plannedEndDate = toAppDateOnlyUtc(planningTask?.plannedEndDate || planningTask?.plannedStartDate);
+  const taskDate = plannedStartDate || plannedEndDate || toAppDateOnlyUtc(project?.orderDate) || toAppDateOnlyUtc(new Date());
   const taskName = (planningTask?.taskName || '').trim() || 'Project Task';
 
   return {

@@ -121,7 +121,7 @@ const propagateCustomerMaster = async (customer) => {
 // @access  Private
 const getCustomers = async (req, res, next) => {
   try {
-    const { search } = req.query;
+    const { search, createdBy } = req.query;
     const parsedPage = Math.max(Number(req.query.page) || 1, 1);
     const parsedLimit = Math.min(Math.max(Number(req.query.limit) || 50, 1), 1000);
 
@@ -148,15 +148,31 @@ const getCustomers = async (req, res, next) => {
       ];
     }
 
+
+    if (createdBy) {
+      if (!mongoose.Types.ObjectId.isValid(createdBy)) {
+        return res.status(400).json({ success: false, message: 'Invalid customer creator filter' });
+      }
+      query.createdBy = createdBy;
+    }
+
     const skip = (parsedPage - 1) * parsedLimit;
 
-    const [customers, total] = await Promise.all([
+    const [customers, total, creatorIds] = await Promise.all([
       populateCustomer(Customer.find(query))
         .sort({ createdAt: -1 })
         .skip(skip)
         .limit(parsedLimit),
       Customer.countDocuments(query),
+      Customer.distinct('createdBy', { createdBy: { $ne: null } }),
     ]);
+
+    const creators = creatorIds.length
+      ? await User.find({ _id: { $in: creatorIds } })
+        .select('name email role department isActive')
+        .sort({ name: 1, email: 1 })
+        .lean()
+      : [];
 
     res.json({
       success: true,
@@ -166,6 +182,16 @@ const getCustomers = async (req, res, next) => {
         page: parsedPage,
         pages: Math.ceil(total / parsedLimit) || 1,
         limit: parsedLimit,
+      },
+      filters: {
+        creators: creators.map((creator) => ({
+          _id: creator._id,
+          name: creator.name || creator.email || 'Unknown User',
+          email: creator.email || '',
+          role: creator.role || '',
+          department: creator.department || '',
+          isActive: creator.isActive !== false,
+        })),
       },
     });
   } catch (error) {

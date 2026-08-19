@@ -2,7 +2,6 @@ export const INQUIRY_PERMISSIONS = Object.freeze({
   CREATE: 'Inquiries - Create Inquiry',
   VIEW: 'Inquiries - View Inquiry',
   EDIT: 'Inquiries - Edit Inquiry',
-  FOLLOW_UP: 'Inquiries - Follow-up / Reminder',
   COMMERCIAL_SUBMIT: 'Inquiries - Commercial Submit',
 });
 
@@ -26,7 +25,6 @@ export const INQUIRY_PERMISSION_OPTIONS = Object.freeze([
   { key: INQUIRY_PERMISSIONS.CREATE, label: 'Create Inquiry' },
   { key: INQUIRY_PERMISSIONS.VIEW, label: 'View Inquiry', universal: true },
   { key: INQUIRY_PERMISSIONS.EDIT, label: 'Edit Inquiry' },
-  { key: INQUIRY_PERMISSIONS.FOLLOW_UP, label: 'Follow-up / Reminder' },
   { key: INQUIRY_PERMISSIONS.COMMERCIAL_SUBMIT, label: 'Commercial Submit' },
 ]);
 

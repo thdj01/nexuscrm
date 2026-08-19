@@ -30,6 +30,40 @@ const addRequiredError = (errors, key, value, message) => {
   }
 };
 
+const getLocalIsoDate = (date = new Date()) => {
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, '0');
+  const day = String(date.getDate()).padStart(2, '0');
+  return `${year}-${month}-${day}`;
+};
+
+const validateComponentRequirementNaFields = (rows = [], prefix = '') => {
+  const errors = {};
+
+  (Array.isArray(rows) ? rows : []).forEach((row = {}, index) => {
+    addRequiredError(
+      errors,
+      `${prefix}.${index}.required`,
+      row.required,
+      'Required selection is required'
+    );
+
+    // Preferred Brand has an explicit NA option in these inquiry tables.
+    // It is editable only when the component itself is required, so enforce
+    // it only in that existing enabled state.
+    if (row.required === 'Yes') {
+      addRequiredError(
+        errors,
+        `${prefix}.${index}.preferredBrand`,
+        row.preferredBrand,
+        'Preferred brand is required (select NA if not applicable)'
+      );
+    }
+  });
+
+  return errors;
+};
+
 const MAIN_INCOMER_FIELDS = [
   'mainIncomerType',
   'supplyVoltage',
@@ -215,6 +249,65 @@ export const validateCommonInquiry = (form = {}) => {
   if (isBlank(form.offerType)) {
     errors.offerType = 'Offer type is required';
   }
+
+  addRequiredError(
+    errors,
+    'orderEndDate',
+    form.orderEndDate,
+    'Order end date is required'
+  );
+
+  if (!isBlank(form.orderEndDate) && String(form.orderEndDate) < getLocalIsoDate()) {
+    errors.orderEndDate = 'Order end date cannot be in the past';
+  }
+
+  // Every General Inquiry dropdown that offers "NA - Not Applicable" is
+  // mandatory. NA itself is a valid completed selection; only blank is invalid.
+  addRequiredError(
+    errors,
+    'panelAreaClassification',
+    form.panelAreaClassification || form.panelAreaClass,
+    'Panel area classification is required (select NA if not applicable)'
+  );
+  addRequiredError(
+    errors,
+    'installationType',
+    form.installationType,
+    'Installation type is required (select NA if not applicable)'
+  );
+  addRequiredError(
+    errors,
+    'ipRating',
+    form.ipRating,
+    'IP rating is required (select NA if not applicable)'
+  );
+  addRequiredError(
+    errors,
+    'enclosureType',
+    selectedEnclosureType(form),
+    'Enclosure type is required (select NA if not applicable)'
+  );
+  addRequiredError(
+    errors,
+    'panelStructure',
+    form.panelStructure || form.mccDetails?.layoutPreferences?.panelStructure,
+    'Panel structure is required (select NA if not applicable)'
+  );
+  addRequiredError(
+    errors,
+    'cableEntry',
+    form.cableEntry,
+    'Cable entry is required (select NA if not applicable)'
+  );
+  addRequiredError(
+    errors,
+    'switchgearMake',
+    form.switchgearMake ||
+    form.plcDetails?.switchgearMake ||
+    form.vfdDetails?.switchgearMake ||
+    form.mccDetails?.outgoingFeederDetails?.switchgearMake,
+    'Switchgear make is required (select NA if not applicable)'
+  );
 
   return { errors };
 };
@@ -464,6 +557,21 @@ export const validatePLCInquiry = (form = {}) => {
       'Commissioning support days are required';
   }
 
+  addRequiredError(
+    errors,
+    'plcDetails.programmingDevelopmentScope',
+    plcDetails.programmingDevelopmentScope,
+    'Programming / development scope is required (select NA if not applicable)'
+  );
+
+  Object.assign(
+    errors,
+    validateComponentRequirementNaFields(
+      plcDetails.automationRequirements,
+      'plcDetails.automationRequirements'
+    )
+  );
+
   return { errors };
 };
 
@@ -482,11 +590,9 @@ export const validateVFDInquiry = (form = {}) => {
   const errors = {};
   const vfdDetails = form.vfdDetails || {};
   const mainIncomer = vfdDetails.mainIncomer || {};
-  const requireMainIncomer = !form?._id || hasMainIncomerData(mainIncomer) || Boolean(mainIncomer.sameAsAbove);
-
   Object.assign(
     errors,
-    validateMainIncomer(mainIncomer, 'vfdDetails.mainIncomer', { required: requireMainIncomer })
+    validateMainIncomer(mainIncomer, 'vfdDetails.mainIncomer', { required: true })
   );
 
   const feederTypes = normalizeMultiSelection(
@@ -512,21 +618,102 @@ export const validateVFDInquiry = (form = {}) => {
     errors['vfdDetails.commissioningSupportDays'] = 'Commissioning support days are required';
   }
 
+  // These VFD Technical Details fields all expose an NA option.
+  addRequiredError(errors, 'supplyVoltage', form.supplyVoltage, 'Supply voltage is required (select NA if not applicable)');
+  addRequiredError(errors, 'controlVoltage', form.controlVoltage, 'Control voltage is required (select NA if not applicable)');
+  addRequiredError(errors, 'frequency', form.frequency, 'Frequency is required (select NA if not applicable)');
+  addRequiredError(
+    errors,
+    'shortCircuitCapacity',
+    form.shortCircuitCapacity,
+    'Short circuit withstand is required (select NA if not applicable)'
+  );
+
+  Object.assign(
+    errors,
+    validateComponentRequirementNaFields(
+      vfdDetails.additionalComponents,
+      'vfdDetails.additionalComponents'
+    )
+  );
+
   return { errors };
 };
 
 export const validateRIOInquiry = (form = {}) => {
   const rioBoxDetails = form.rioBoxDetails || {};
   const mainIncomer = rioBoxDetails.mainIncomer || {};
-  const requireMainIncomer = !form?._id || hasMainIncomerData(mainIncomer) || Boolean(mainIncomer.sameAsAbove);
+  const application = rioBoxDetails.application || {};
+  const enclosureConditions = rioBoxDetails.enclosureConditions || {};
+  const accessories = rioBoxDetails.accessories || {};
+  const errors = validateMainIncomer(
+    mainIncomer,
+    'rioBoxDetails.mainIncomer',
+    { required: true }
+  );
 
-  return {
-    errors: validateMainIncomer(
-      mainIncomer,
-      'rioBoxDetails.mainIncomer',
-      { required: requireMainIncomer }
-    ),
-  };
+  const requiredNaFields = [
+    ['rioBoxDetails.application.mounting', application.mounting, 'Mounting'],
+    ['rioBoxDetails.application.systemVoltage', application.systemVoltage, 'System voltage'],
+    ['rioBoxDetails.application.communicationProtocol', application.communicationProtocol, 'Communication protocol'],
+    ['rioBoxDetails.application.networkMedium', application.networkMedium, 'Network medium'],
+    ['rioBoxDetails.application.topology', application.topology, 'Topology'],
+    ['rioBoxDetails.application.redundancyRequired', application.redundancyRequired, 'Redundancy selection'],
+    ['rioBoxDetails.application.localHmiRequired', application.localHmiRequired, 'Local HMI selection'],
+    ['rioBoxDetails.enclosureConditions.enclosureMaterial', enclosureConditions.enclosureMaterial, 'Enclosure material'],
+    ['rioBoxDetails.enclosureConditions.ipRating', enclosureConditions.ipRating, 'IP rating'],
+    ['rioBoxDetails.enclosureConditions.areaClassification', enclosureConditions.areaClassification, 'Area classification'],
+    ['rioBoxDetails.enclosureConditions.indoorOutdoor', enclosureConditions.indoorOutdoor, 'Indoor / outdoor selection'],
+    ['rioBoxDetails.enclosureConditions.canopyRequired', enclosureConditions.canopyRequired, 'Canopy selection'],
+    ['rioBoxDetails.enclosureConditions.cableEntry', enclosureConditions.cableEntry, 'Cable entry'],
+    ['rioBoxDetails.enclosureConditions.glandPlateRequired', enclosureConditions.glandPlateRequired, 'Gland plate selection'],
+    ['rioBoxDetails.enclosureConditions.powerSupplyAvailable', enclosureConditions.powerSupplyAvailable, 'Power supply availability'],
+    ['rioBoxDetails.enclosureConditions.upsSupplyAvailable', enclosureConditions.upsSupplyAvailable, 'UPS supply availability'],
+    ['rioBoxDetails.enclosureConditions.spaceHeaterRequired', enclosureConditions.spaceHeaterRequired, 'Space heater selection'],
+    ['rioBoxDetails.accessories.networkSwitch', accessories.networkSwitch, 'Network switch'],
+    ['rioBoxDetails.accessories.fiberConverter', accessories.fiberConverter, 'Fiber converter'],
+    ['rioBoxDetails.accessories.powerSupply24Vdc', accessories.powerSupply24Vdc, '24 VDC power supply'],
+    ['rioBoxDetails.accessories.redundantPsu', accessories.redundantPsu, 'Redundant PSU'],
+    ['rioBoxDetails.accessories.marshallingTerminals', accessories.marshallingTerminals, 'Marshalling terminals'],
+    ['rioBoxDetails.accessories.interposingRelays', accessories.interposingRelays, 'Interposing relays'],
+    ['rioBoxDetails.accessories.intrinsicSafetyBarriers', accessories.intrinsicSafetyBarriers, 'Intrinsic safety barriers'],
+    ['rioBoxDetails.accessories.localIsolator', accessories.localIsolator, 'Local isolator'],
+  ];
+
+  requiredNaFields.forEach(([key, value, label]) => {
+    addRequiredError(errors, key, value, `${label} is required (select NA if not applicable)`);
+  });
+
+  return { errors };
+};
+
+export const validateFLPInquiry = (form = {}) => {
+  const details = form.flpEnclosureDetails || {};
+  const weatherproof = details.weatherproof || {};
+  const flameproof = details.flameproof || {};
+  const errors = {};
+
+  addRequiredError(errors, 'hazardousArea', form.hazardousArea, 'Hazardous area selection is required (select NA if not applicable)');
+  addRequiredError(errors, 'outdoorInstallation', form.outdoorInstallation, 'Outdoor installation selection is required (select NA if not applicable)');
+
+  const requiredNaFields = [
+    ['flpEnclosureDetails.weatherproof.material', weatherproof.material, 'Weatherproof material'],
+    ['flpEnclosureDetails.weatherproof.ipRating', weatherproof.ipRating, 'Weatherproof IP rating'],
+    ['flpEnclosureDetails.weatherproof.mounting', weatherproof.mounting, 'Weatherproof mounting'],
+    ['flpEnclosureDetails.weatherproof.windowRequired', weatherproof.windowRequired, 'Window required selection'],
+    ['flpEnclosureDetails.flameproof.zoneDivision', flameproof.zoneDivision, 'Zone / division'],
+    ['flpEnclosureDetails.flameproof.gasGroup', flameproof.gasGroup, 'Gas group'],
+    ['flpEnclosureDetails.flameproof.temperatureClass', flameproof.temperatureClass, 'Temperature class'],
+    ['flpEnclosureDetails.flameproof.certification', flameproof.certification, 'Certification'],
+    ['flpEnclosureDetails.flameproof.material', flameproof.material, 'Flameproof material'],
+    ['flpEnclosureDetails.flameproof.ipRating', flameproof.ipRating, 'Flameproof IP rating'],
+  ];
+
+  requiredNaFields.forEach(([key, value, label]) => {
+    addRequiredError(errors, key, value, `${label} is required (select NA if not applicable)`);
+  });
+
+  return { errors };
 };
 
 export const validateMCCInquiry = (form = {}) => {
@@ -610,6 +797,10 @@ export const validateInquiry = (form = {}) => {
 
   if (hasInquiryPanelType(panelTypes, 'RIO Box')) {
     typeErrors.push(validateRIOInquiry(form).errors);
+  }
+
+  if (hasInquiryPanelType(panelTypes, 'FLP')) {
+    typeErrors.push(validateFLPInquiry(form).errors);
   }
 
   const errors = mergeErrors(commonResult.errors, ...typeErrors);

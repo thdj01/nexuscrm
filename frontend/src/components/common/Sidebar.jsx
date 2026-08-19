@@ -23,7 +23,7 @@ import nexusXLogo from '../../assets/nexus-logo-x.png';
 import { useAuth } from '../../context/AuthContext';
 import { CUSTOMER_PERMISSIONS, INQUIRY_PERMISSIONS } from '../../constants/permissions';
 import Avatar from './Avatar';
-import { getUserRoleDepartmentLabel } from '../../utils/userRoleLabel';
+import { cleanDepartmentName, getRoleLabel, joinDepartmentNames } from '../../utils/userRoleLabel';
 
 const navItems = [
   { to: '/',             icon: LayoutDashboard, label: 'Dashboard' },
@@ -34,6 +34,45 @@ const navItems = [
   // Points to /timesheet/list; NavLink will be active for any /timesheet/* path
   { to: '/timesheet',    icon: Clock,           label: 'Timesheet' },
 ];
+
+const getSidebarRoleDepartmentLabel = (user = {}) => {
+  const role = getRoleLabel(user?.role);
+
+  if (user?.role === 'admin') return role;
+
+  const isHod = user?.role === 'hod' || user?.role === 'manager';
+  const candidates = isHod
+    ? [
+        ...(Array.isArray(user?.hodDepartmentNames) ? user.hodDepartmentNames : []),
+        ...(Array.isArray(user?.hodDepartmentInfo)
+          ? user.hodDepartmentInfo.map((department) => department?.name)
+          : []),
+        user?.departmentName,
+        user?.departmentInfo?.name,
+      ]
+    : [
+        user?.departmentName,
+        user?.departmentInfo?.name,
+        user?.teamId?.name,
+        user?.team?.name,
+      ];
+
+  const departmentNames = [];
+  const seen = new Set();
+
+  candidates
+    .map(cleanDepartmentName)
+    .filter(Boolean)
+    .forEach((name) => {
+      const key = name.toLowerCase();
+      if (seen.has(key)) return;
+      seen.add(key);
+      departmentNames.push(name);
+    });
+
+  const departments = joinDepartmentNames(departmentNames);
+  return departments ? `${role} - ${departments}` : role;
+};
 
 const getMasterItems = ({ isAdmin, canAccessTimesheetAdmin }) => [
   ...(canAccessTimesheetAdmin
@@ -68,7 +107,7 @@ const Sidebar = ({
 }) => {
   const [collapsedInternal, setCollapsedInternal] = useState(false);
   const { user, logout, isAdmin, isHod, isTeamLead, hasPermission } = useAuth();
-  const userRoleDepartmentLabel = getUserRoleDepartmentLabel(user);
+  const userRoleDepartmentLabel = getSidebarRoleDepartmentLabel(user);
   const canAccessTimesheetAdmin =
     isAdmin ||
     isHod ||

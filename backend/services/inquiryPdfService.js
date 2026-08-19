@@ -20,7 +20,7 @@ const LOGO_HEIGHT_PX = 210;
 const OMIT_KEYS = new Set([
   '_id', '__v', 'customerRef', 'projectReference', 'createdBy', 'updatedBy',
   'attachments', 'attachment', 'bomAttachments', 'status', 'statusDetails',
-  'reviewStatus', 'nextFollowUpDate', 'priority', 'estimatedValue',
+  'reviewStatus', 'priority', 'estimatedValue',
   'convertedToProject', 'kickoffMeeting', 'storedName', 'storagePath',
   'workflowReference', 'scheduledBy', 'scheduledAt', 'scheduledOn',
   'enclosureMaterial', 'enclosureStandard', 'notes', 'key',
@@ -66,6 +66,7 @@ const LABEL_OVERRIDES = {
   referenceBomAttached: 'Reference BOM Attached',
   commissioningScope: 'Commissioning Scope',
   deliveryDate: 'Required Delivery Date',
+  orderEndDate: 'Order End Date',
   deliveryTerms: 'Delivery Terms',
   paymentTerms: 'Payment Terms',
   additionalNotes: 'Additional Notes',

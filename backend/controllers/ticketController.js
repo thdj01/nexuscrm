@@ -705,6 +705,7 @@ const getTickets = async (req, res) => {
       project,
       inquiry,
       assignedTo,
+      createdBy,
       from,
       to,
       search,
@@ -744,6 +745,11 @@ const getTickets = async (req, res) => {
     if (inquiryIdError) return fail(res, inquiryIdError);
     if (inquiry) filter.inquiry = inquiry;
 
+    if (createdBy) {
+      if (!isValidId(createdBy)) return fail(res, 'Created by employee is invalid');
+      filter.createdBy = createdBy;
+    }
+
     const assignedToValues = normalizeMultiValue(assignedTo);
     for (const assignedToId of assignedToValues) {
       const assignedToIdError = validateOptionalObjectId(assignedToId, 'Assigned employee');
@@ -780,7 +786,7 @@ const getTickets = async (req, res) => {
     const statusCountFilter = { ...filter };
     delete statusCountFilter.status;
 
-    const [tickets, total, statusCounts] = await Promise.all([
+    const [tickets, total, statusCounts, creatorIds] = await Promise.all([
       Ticket.find(filter)
         .populate(TICKET_POPULATE)
         .sort({ createdAt: -1 })
@@ -789,7 +795,15 @@ const getTickets = async (req, res) => {
         .lean(),
       Ticket.countDocuments(filter),
       buildStatusCounts(statusCountFilter),
+      Ticket.distinct('createdBy', { createdBy: { $ne: null }, isActive: true }),
     ]);
+
+    const creators = creatorIds.length
+      ? await User.find({ _id: { $in: creatorIds } })
+        .select('name email role department isActive')
+        .sort({ name: 1, email: 1 })
+        .lean()
+      : [];
 
     return ok(res, {
       tickets,
@@ -799,6 +813,16 @@ const getTickets = async (req, res) => {
         page: currentPage,
         limit: lim,
         totalPages: Math.ceil(total / lim),
+      },
+      filters: {
+        creators: creators.map((creator) => ({
+          _id: creator._id,
+          name: creator.name || creator.email || 'Unknown User',
+          email: creator.email || '',
+          role: creator.role || '',
+          department: creator.department || '',
+          isActive: creator.isActive !== false,
+        })),
       },
     });
   } catch (err) {

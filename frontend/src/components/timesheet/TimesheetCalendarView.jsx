@@ -15,6 +15,7 @@ import interactionPlugin from '@fullcalendar/interaction';
 
 import { fetchCalendarTasks } from '../../api/timesheetService';
 import { useToast }           from '../../context/ToastContext';
+import { formatTime12Hour }    from '../../utils/timesheetTime';
 
 const TYPE_COLORS = {
   Development:   { bg: '#e0f2fe', border: '#0ea5e9', text: '#0c4a6e' },
@@ -35,7 +36,37 @@ const STATUS_BORDER = {
   Completed:    '#22c55e',
 };
 
-const toYMD = (date) => new Date(date).toISOString().split('T')[0];
+const toYMD = (value) => {
+  const date = value instanceof Date ? value : new Date(value);
+  if (Number.isNaN(date.getTime())) return '';
+  const parts = new Intl.DateTimeFormat('en-US', {
+    timeZone: 'Asia/Kolkata',
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+  }).formatToParts(date);
+  const values = Object.fromEntries(parts.map((part) => [part.type, part.value]));
+  return `${values.year}-${values.month}-${values.day}`;
+};
+
+const enumerateTaskDateStrings = (task) => {
+  const fallback = toYMD(task?.date);
+  if (task?.taskSource !== 'PROJECT') return fallback ? [fallback] : [];
+
+  const startYmd = toYMD(task?.sourcePlannedStartDate || task?.date);
+  const endYmd = toYMD(task?.sourcePlannedEndDate || task?.sourcePlannedStartDate || task?.date);
+  if (!startYmd || !endYmd) return fallback ? [fallback] : [];
+
+  const start = new Date(`${startYmd}T00:00:00.000Z`);
+  const end = new Date(`${endYmd}T00:00:00.000Z`);
+  if (end < start) return [startYmd];
+
+  const days = [];
+  for (let cursor = start; cursor <= end; cursor = new Date(cursor.getTime() + 86400000)) {
+    days.push(cursor.toISOString().slice(0, 10));
+  }
+  return days;
+};
 
 const fmtDate = (value) => {
   if (!value) return '—';
@@ -90,7 +121,9 @@ const getTaskSourceLabel = (task) =>
   task?.taskSource === 'PROJECT' ? '[PROJECT]' : '[USER]';
 
 const getTaskTimeLabel = (task) => {
-  if (task?.startTime && task?.endTime) return `${task.startTime}–${task.endTime}`;
+  if (task?.startTime && task?.endTime) {
+    return `${formatTime12Hour(task.startTime)}–${formatTime12Hour(task.endTime)}`;
+  }
   return 'Full day';
 };
 
@@ -339,28 +372,30 @@ const TimesheetCalendarView = () => {
     const byDayAndPerson = new Map();
 
     tasks.forEach((task) => {
-      const dateStr = toYMD(new Date(task.date));
       const employeeId = getEmployeeId(task);
-      const id = `${dateStr}__${employeeId}`;
       const employeeName = getEmployeeName(task);
 
-      if (!byDayAndPerson.has(id)) {
-        byDayAndPerson.set(id, {
-          id,
-          dateStr,
-          employeeId,
-          employeeName,
-          tasks: [],
-          taskCount: 0,
-          totalHours: 0,
-          primaryTaskType: 'Other',
-        });
-      }
+      enumerateTaskDateStrings(task).forEach((dateStr) => {
+        const id = `${dateStr}__${employeeId}`;
 
-      const group = byDayAndPerson.get(id);
-      group.tasks.push(task);
-      group.taskCount += 1;
-      group.totalHours += Number(task.hours || 0);
+        if (!byDayAndPerson.has(id)) {
+          byDayAndPerson.set(id, {
+            id,
+            dateStr,
+            employeeId,
+            employeeName,
+            tasks: [],
+            taskCount: 0,
+            totalHours: 0,
+            primaryTaskType: 'Other',
+          });
+        }
+
+        const group = byDayAndPerson.get(id);
+        group.tasks.push(task);
+        group.taskCount += 1;
+        group.totalHours += Number(task.hours || 0);
+      });
     });
 
     return Array.from(byDayAndPerson.values())

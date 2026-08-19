@@ -308,6 +308,7 @@ const buildInitialState = (initialData = null) => {
       inquiryNumber: getInquiryNumber(source),
       projectQuantity: Number(source.projectQuantity || source.quantity || 1),
       orderDate: toDateStr(source.orderDate) || todayDateStr(),
+      orderEndDate: toDateStr(source.orderEndDate || source.inquiryReference?.orderEndDate),
       projectEndDate: toDateStr(source.projectEndDate),
       delayedEndDate: toDateStr(source.delayedEndDate || source.projectEndDate),
     },
@@ -797,6 +798,7 @@ const ProjectForm = ({
     };
 
     if (existingInquiryNumber) payload.inquiryNumber = existingInquiryNumber;
+    if (!hasInquirySource) payload.orderEndDate = form.orderEndDate || undefined;
     if (pendingDocuments.length) payload._pendingDocuments = pendingDocuments;
     const result = await onSubmit(payload);
     if (result !== false) {
@@ -863,15 +865,26 @@ const ProjectForm = ({
               <FormField label="Order Date" error={errors.orderDate}>
                 <Input
                   type="date"
-                  min={todayDateStr()}
+                  min={hasInquirySource ? undefined : todayDateStr()}
                   value={form.orderDate}
+                  disabled={hasInquirySource}
+                  className={hasInquirySource ? 'cursor-not-allowed bg-gray-100 text-gray-500' : ''}
                   onChange={(event) => {
                     const value = event.target.value;
                     const dateError = editableDateError(value, initial.form.orderDate, 'Order Date');
                     setForm((prev) => ({ ...prev, orderDate: value }));
                     setErrors((prev) => ({ ...prev, orderDate: dateError || undefined }));
                   }}
-                  title="Previous dates and Sundays are blocked."
+                  title={hasInquirySource ? 'Order Date is controlled by the converted Inquiry project.' : 'Previous dates and Sundays are blocked.'}
+                />
+              </FormField>
+              <FormField label="Order Expected End Date">
+                <Input
+                  type="date"
+                  value={form.orderEndDate || ''}
+                  disabled={hasInquirySource}
+                  className={hasInquirySource ? 'cursor-not-allowed bg-gray-100 text-gray-500' : ''}
+                  onChange={(event) => setForm((prev) => ({ ...prev, orderEndDate: event.target.value }))}
                 />
               </FormField>
               <FormField label="Actual End Date">

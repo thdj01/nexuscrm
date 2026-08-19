@@ -33,7 +33,6 @@ const CHANGE_IGNORED_FIELDS = new Set([
   'bomAttachments',
   'status',
   'statusDetails',
-  'nextFollowUpDate',
 ]);
 
 function toPlain(value) {
@@ -57,23 +56,7 @@ function isObjectIdLike(value) {
   return typeof value.toHexString === 'function' || value._bsontype === 'ObjectId';
 }
 
-function normalizeDate(value) {
-  if (!value) return '';
-  const date = value instanceof Date ? value : new Date(value);
-  if (Number.isNaN(date.getTime())) return String(value);
-  return date.toISOString();
-}
 
-function formatDate(value) {
-  if (!value) return '-';
-  const date = value instanceof Date ? value : new Date(value);
-  if (Number.isNaN(date.getTime())) return String(value);
-  return new Intl.DateTimeFormat('en-IN', {
-    day: '2-digit',
-    month: 'short',
-    year: 'numeric',
-  }).format(date);
-}
 
 function attachmentKey(file = {}) {
   return String(
@@ -167,14 +150,6 @@ function buildInquiryChangeItems(beforeInquiry = {}, afterInquiry = {}, options 
     items.push(`removed Technical BOM document${bomDocuments.removed.length === 1 ? '' : 's'}: ${truncateNames(bomDocuments.removed)}`);
   }
 
-  const beforeFollowUp = normalizeDate(before.nextFollowUpDate);
-  const afterFollowUp = normalizeDate(after.nextFollowUpDate);
-  if (beforeFollowUp !== afterFollowUp) {
-    items.push(after.nextFollowUpDate
-      ? `follow-up date changed to ${formatDate(after.nextFollowUpDate)}`
-      : 'follow-up reminder cleared');
-  }
-
   if (hasGeneralDetailsChanged(before, after)) {
     items.push('inquiry details updated');
   }
@@ -202,8 +177,8 @@ async function resolveInquiryChangeRecipientUsers(inquiry = {}, { includeEstimat
     includeEstimation ? getEstimationUsers() : Promise.resolve([]),
     creatorId && mongoose.Types.ObjectId.isValid(creatorId)
       ? User.findOne({ _id: creatorId, isActive: { $ne: false } })
-          .select('_id name email phone mobileNumber whatsappNumber mobile role department hodDepartments teamId')
-          .lean()
+        .select('_id name email phone mobileNumber whatsappNumber mobile role department hodDepartments teamId')
+        .lean()
       : Promise.resolve(null),
   ]);
 

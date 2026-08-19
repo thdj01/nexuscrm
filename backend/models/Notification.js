@@ -31,7 +31,6 @@ const notificationSchema = new mongoose.Schema(
       type: String,
       // [FIX C3] Added 'status' and 'warning' — used by inquiryController
       enum: [
-        'follow_up',
         'overdue',
         'project_delay',
         'order_confirmed',

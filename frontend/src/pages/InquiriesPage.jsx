@@ -216,7 +216,6 @@ const getPanelTypeLabel = (value = '') => {
   return PANEL_TYPE_LABELS[text] || text || '—';
 };
 
-const PAGE_SIZE_BASE_OPTIONS = [50, 100, 250];
 const ALL_YEARS_VALUE = 'all';
 const FINANCIAL_YEAR_STORAGE_KEY = 'dashboardFinancialYear';
 
@@ -245,27 +244,6 @@ const generateFinancialYearOptions = (yearsBack = 2, yearsForward = 2) => {
 };
 
 
-const getPageSizeOptions = (total = 0, selectedLimit = 50) => {
-  const numericTotal = Number(total) || 0;
-  const options = [...PAGE_SIZE_BASE_OPTIONS];
-
-  if (numericTotal > 250) {
-    let nextSize = 500;
-
-    while (nextSize < numericTotal) {
-      options.push(nextSize);
-      nextSize += nextSize < 1000 ? 500 : 1000;
-    }
-
-    options.push(nextSize);
-  }
-
-  if (selectedLimit) {
-    options.push(Number(selectedLimit));
-  }
-
-  return [...new Set(options)].sort((a, b) => a - b);
-};
 
 const parseFilterValues = (value = '') => (
   String(value || '')
@@ -367,6 +345,42 @@ const normalizeUserList = (payload) => {
 
 const getUserId = (user) => String(user?._id || user || '');
 
+const getKickoffUserDepartmentLabel = (account = {}) => {
+  const isHod = account?.role === 'hod' || account?.role === 'manager';
+  const candidates = isHod
+    ? [
+        ...(Array.isArray(account?.hodDepartmentNames) ? account.hodDepartmentNames : []),
+        ...(Array.isArray(account?.hodDepartmentInfo)
+          ? account.hodDepartmentInfo.map((department) => department?.name)
+          : []),
+        account?.departmentName,
+        account?.departmentInfo?.name,
+        account?.teamId?.name,
+      ]
+    : [
+        account?.departmentName,
+        account?.departmentInfo?.name,
+        account?.teamId?.name,
+      ];
+
+  const departments = [];
+  const seen = new Set();
+
+  candidates
+    .map((value) => String(value || '').trim())
+    .filter(Boolean)
+    .forEach((name) => {
+      const key = name.toLowerCase();
+      if (seen.has(key)) return;
+      seen.add(key);
+      departments.push(name);
+    });
+
+  if (departments.length <= 1) return departments[0] || '';
+  if (departments.length === 2) return `${departments[0]} & ${departments[1]}`;
+  return `${departments.slice(0, -1).join(', ')} & ${departments[departments.length - 1]}`;
+};
+
 const getKickoffStatus = (inquiry) => inquiry?.kickoffMeeting?.status || '';
 
 const isKickoffScheduledOrReady = (inquiry) => ['Scheduled', 'Ready For Completion'].includes(getKickoffStatus(inquiry));
@@ -446,7 +460,6 @@ const InquiriesPage = () => {
 
   const canCreateInquiry = hasPermission(INQUIRY_PERMISSIONS.CREATE);
   const canEditInquiry = hasPermission(INQUIRY_PERMISSIONS.EDIT);
-  const canManageFollowUp = hasPermission(INQUIRY_PERMISSIONS.FOLLOW_UP);
   const canCommercialSubmit = hasPermission(INQUIRY_PERMISSIONS.COMMERCIAL_SUBMIT);
   const canCompleteKickoff = useCallback((inquiry = {}) => {
     if (user?.role === 'admin' || isEstimationAccount(user)) return true;
@@ -497,14 +510,6 @@ const InquiriesPage = () => {
   const [statusModal, setStatusModal] = useState({ isOpen: false, type: '', inquiry: null, nextStatus: '' });
   const [statusModalForm, setStatusModalForm] = useState(getInitialStatusModalForm);
   const [statusModalErrors, setStatusModalErrors] = useState({});
-  const [followUpModal, setFollowUpModal] = useState({
-    isOpen: false,
-    inquiry: null,
-    nextFollowUpDate: '',
-    remarks: '',
-  });
-  const [followUpError, setFollowUpError] = useState('');
-
   // ── Fetch ────────────────────────────────────────────────────────────────
   const fetchInquiries = useCallback(async () => {
     setLoading(true);
@@ -600,22 +605,14 @@ const InquiriesPage = () => {
   };
 
   // ── Convert / Status workflow ───────────────────────────────────────────
-  const updateInquiryStatus = async (inquiry, nextStatus, extraPayload = {}, options = {}) => {
+  const updateInquiryStatus = async (inquiry, nextStatus, extraPayload = {}) => {
     try {
-      if (!options.skipOptimistic) {
-        setInquiries(prev =>
-          prev.map(item =>
-            item._id === inquiry._id
-              ? { ...item, status: nextStatus, ...extraPayload.optimisticPatch }
-              : item
-          )
-        );
-      }
-
       const payload = extraPayload.formData || { status: nextStatus, ...(extraPayload.body || {}) };
       const { data } = await API.patch(`/inquiries/${inquiry._id}/status`, payload);
       const updatedInquiry = data?.data;
 
+      // Apply the server result once. Avoid an optimistic render followed by a
+      // second server-response render for a single status change.
       if (updatedInquiry?._id) {
         setInquiries(prev =>
           prev.map(item =>
@@ -633,14 +630,6 @@ const InquiriesPage = () => {
         err.response?.data?.message ||
         'Failed to update status'
       );
-
-      if (!options.skipOptimistic) {
-        setInquiries(prev =>
-          prev.map(item =>
-            item._id === inquiry._id ? inquiry : item
-          )
-        );
-      }
       return false;
     }
   };
@@ -688,6 +677,14 @@ const InquiriesPage = () => {
     if (nextStatus === currentStatus && nextStatus !== 'Revision') return;
 
     if (nextStatus === 'Order Won') {
+      // Once the Inquiry already has a Project, changing the status back to
+      // Project Won is an unlock action only. Do not schedule a second kickoff
+      // or attempt another conversion for the same Inquiry.
+      if (inquiry.convertedToProject || inquiry.projectReference) {
+        updateInquiryStatus(inquiry, nextStatus);
+        return;
+      }
+
       openKickoffModal(inquiry);
       return;
     }
@@ -794,8 +791,7 @@ const InquiriesPage = () => {
       const saved = await updateInquiryStatus(
         inquiry,
         nextStatus,
-        formData ? { formData } : { body },
-        { skipOptimistic: true }
+        formData ? { formData } : { body }
       );
       if (saved) closeStatusModal();
     } finally {
@@ -916,61 +912,6 @@ const InquiriesPage = () => {
     }
   };
 
-  const openFollowUpModal = (inquiry) => {
-    if (!canManageFollowUp || !canEditInquiryRecord(inquiry)) return;
-    setFollowUpModal({
-      isOpen: true,
-      inquiry,
-      nextFollowUpDate: inquiry?.nextFollowUpDate
-        ? new Date(inquiry.nextFollowUpDate).toISOString().slice(0, 10)
-        : '',
-      remarks: inquiry?.remarks || '',
-    });
-    setFollowUpError('');
-  };
-
-  const closeFollowUpModal = (force = false) => {
-    if (submitting && !force) return;
-    setFollowUpModal({
-      isOpen: false,
-      inquiry: null,
-      nextFollowUpDate: '',
-      remarks: '',
-    });
-    setFollowUpError('');
-  };
-
-  const saveFollowUpReminder = async () => {
-    const inquiry = followUpModal.inquiry;
-    if (!inquiry) return;
-
-    if (!followUpModal.nextFollowUpDate) {
-      setFollowUpError('Follow-up date is required');
-      return;
-    }
-
-    setSubmitting(true);
-    try {
-      const { data } = await API.patch(`/inquiries/${inquiry._id}/follow-up`, {
-        nextFollowUpDate: followUpModal.nextFollowUpDate,
-        remarks: followUpModal.remarks,
-      });
-
-      if (data?.data?._id) {
-        setInquiries((current) => current.map((item) => (
-          item._id === data.data._id ? { ...item, ...data.data } : item
-        )));
-      }
-
-      toast.success('Follow-up reminder updated');
-      closeFollowUpModal(true);
-    } catch (error) {
-      toast.error(error.response?.data?.message || 'Failed to update follow-up reminder');
-    } finally {
-      setSubmitting(false);
-    }
-  };
-
   const clearFilters = () => {
     setSearch('');
     setFilterStatuses([]);
@@ -981,29 +922,37 @@ const InquiriesPage = () => {
   // ── Table columns ─────────────────────────────────────────────────────────
   const columns = [
     {
-      key: 'inquiryId', label: 'ID', width: '100px',
+      key: 'inquiryId', label: 'ID', width: '90px',
       render: v => <span className="font-mono text-xs font-semibold text-blue-700">{v}</span>,
     },
     {
-      key: 'inquiryDate', label: 'Date', width: '100px',
+      key: 'inquiryDate', label: 'Date', width: '90px',
       render: v => new Date(v).toLocaleDateString('en-IN'),
     },
     {
       key: 'customerName',
-      label: 'Customer / Project Name',
+      label: 'Customer Name',
+      width: '150px',
       render: (_v, row) => (
-        <div>
-          <p className="font-medium text-gray-800 text-sm">{getLiveCustomerName(row) || '—'}</p>
-          <p className="text-xs text-gray-400">
-            {row.projectName || row.projectReference?.projectName || '—'}
-          </p>
-        </div>
+        <span className="font-medium text-gray-800 text-sm">
+          {row.customerName || getLiveCustomerName(row) || '—'}
+        </span>
+      ),
+    },
+    {
+      key: 'projectName',
+      label: 'Project Name',
+      width: '160px',
+      render: (_v, row) => (
+        <span className="text-sm text-gray-600">
+          {row.projectName || row.projectReference?.projectName || '—'}
+        </span>
       ),
     },
     {
       key: 'createdBy',
       label: 'Created By',
-      width: '150px',
+      width: '130px',
       render: (_value, row) => {
         const currentUserId = getEntityId(user?._id || user?.id);
         const creatorId = getEntityId(row.createdBy);
@@ -1019,9 +968,9 @@ const InquiriesPage = () => {
         );
       },
     },
-    { key: 'mobileNumber', label: 'Mobile', width: '120px' },
+    { key: 'mobileNumber', label: 'Mobile', width: '110px' },
     {
-      key: 'panelTypes', label: 'Panel Type', width: '140px',
+      key: 'panelTypes', label: 'Panel Type', width: '120px',
       render: (v, row) => {
         const types = Array.isArray(v) && v.length ? v : (row.productType ? [row.productType] : []);
         return (
@@ -1037,7 +986,7 @@ const InquiriesPage = () => {
     {
       key: 'status',
       label: 'Status',
-      width: '300px',
+      width: '210px',
       render: (v, row) => {
         const currentStatus = normalizeInquiryStatus(v);
         const selectValue = currentStatus === 'Revision' ? 'Revision_CURRENT' : currentStatus;
@@ -1054,7 +1003,7 @@ const InquiriesPage = () => {
               handleStatusChange(row, selectedStatus);
             }}
             onClick={(e) => e.stopPropagation()}
-            className="w-full min-w-[270px]"
+            className="w-full min-w-[210px]"
           >
             {STATUS_OPTIONS.map(({ value, label }) => {
               if (currentStatus === 'Revision' && value === 'Revision') {
@@ -1079,44 +1028,16 @@ const InquiriesPage = () => {
       },
     },
     {
-      key: '_id', label: 'Actions', width: '220px',
+      key: '_id', label: 'Actions', width: '210px',
       render: (_, row) => {
         const latestBomRevisionLabel = getLatestBomRevisionLabel(row.bomAttachments);
         const canEditRow = canEditInquiryRecord(row);
 
         return (
-          <div className="flex flex-wrap items-center gap-1" onClick={(e) => e.stopPropagation()}>
-          {canEditRow && (
-            <button
-              type="button"
-              onClick={(e) => {
-                e.stopPropagation();
-                navigate(`/inquiries/${row._id}/edit`);
-              }}
-              className="rounded p-1.5 text-gray-400 hover:bg-amber-50 hover:text-amber-600 transition-colors"
-              title="Edit inquiry"
-            >
-              <Edit2 size={14} />
-            </button>
-          )}
-
-          {canManageFollowUp && canEditRow && (
-            <button
-              type="button"
-              onClick={(e) => {
-                e.stopPropagation();
-                openFollowUpModal(row);
-              }}
-              className="rounded p-1.5 text-gray-400 transition-colors hover:bg-blue-50 hover:text-blue-600"
-              title="Set follow-up reminder"
-            >
-              <Clock size={14} />
-            </button>
-          )}
-
+          <div className="flex w-full items-center justify-end gap-1 whitespace-nowrap" onClick={(e) => e.stopPropagation()}>
           {latestBomRevisionLabel && (
             <span
-              className="rounded bg-indigo-50 px-2 py-1 text-[11px] font-semibold text-indigo-700"
+              className="rounded bg-indigo-50 px-1.5 py-0.5 text-[10px] font-semibold text-indigo-700"
               title="Latest Technical BoM revision"
             >
               {latestBomRevisionLabel}
@@ -1130,7 +1051,7 @@ const InquiriesPage = () => {
                 e.stopPropagation();
                 openScheduledKickoffModal(row);
               }}
-              className={`rounded px-2 py-1 text-[11px] font-semibold ${isKickoffTimeCompleted(row) ? 'bg-amber-50 text-amber-700 hover:bg-amber-100' : 'bg-blue-50 text-blue-700 hover:bg-blue-100'}`}
+              className={`rounded px-1.5 py-0.5 text-[10px] font-semibold ${isKickoffTimeCompleted(row) ? 'bg-amber-50 text-amber-700 hover:bg-amber-100' : 'bg-blue-50 text-blue-700 hover:bg-blue-100'}`}
               title={row.kickoffMeeting?.scheduledAt ? `Kick-off: ${new Date(row.kickoffMeeting.scheduledAt).toLocaleString('en-IN')}` : 'Kick-off Meeting scheduled'}
             >
               {isKickoffTimeCompleted(row) ? 'Mark Kickoff Done' : 'Kickoff Scheduled'}
@@ -1139,11 +1060,25 @@ const InquiriesPage = () => {
 
           {isOrderWonStatus(row.status) && row.convertedToProject && (
             <span
-              className="rounded bg-green-50 px-2 py-1 text-[11px] font-semibold text-green-700"
+              className="rounded bg-green-50 px-1.5 py-0.5 text-[10px] font-semibold text-green-700"
               title={row.projectReference?.projectId ? `Linked project: ${row.projectReference.projectId}` : 'Project already created'}
             >
               Project Created
             </span>
+          )}
+
+          {canEditRow && (
+            <button
+              type="button"
+              onClick={(e) => {
+                e.stopPropagation();
+                navigate(`/inquiries/${row._id}/edit`);
+              }}
+              className="ml-0.5 shrink-0 rounded p-1.5 text-gray-400 transition-colors hover:bg-amber-50 hover:text-amber-600"
+              title="Edit inquiry"
+            >
+              <Edit2 size={14} />
+            </button>
           )}
           </div>
         );
@@ -1151,7 +1086,6 @@ const InquiriesPage = () => {
     },
   ];
 
-  const limitOptions = getPageSizeOptions(pagination?.total || 0, limit);
   const hasFilters = search || filterStatuses.length > 0 || filterPanelTypes.length > 0 || filterCreatedBy;
   const existingKickoffUsers = Array.isArray(pendingConversion?.kickoffMeeting?.attendees)
     ? pendingConversion.kickoffMeeting.attendees.filter(user => typeof user === 'object' && user?._id)
@@ -1259,19 +1193,6 @@ const InquiriesPage = () => {
               {financialYearOptions.map((year) => <option key={year} value={year}>{year === ALL_YEARS_VALUE ? 'All Years' : year}</option>)}
             </Select>
 
-            <Select
-              value={limit}
-              onChange={(e) => {
-                setLimit(Number(e.target.value));
-                setPage(1);
-              }}
-              className="h-9 w-full lg:w-[105px] lg:shrink-0"
-              aria-label="Records per page"
-            >
-              {limitOptions.map((value) => (
-                <option key={value} value={value}>{value}</option>
-              ))}
-            </Select>
           </div>
 
           <div className="flex w-full items-center justify-end gap-2 lg:w-auto">
@@ -1305,68 +1226,12 @@ const InquiriesPage = () => {
           loading={loading}
           pagination={pagination}
           onPageChange={setPage}
+          onPageSizeChange={(value) => { setLimit(value); setPage(1); }}
+          paginationTotalLabel="records"
           onRowClick={(row) => navigate(`/inquiries/${row._id}`)}
           emptyMessage={canCreateInquiry ? "No inquiries found. Click 'New Inquiry' to add one." : 'No inquiries found.'}
         />
       </Card>
-
-      <Modal
-        isOpen={followUpModal.isOpen}
-        onClose={submitting ? undefined : closeFollowUpModal}
-        title="Follow-up / Reminder"
-        size="sm"
-        topOffset="topbar"
-      >
-        <div className="space-y-4">
-          {followUpModal.inquiry && (
-            <div className="rounded-lg bg-gray-50 p-3 text-sm">
-              <p className="font-medium text-gray-800">
-                {followUpModal.inquiry.projectName || getLiveCustomerName(followUpModal.inquiry)}
-              </p>
-              <p className="text-xs text-gray-500">
-                Inquiry: {followUpModal.inquiry.inquiryId}
-              </p>
-            </div>
-          )}
-
-          <FormField label="Next Follow-up Date" required error={followUpError}>
-            <Input
-              type="date"
-              value={followUpModal.nextFollowUpDate}
-              onChange={(event) => {
-                setFollowUpModal((current) => ({
-                  ...current,
-                  nextFollowUpDate: event.target.value,
-                }));
-                setFollowUpError('');
-              }}
-              disabled={submitting}
-            />
-          </FormField>
-
-          <FormField label="Follow-up Note">
-            <Textarea
-              value={followUpModal.remarks}
-              onChange={(event) => setFollowUpModal((current) => ({
-                ...current,
-                remarks: event.target.value,
-              }))}
-              rows={3}
-              placeholder="Enter follow-up note"
-              disabled={submitting}
-            />
-          </FormField>
-
-          <div className="flex justify-end gap-2 border-t border-gray-100 pt-3">
-            <Button type="button" variant="secondary" onClick={closeFollowUpModal} disabled={submitting}>
-              Cancel
-            </Button>
-            <Button type="button" onClick={saveFollowUpReminder} loading={submitting}>
-              Save Reminder
-            </Button>
-          </div>
-        </div>
-      </Modal>
 
       {/* ── Status workflow modal ───────────────────────────────────────────── */}
       <Modal
@@ -1379,7 +1244,7 @@ const InquiriesPage = () => {
         <div className="space-y-5">
           {statusModal.inquiry && (
             <div className="rounded-lg bg-gray-50 p-3 text-sm">
-              <p className="font-medium text-gray-800">{statusModal.inquiry.projectName || getLiveCustomerName(statusModal.inquiry)}</p>
+              <p className="font-medium text-gray-800">{statusModal.inquiry.projectName || statusModal.inquiry.customerName || getLiveCustomerName(statusModal.inquiry)}</p>
               <p className="text-xs text-gray-500">Inquiry: {statusModal.inquiry.inquiryId}</p>
             </div>
           )}
@@ -1533,7 +1398,7 @@ const InquiriesPage = () => {
 
           {pendingConversion && (
             <div className="rounded-lg bg-gray-50 p-3 text-sm">
-              <p className="font-medium text-gray-800">{pendingConversion.projectName || getLiveCustomerName(pendingConversion)}</p>
+              <p className="font-medium text-gray-800">{pendingConversion.projectName || pendingConversion.customerName || getLiveCustomerName(pendingConversion)}</p>
               <p className="text-xs text-gray-500">Inquiry: {pendingConversion.inquiryId}</p>
             </div>
           )}
@@ -1688,7 +1553,7 @@ const InquiriesPage = () => {
                             <span className="min-w-0 flex-1">
                               <span className="block truncate font-medium text-gray-800">{user.name}</span>
                               <span className="block truncate text-xs text-gray-400">
-                                {[user.email, user.role, user.departmentName || user.teamId?.name].filter(Boolean).join(' • ')}
+                                {[user.email, user.role, getKickoffUserDepartmentLabel(user)].filter(Boolean).join(' • ')}
                               </span>
                             </span>
                           </button>

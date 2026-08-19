@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { ChevronLeft, ChevronRight } from 'lucide-react';
 import Spinner from './Spinner';
 
@@ -14,50 +14,83 @@ import Spinner from './Spinner';
  * is what lets this actually clip rather than overflow.
  */
 export const TableScroll = ({ children, className = '' }) => (
-  <div className={`w-full overflow-x-auto ${className}`}>{children}</div>
+  <div className={`w-full min-w-0 max-w-full overflow-x-auto overscroll-x-contain ${className}`}>{children}</div>
 );
 
-const Pagination = ({ pagination, onPageChange }) => {
-  if (!pagination || pagination.pages <= 1) return null;
+const DEFAULT_PAGE_SIZE_OPTIONS = [5, 10, 25, 50, 100];
+
+const Pagination = ({
+  pagination,
+  onPageChange,
+  onPageSizeChange,
+  pageSizeOptions = DEFAULT_PAGE_SIZE_OPTIONS,
+  totalLabel = 'records',
+}) => {
+  if (!pagination) return null;
+
+  const total = Number(pagination.total) || 0;
+  const limit = Number(pagination.limit) || 50;
+  const pages = Math.max(1, Number(pagination.pages || pagination.totalPages) || 1);
+  const page = Math.min(Math.max(1, Number(pagination.page) || 1), pages);
+  const hasPageSizeSelector = typeof onPageSizeChange === 'function';
+
+  // Keep the old compact behavior for tables that do not opt into the new
+  // bottom page-size control. The four main list pages opt in explicitly.
+  if (pages <= 1 && !hasPageSizeSelector) return null;
+
+  const normalizedOptions = [...new Set([
+    ...pageSizeOptions.map(Number).filter((value) => Number.isFinite(value) && value > 0),
+    limit,
+  ])].sort((a, b) => a - b);
 
   return (
-    <div className="flex flex-col gap-3 border-t border-gray-200 px-4 py-3 sm:flex-row sm:items-center sm:justify-between">
-      <p className="text-xs text-gray-500 sm:text-sm">
-        Showing {(pagination.page - 1) * pagination.limit + 1}–
-        {Math.min(pagination.page * pagination.limit, pagination.total)} of {pagination.total}
-      </p>
-      <div className="flex items-center gap-1 self-end sm:self-auto">
+    <div
+      className="mt-auto flex shrink-0 flex-col gap-2 border-t border-gray-200 bg-white px-3 py-2 shadow-[0_-2px_8px_rgba(15,23,42,0.04)] sm:flex-row sm:items-center sm:justify-between sm:px-4"
+    >
+      <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-xs font-medium text-gray-500">
+        {hasPageSizeSelector && (
+          <label className="flex items-center gap-1.5 whitespace-nowrap">
+            <span>Show per page:</span>
+            <select
+              value={limit}
+              onChange={(event) => onPageSizeChange(Number(event.target.value))}
+              className="h-8 min-w-[58px] rounded-lg border border-gray-300 bg-white px-2 text-center text-xs font-semibold text-gray-700 outline-none transition focus:border-blue-500 focus:ring-2 focus:ring-blue-200"
+              aria-label="Show records per page"
+            >
+              {normalizedOptions.map((value) => (
+                <option key={value} value={value}>{value}</option>
+              ))}
+            </select>
+          </label>
+        )}
+        <span className="whitespace-nowrap">Total: {total} {totalLabel}</span>
+      </div>
+
+      <div className="flex w-full min-w-0 items-center justify-between gap-1.5 sm:w-auto sm:justify-end">
         <button
-          onClick={() => onPageChange(pagination.page - 1)}
-          disabled={pagination.page === 1}
-          className="rounded p-1.5 hover:bg-gray-100 disabled:cursor-not-allowed disabled:opacity-40"
+          type="button"
+          onClick={() => onPageChange(page - 1)}
+          disabled={page <= 1}
+          className="inline-flex h-8 min-w-0 flex-1 items-center justify-center gap-1 rounded-lg border border-gray-200 bg-white px-2 text-xs font-semibold text-gray-600 shadow-sm transition hover:bg-gray-50 disabled:cursor-not-allowed disabled:text-gray-300 disabled:shadow-none sm:min-w-[78px] sm:flex-none sm:px-3"
           aria-label="Previous page"
         >
-          <ChevronLeft size={16} />
+          <ChevronLeft size={14} />
+          <span>Previous</span>
         </button>
-        {Array.from({ length: Math.min(5, pagination.pages) }, (_, i) => {
-          const page = i + 1;
-          return (
-            <button
-              key={page}
-              onClick={() => onPageChange(page)}
-              className={`h-8 w-8 rounded text-sm font-medium ${
-                pagination.page === page
-                  ? 'bg-blue-600 text-white'
-                  : 'text-gray-600 hover:bg-gray-100'
-              }`}
-            >
-              {page}
-            </button>
-          );
-        })}
+
+        <span className="inline-flex h-8 min-w-0 flex-1 items-center justify-center whitespace-nowrap rounded-lg border border-blue-100 bg-blue-50/50 px-2 text-xs font-semibold text-gray-700 sm:min-w-[92px] sm:flex-none">
+          Page {page} of {pages}
+        </span>
+
         <button
-          onClick={() => onPageChange(pagination.page + 1)}
-          disabled={pagination.page === pagination.pages}
-          className="rounded p-1.5 hover:bg-gray-100 disabled:cursor-not-allowed disabled:opacity-40"
+          type="button"
+          onClick={() => onPageChange(page + 1)}
+          disabled={page >= pages}
+          className="inline-flex h-8 min-w-0 flex-1 items-center justify-center gap-1 rounded-lg border border-gray-200 bg-white px-2 text-xs font-semibold text-gray-600 shadow-sm transition hover:bg-gray-50 disabled:cursor-not-allowed disabled:text-gray-300 disabled:shadow-none sm:min-w-[66px] sm:flex-none sm:px-3"
           aria-label="Next page"
         >
-          <ChevronRight size={16} />
+          <span>Next</span>
+          <ChevronRight size={14} />
         </button>
       </div>
     </div>
@@ -85,7 +118,51 @@ const Table = ({
   emptyMessage = 'No records found',
   onRowClick,
   mobileCards = true,
+  getRowClassName,
+  onPageSizeChange,
+  pageSizeOptions,
+  paginationTotalLabel = 'records',
 }) => {
+  const hasFixedPagination = typeof onPageSizeChange === 'function';
+  const rootRef = useRef(null);
+  const [availableHeight, setAvailableHeight] = useState(null);
+
+  const cols = columns || [];
+  const rows = data || [];
+  const isEmpty = rows.length === 0;
+
+  // The four main list pages opt into onPageSizeChange. For those pages we
+  // reserve exactly the remaining viewport height for the table card. The rows
+  // scroll inside that area while the pagination footer stays permanently
+  // visible at the bottom instead of appearing only after all rows are passed.
+  useEffect(() => {
+    if (!hasFixedPagination || loading) {
+      setAvailableHeight(null);
+      return undefined;
+    }
+
+    const updateAvailableHeight = () => {
+      if (!rootRef.current) return;
+      const { top } = rootRef.current.getBoundingClientRect();
+      const bottomGap = window.innerWidth < 640 ? 8 : 16;
+      const nextHeight = Math.max(280, Math.floor(window.innerHeight - top - bottomGap));
+      setAvailableHeight(nextHeight);
+    };
+
+    updateAvailableHeight();
+    window.addEventListener('resize', updateAvailableHeight);
+
+    // MainLayout owns the vertical page scroller. Recalculate if its scroll
+    // position changes (for example on a small screen with stacked filters).
+    const mainScroller = rootRef.current?.closest('main');
+    mainScroller?.addEventListener('scroll', updateAvailableHeight, { passive: true });
+
+    return () => {
+      window.removeEventListener('resize', updateAvailableHeight);
+      mainScroller?.removeEventListener('scroll', updateAvailableHeight);
+    };
+  }, [hasFixedPagination, loading]);
+
   if (loading) {
     return (
       <div className="flex h-48 items-center justify-center">
@@ -94,12 +171,13 @@ const Table = ({
     );
   }
 
-  const cols = columns || [];
-  const rows = data || [];
-  const isEmpty = rows.length === 0;
-
   return (
-    <div>
+    <div
+      ref={rootRef}
+      className={`flex min-w-0 max-w-full flex-col ${hasFixedPagination ? 'min-h-0 overflow-hidden' : ''}`}
+      style={hasFixedPagination && availableHeight ? { height: `${availableHeight}px` } : undefined}
+    >
+      <div className={hasFixedPagination ? 'min-h-0 flex-1 overflow-y-auto overscroll-y-contain' : ''}>
       {/* ── Mobile: stacked cards ───────────────────────────────────────── */}
       {mobileCards && (
         <div className="space-y-3 md:hidden">
@@ -114,22 +192,22 @@ const Table = ({
                 onClick={() => onRowClick?.(row)}
                 className={`rounded-xl border border-gray-100 bg-white p-4 shadow-sm ${
                   onRowClick ? 'cursor-pointer active:bg-gray-50' : ''
-                }`}
+                } ${getRowClassName?.(row) || ''}`}
               >
-                <dl className="space-y-2">
+                <dl className="space-y-3">
                   {cols.map((col) => (
                     <div
                       key={col.key}
-                      className="flex items-start justify-between gap-3 text-sm"
+                      className="grid min-w-0 grid-cols-1 gap-1 text-sm sm:grid-cols-[minmax(105px,auto)_minmax(0,1fr)] sm:items-start sm:gap-3"
                     >
                       {col.label ? (
-                        <dt className="shrink-0 text-xs font-semibold uppercase tracking-wide text-gray-400">
+                        <dt className="text-xs font-semibold uppercase tracking-wide text-gray-400 sm:pt-0.5">
                           {col.label}
                         </dt>
                       ) : (
                         <span className="sr-only">value</span>
                       )}
-                      <dd className="min-w-0 break-words text-right text-gray-700">
+                      <dd className="min-w-0 break-words text-left text-gray-700 sm:text-right">
                         {col.render ? col.render(row[col.key], row) : row[col.key] ?? '—'}
                       </dd>
                     </div>
@@ -172,7 +250,7 @@ const Table = ({
                     onClick={() => onRowClick?.(row)}
                     className={`table-row-hover border-b border-gray-100 ${
                       onRowClick ? 'cursor-pointer' : ''
-                    }`}
+                    } ${getRowClassName?.(row) || ''}`}
                   >
                     {cols.map((col) => (
                       <td key={col.key} className="px-4 py-3 text-gray-700">
@@ -187,7 +265,15 @@ const Table = ({
         </TableScroll>
       </div>
 
-      <Pagination pagination={pagination} onPageChange={onPageChange} />
+      </div>
+
+      <Pagination
+        pagination={pagination}
+        onPageChange={onPageChange}
+        onPageSizeChange={onPageSizeChange}
+        pageSizeOptions={pageSizeOptions}
+        totalLabel={paginationTotalLabel}
+      />
     </div>
   );
 };

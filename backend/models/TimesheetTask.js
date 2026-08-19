@@ -3,6 +3,11 @@
 // ─────────────────────────────────────────────────────────────────────────────
 
 const mongoose = require('mongoose');
+const {
+  normalizeTimeTo24Hour,
+  timeToMinutes,
+  parseDurationToDecimalHours,
+} = require('../utils/timesheetTime');
 
 // ── Kanban / task status enum ─────────────────────────────────────────────────
 const TASK_STATUSES = ['Backlog', 'Planned', 'In Progress', 'Review', 'Completed'];
@@ -32,16 +37,6 @@ const ARCHIVE_REASONS = [
   'PROJECT_DELETED',
   'MANUAL_ARCHIVE',
 ];
-
-// ─────────────────────────────────────────────────────────────────────────────
-// Helper — parse "HH:mm" → total minutes since midnight
-// ─────────────────────────────────────────────────────────────────────────────
-function timeToMinutes(t) {
-  if (!t || typeof t !== 'string') return null;
-  const [h, m] = t.split(':').map(Number);
-  if (isNaN(h) || isNaN(m)) return null;
-  return h * 60 + m;
-}
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Schema
@@ -242,29 +237,45 @@ const timesheetTaskSchema = new mongoose.Schema(
       index: true,
     },
 
-    // Stored as "HH:mm" strings for timezone-safe handling
+    // Stored canonically as 24-hour "HH:mm" strings for timezone-safe
+    // sorting/calculation. The setter also accepts AM/PM input such as
+    // "02:25 PM" and normalizes it without changing existing stored data.
     startTime: {
       type: String,
       trim: true,
+      set: (value) => {
+        if (value === null || value === undefined || value === '') return '';
+        return normalizeTimeTo24Hour(value) ?? value;
+      },
       validate: {
         validator: (v) => !v || /^([01]\d|2[0-3]):[0-5]\d$/.test(v),
-        message: 'startTime must be in HH:mm format',
+        message: 'startTime must be a valid time (for example 02:25 PM or 14:25)',
       },
     },
 
     endTime: {
       type: String,
       trim: true,
+      set: (value) => {
+        if (value === null || value === undefined || value === '') return '';
+        return normalizeTimeTo24Hour(value) ?? value;
+      },
       validate: {
         validator: (v) => !v || /^([01]\d|2[0-3]):[0-5]\d$/.test(v),
-        message: 'endTime must be in HH:mm format',
+        message: 'endTime must be a valid time (for example 05:25 PM or 17:25)',
       },
     },
 
-    // Auto-calculated from startTime / endTime; can also be set manually
-    // when times are not provided.
+    // Stored as true decimal hours for totals/aggregation. String input can use
+    // H.MM or H:MM shorthand ("1.15" / "1:15" = 1h 15m). Existing
+    // numeric decimal-hour callers remain backward compatible.
     hours: {
       type: Number,
+      set: (value) => {
+        if (typeof value !== 'string') return value;
+        const parsed = parseDurationToDecimalHours(value);
+        return parsed === null ? value : parsed;
+      },
       min: [0, 'Hours cannot be negative'],
       max: [24, 'Hours cannot exceed 24 in a single entry'],
       default: 0,

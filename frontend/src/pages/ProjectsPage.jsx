@@ -20,7 +20,6 @@ import {
   getProjectId,
 } from '../api/projectService';
 
-const PAGE_SIZE_BASE_OPTIONS = [50, 100, 250];
 const ALL_YEARS_VALUE = 'all';
 const FINANCIAL_YEAR_STORAGE_KEY = 'dashboardFinancialYear';
 
@@ -49,40 +48,14 @@ const generateFinancialYearOptions = (yearsBack = 2, yearsForward = 2) => {
 };
 
 
-const getPageSizeOptions = (total = 0, selectedLimit = 50) => {
-  const numericTotal = Number(total) || 0;
-  const options = [...PAGE_SIZE_BASE_OPTIONS];
 
-  if (numericTotal > 250) {
-    let nextSize = 500;
+const getEntityId = (value) => String(value?._id || value?.id || value || '');
 
-    while (nextSize < numericTotal) {
-      options.push(nextSize);
-      nextSize += nextSize < 1000 ? 500 : 1000;
-    }
-
-    options.push(nextSize);
-  }
-
-  if (selectedLimit) {
-    options.push(Number(selectedLimit));
-  }
-
-  return [...new Set(options)].sort((a, b) => a - b);
+const getCreatedByName = (row = {}) => {
+  const createdBy = row.createdBy;
+  if (!createdBy || typeof createdBy === 'string') return '—';
+  return createdBy.name || createdBy.email || '—';
 };
-
-
-const PANEL_TYPE_LABELS = {
-  PLC: 'PLC',
-  MCC: 'MCC',
-  VFD: 'VFD',
-  PLC_MCC: 'MCC cum PLC',
-  'MCC cum PLC': 'MCC cum PLC',
-};
-
-
-
-const fmt = (d) => d ? new Date(d).toLocaleDateString('en-IN') : '—';
 
 const getInquiryNumber = (project = {}) => (
   project?.inquiryNumber ||
@@ -91,6 +64,11 @@ const getInquiryNumber = (project = {}) => (
   ''
 );
 
+const isProjectLocked = (project = {}) => Boolean(project?.projectLock?.locked);
+const getProjectLockStatus = (project = {}) => String(
+  project?.projectLock?.status || project?.inquiryReference?.status || ''
+).trim();
+
 const fmtTime = (time) => {
   if (!time) return '—';
   const [hours = '', minutes = ''] = String(time).split(':');
@@ -98,6 +76,22 @@ const fmtTime = (time) => {
   const date = new Date();
   date.setHours(Number(hours), Number(minutes), 0, 0);
   return date.toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit' });
+};
+
+const formatProjectDate = (value) => {
+  if (!value) return '—';
+
+  // Project dates are calendar dates. Format the date portion directly so
+  // timezone conversion cannot move it to the previous/next day.
+  const match = String(value).match(/^(\d{4})-(\d{2})-(\d{2})/);
+  if (match) {
+    const [, year, month, day] = match;
+    return `${day}/${month}/${year}`;
+  }
+
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return '—';
+  return date.toLocaleDateString('en-IN');
 };
 
 const formatKickoffAttendees = (attendees = []) => {
@@ -128,7 +122,9 @@ const ProjectsPage = () => {
   const [loading, setLoading] = useState(true);
   const [submitting, setSubmitting] = useState(false);
   const [search, setSearch] = useState('');
-  const [filterOrderDate, setFilterOrderDate] = useState(() => searchParams.get('orderDate') || '');
+  const [filterProjectEndDate, setFilterProjectEndDate] = useState(() => searchParams.get('projectEndDate') || searchParams.get('orderDate') || '');
+  const [filterCreatedBy, setFilterCreatedBy] = useState(() => searchParams.get('createdBy') || '');
+  const [creatorOptions, setCreatorOptions] = useState([]);
   const [financialYear, setFinancialYear] = useState(() => searchParams.get('financialYear') || getStoredFinancialYear() || getCurrentFinancialYear());
   const riskFilter = searchParams.get('riskFilter') || '';
   const financialYearOptions = [ALL_YEARS_VALUE, ...generateFinancialYearOptions()];
@@ -146,7 +142,8 @@ const ProjectsPage = () => {
     try {
       const params = { page, limit };
       if (search) params.search = search;
-      if (filterOrderDate) params.orderDate = filterOrderDate;
+      if (filterProjectEndDate) params.projectEndDate = filterProjectEndDate;
+      if (filterCreatedBy) params.createdBy = filterCreatedBy;
       if (financialYear) params.financialYear = financialYear;
       if (riskFilter) params.riskFilter = riskFilter;
 
@@ -165,6 +162,7 @@ const ProjectsPage = () => {
       });
 
       setProjects(enriched);
+      setCreatorOptions(Array.isArray(result.filters?.creators) ? result.filters.creators : []);
       setPagination({
         total: result.pagination?.total || 0,
         page: result.pagination?.page || page,
@@ -177,14 +175,14 @@ const ProjectsPage = () => {
     } finally {
       setLoading(false);
     }
-  }, [page, limit, search, filterOrderDate, financialYear, riskFilter, toast]);
+  }, [page, limit, search, filterProjectEndDate, filterCreatedBy, financialYear, riskFilter, toast]);
 
   useEffect(() => {
-    const fetchKey = JSON.stringify({ page, limit, search, filterOrderDate, financialYear, riskFilter });
+    const fetchKey = JSON.stringify({ page, limit, search, filterProjectEndDate, filterCreatedBy, financialYear, riskFilter });
     if (lastAutomaticFetchKeyRef.current === fetchKey) return;
     lastAutomaticFetchKeyRef.current = fetchKey;
     fetchProjects();
-  }, [fetchProjects, page, limit, search, filterOrderDate, financialYear, riskFilter]);
+  }, [fetchProjects, page, limit, search, filterProjectEndDate, filterCreatedBy, financialYear, riskFilter]);
   useEffect(() => {
     if (!searchParams.has('projectStatus')) return;
     const nextParams = new URLSearchParams(searchParams);
@@ -208,7 +206,7 @@ const ProjectsPage = () => {
     setSearchParams(nextParams, { replace: true });
   };
 
-  useEffect(() => { setPage(1); }, [search, filterOrderDate, financialYear, riskFilter, limit]);
+  useEffect(() => { setPage(1); }, [search, filterProjectEndDate, filterCreatedBy, financialYear, riskFilter, limit]);
 
   const handleEdit = async (formData) => {
     setSubmitting(true);
@@ -229,7 +227,8 @@ const ProjectsPage = () => {
 
   const clearFilters = () => {
     setSearch('');
-    setFilterOrderDate('');
+    setFilterProjectEndDate('');
+    setFilterCreatedBy('');
     if (riskFilter) {
       const nextParams = new URLSearchParams(searchParams);
       nextParams.delete('riskFilter');
@@ -277,24 +276,58 @@ const ProjectsPage = () => {
     },
     {
       key: 'customerName',
-      label: 'Customer / Project',
+      label: 'Customer',
+      width: '170px',
       render: (value, row) => (
         <button
           type="button"
           onClick={(e) => { e.stopPropagation(); openProjectView(row); }}
-          className="text-left"
+          className="text-left font-medium text-gray-800 hover:text-blue-700 hover:underline"
           title="View project"
         >
-          <p className="font-medium text-gray-800 hover:text-blue-700 hover:underline">{value}</p>
-          <p className="text-xs text-gray-400">{row.projectName}</p>
+          {value || '—'}
+        </button>
+      ),
+    },
+    {
+      key: 'projectName',
+      label: 'Project Name',
+      width: '180px',
+      render: (value, row) => (
+        <button
+          type="button"
+          onClick={(e) => { e.stopPropagation(); openProjectView(row); }}
+          className="text-left text-sm text-gray-600 hover:text-blue-700 hover:underline"
+          title="View project"
+        >
+          {value || row.name || '—'}
         </button>
       ),
     },
     {
       key: 'projectQuantity',
-      label: 'Project Quantity',
-      width: '125px',
+      label: 'Quantity',
+      width: '85px',
       render: (value, row) => <span className="font-semibold text-gray-700">{value || row.quantity || 1}</span>,
+    },
+    {
+      key: 'createdBy',
+      label: 'Created By',
+      width: '145px',
+      render: (_, row) => {
+        const creatorId = getEntityId(row.createdBy);
+        const currentUserId = getEntityId(user?._id || user?.id);
+        const isCurrentUser = Boolean(creatorId && currentUserId && creatorId === currentUserId);
+
+        return (
+          <span className="text-sm text-gray-700">
+            {getCreatedByName(row)}
+            {isCurrentUser && (
+              <span className="ml-1 text-[11px] font-normal text-gray-400">(you)</span>
+            )}
+          </span>
+        );
+      },
     },
     {
       key: 'selectedDepartments',
@@ -316,8 +349,17 @@ const ProjectsPage = () => {
     {
       key: 'projectStatus',
       label: 'Status',
-      width: '110px',
-      render: (value) => <StatusBadge status={value} size="xs" />,
+      width: '130px',
+      render: (value, row) => (
+        <div className="space-y-1">
+          <StatusBadge status={value} size="xs" />
+          {isProjectLocked(row) && (
+            <p className="text-[10px] font-semibold text-gray-500">
+              Locked · {getProjectLockStatus(row) || 'Inquiry Hold/Lost'}
+            </p>
+          )}
+        </div>
+      ),
     },
     {
       key: 'completionPercentage',
@@ -336,7 +378,7 @@ const ProjectsPage = () => {
       key: 'projectEndDate',
       label: 'End Date',
       width: '120px',
-      render: (value) => <span className="text-xs text-gray-700">{fmt(value)}</span>,
+      render: (value) => <span className="text-xs text-gray-700">{formatProjectDate(value)}</span>,
     },
     {
       key: '_id',
@@ -344,7 +386,7 @@ const ProjectsPage = () => {
       width: '130px',
       render: (_, row) => (
         <div className="flex items-center gap-1" onClick={(e) => e.stopPropagation()}>
-          {canOpenProjectEditor && (
+          {canOpenProjectEditor && !isProjectLocked(row) && (
             <button
               type="button"
               title="Edit"
@@ -378,8 +420,7 @@ const ProjectsPage = () => {
     },
   ];
 
-  const limitOptions = getPageSizeOptions(pagination?.total || 0, limit);
-  const hasFilters = search || filterOrderDate || riskFilter;
+  const hasFilters = search || filterProjectEndDate || filterCreatedBy || riskFilter;
 
   return (
     <div className="fade-in w-full min-w-0 max-w-full space-y-4 overflow-x-hidden">
@@ -421,13 +462,35 @@ const ProjectsPage = () => {
           </div>
 
           <div className="grid min-w-0 grid-cols-1 gap-2 min-[420px]:grid-cols-2 sm:flex sm:flex-wrap sm:items-center">
-            <input
-              type="date"
-              value={filterOrderDate}
-              onChange={(e) => setFilterOrderDate(e.target.value)}
-              className="h-9 w-full sm:w-[150px] sm:shrink-0 rounded-lg border border-gray-300 bg-white px-3 text-base sm:text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
-              aria-label="Filter by order date"
-            />
+            <div className="relative w-full sm:w-[150px] sm:shrink-0">
+              {!filterProjectEndDate && (
+                <span className="pointer-events-none absolute left-3 top-1/2 z-10 -translate-y-1/2 text-sm text-gray-500">
+                  End Date
+                </span>
+              )}
+              <input
+                type="date"
+                value={filterProjectEndDate}
+                onChange={(e) => setFilterProjectEndDate(e.target.value)}
+                className={`h-9 w-full rounded-lg border border-gray-300 bg-white px-3 text-base sm:text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 ${filterProjectEndDate ? 'text-gray-700' : 'text-transparent'}`}
+                aria-label="Filter by project end date"
+                title="Filter by Project End Date"
+              />
+            </div>
+
+            <Select
+              value={filterCreatedBy}
+              onChange={(e) => setFilterCreatedBy(e.target.value)}
+              className="h-9 w-full sm:w-[160px] sm:shrink-0"
+              aria-label="Filter projects by creator"
+            >
+              <option value="">All Created By</option>
+              {creatorOptions.map((creator) => (
+                <option key={creator._id} value={creator._id}>
+                  {creator.name || creator.email || 'Unknown User'}
+                </option>
+              ))}
+            </Select>
 
             <Select
               value={financialYear}
@@ -438,19 +501,6 @@ const ProjectsPage = () => {
               {financialYearOptions.map((year) => <option key={year} value={year}>{year === ALL_YEARS_VALUE ? 'All Years' : year}</option>)}
             </Select>
 
-            <Select
-              value={limit}
-              onChange={(e) => {
-                setLimit(Number(e.target.value));
-                setPage(1);
-              }}
-              className="h-9 w-full sm:w-[105px] sm:shrink-0"
-              aria-label="Records per page"
-            >
-              {limitOptions.map((value) => (
-                <option key={value} value={value}>{value}</option>
-              ))}
-            </Select>
           </div>
 
           <div className="flex min-w-0 items-center justify-end gap-2">
@@ -483,7 +533,10 @@ const ProjectsPage = () => {
           loading={loading}
           pagination={pagination}
           onPageChange={setPage}
+          onPageSizeChange={(value) => { setLimit(value); setPage(1); }}
+          paginationTotalLabel="records"
           onRowClick={openProjectView}
+          getRowClassName={(row) => isProjectLocked(row) ? '!bg-gray-100 opacity-60 grayscale' : ''}
           emptyMessage="No projects found. Add your first project!"
         />
       </Card>
@@ -516,7 +569,7 @@ const ProjectsPage = () => {
                   ['Customer', selected.customerName],
                   ['Company', selected.companyName],
                   ['Project Name', selected.projectName],
-                  ['Project Quantity', selected.projectQuantity || selected.quantity || 1],
+                  ['Quantity', selected.projectQuantity || selected.quantity || 1],
                   ['Departments', (selected.selectedDepartments || []).join(', ')],
                   ['Panel Planning', (selected.panelSelections || []).map((item) => `${item.department}: ${item.panelType} × ${item.quantity}`).join('; ')],
                   ['Order Date', fmt(selected.orderDate)],

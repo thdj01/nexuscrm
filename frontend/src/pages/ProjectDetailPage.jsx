@@ -28,6 +28,11 @@ const getInquiryNumber = (project = {}) => (
   ''
 );
 
+const isProjectLocked = (project = {}) => Boolean(project?.projectLock?.locked);
+const getProjectLockStatus = (project = {}) => String(
+  project?.projectLock?.status || project?.inquiryReference?.status || ''
+).trim();
+
 
 const PROJECT_SECTION_SCROLL_OFFSET = 150;
 
@@ -97,6 +102,10 @@ const ProjectDetailPage = () => {
   const sectionRefs = useRef([]);
   const lastAutomaticallyLoadedProjectRef = useRef('');
 
+  const projectLocked = !isNewProject && isProjectLocked(project);
+  const projectLockStatus = getProjectLockStatus(project);
+  const effectiveReadOnly = isNewProject ? false : (projectLocked || readOnly);
+
   const loadProject = useCallback(async () => {
     if (isNewProject) {
       setProject(null);
@@ -121,6 +130,11 @@ const ProjectDetailPage = () => {
   useEffect(() => {
     setReadOnly(!startsEditable);
   }, [startsEditable, id]);
+
+
+  useEffect(() => {
+    if (projectLocked) setReadOnly(true);
+  }, [projectLocked]);
 
   useEffect(() => {
     const loadKey = isNewProject ? 'new' : String(id || '');
@@ -451,7 +465,7 @@ const ProjectDetailPage = () => {
                 >
                   <Activity size={16} strokeWidth={2.25} /> Activity
                 </Button>
-                {canCreateProject && (
+                {canCreateProject && !projectLocked && (
                   <Button
                     variant="secondary"
                     onClick={() => setShowCopyConfirm(true)}
@@ -463,7 +477,7 @@ const ProjectDetailPage = () => {
                     <Copy size={16} strokeWidth={2.25} /> Copy
                   </Button>
                 )}
-                {readOnly && canOpenProjectEditor && (
+                {readOnly && canOpenProjectEditor && !projectLocked && (
                   <Button
                     onClick={() => setReadOnly(false)}
                     title="Edit"
@@ -524,6 +538,15 @@ const ProjectDetailPage = () => {
           </div>
       </PageHeader>
 
+      {projectLocked && (
+        <div className="rounded-xl border border-gray-300 bg-gray-100 px-4 py-3 text-sm text-gray-700">
+          <p className="font-semibold">Project locked · {projectLockStatus || 'Inquiry Hold/Lost'}</p>
+          <p className="mt-0.5 text-xs text-gray-500">
+            This project is read-only because its linked Inquiry is on Hold/Lost. Change the Inquiry status back to Project Won to unlock editing.
+          </p>
+        </div>
+      )}
+
       <Modal
         isOpen={showCopyConfirm}
         onClose={() => { if (!copying) setShowCopyConfirm(false); }}
@@ -551,23 +574,25 @@ const ProjectDetailPage = () => {
       </Modal>
 
 
-      <ProjectForm
-        initialData={isNewProject ? null : project}
-        onSubmit={isNewProject ? handleCreate : handleEdit}
-        loading={submitting}
-        readOnly={isNewProject ? false : readOnly}
-        canEditProject={formCanEditProject}
-        canManagePlanning={formCanManagePlanning}
-        canAddPlanningGrid={formCanAddPlanningGrid}
-        canUpdateCompletion={formCanUpdateCompletion}
-        canMarkCompleted={formCanMarkCompleted}
-        canManageDocuments={formCanManageDocuments}
-        setSectionRef={setProjectSectionRef}
-        setPlanningGridNavigation={setPlanningGridNavigation}
-        activeSection={activeSection}
-        activePlanningGridId={activePlanningGridId}
-        isDocumentsActive={activeSection === projectStepperSteps.length - 1}
-      />
+      <div className={projectLocked ? 'rounded-xl bg-gray-50 opacity-60 grayscale' : ''}>
+        <ProjectForm
+          initialData={isNewProject ? null : project}
+          onSubmit={isNewProject ? handleCreate : handleEdit}
+          loading={submitting}
+          readOnly={effectiveReadOnly}
+          canEditProject={projectLocked ? false : formCanEditProject}
+          canManagePlanning={projectLocked ? false : formCanManagePlanning}
+          canAddPlanningGrid={projectLocked ? false : formCanAddPlanningGrid}
+          canUpdateCompletion={projectLocked ? false : formCanUpdateCompletion}
+          canMarkCompleted={projectLocked ? false : formCanMarkCompleted}
+          canManageDocuments={projectLocked ? false : formCanManageDocuments}
+          setSectionRef={setProjectSectionRef}
+          setPlanningGridNavigation={setPlanningGridNavigation}
+          activeSection={activeSection}
+          activePlanningGridId={activePlanningGridId}
+          isDocumentsActive={activeSection === projectStepperSteps.length - 1}
+        />
+      </div>
     </div>
   );
 };

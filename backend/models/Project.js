@@ -1,5 +1,4 @@
 const mongoose = require('mongoose');
-const Counter = require('./Counter');
 const { SUPPORTED_PROJECT_DEPARTMENTS, SUPPORTED_PANEL_TYPES, PLANNING_MODES, TASK_STATUSES } = require('../config/projectPlanningCatalog');
 
 // ── Date helpers ─────────────────────────────────────────────────────────────
@@ -229,8 +228,8 @@ const projectSchema = new mongoose.Schema(
     inquiryNumber: { type: String, trim: true, default: '' },
 
     customerName: { type: String, required: [true, 'Customer name is required'], trim: true },
-    companyName:  { type: String, trim: true },
-    projectName:  { type: String, required: [true, 'Project name is required'], trim: true },
+    companyName: { type: String, trim: true },
+    projectName: { type: String, required: [true, 'Project name is required'], trim: true },
 
     // Deprecated legacy Project Details fields. Kept select:false during the
     // compatibility window so old records can be migrated without data loss.
@@ -262,30 +261,31 @@ const projectSchema = new mongoose.Schema(
 
     // Stored field remains `quantity`; UI/API label is Project Quantity.
     quantity: { type: Number, default: 1, min: 1, validate: { validator: Number.isInteger, message: 'Project Quantity must be a whole number' } },
-    orderValue:           { type: Number, default: 0 },
-    orderDate:            { type: Date, default: Date.now },
+    orderValue: { type: Number, default: 0 },
+    orderDate: { type: Date, default: Date.now },
+    orderEndDate: { type: Date },
     expectedDeliveryDate: { type: Date },
-    actualDeliveryDate:   { type: Date },
+    actualDeliveryDate: { type: Date },
 
     // Original planned/expected project end date. This date is kept as the
     // comparison baseline for delay; completion does not overwrite it.
-    projectEndDate:       { type: Date },
+    projectEndDate: { type: Date },
 
     // Real project completion date. Set once when projectStatus becomes Completed.
-    completedAt:          { type: Date },
+    completedAt: { type: Date },
 
     // Frozen after completion; live calculated before completion.
-    delayedDays:          { type: Number, default: 0, min: 0 },
-    delayedEndDate:       { type: Date },
-    isDelayed:            { type: Boolean, default: false },
+    delayedDays: { type: Number, default: 0, min: 0 },
+    delayedEndDate: { type: Date },
+    isDelayed: { type: Boolean, default: false },
 
-    productionStatus:   { type: String, enum: ['Not Started', 'In Progress', 'Completed'], default: 'Not Started' },
-    dispatchStatus:     { type: String, enum: ['Not Delivered', 'Delivered'], default: 'Not Delivered' },
+    productionStatus: { type: String, enum: ['Not Started', 'In Progress', 'Completed'], default: 'Not Started' },
+    dispatchStatus: { type: String, enum: ['Not Delivered', 'Delivered'], default: 'Not Delivered' },
     installationStatus: { type: String, enum: ['Not Started', 'In Progress', 'Completed'], default: 'Not Started' },
-    paymentStatus:      { type: String, enum: ['Pending', 'Partial', 'Completed'], default: 'Pending' },
+    paymentStatus: { type: String, enum: ['Pending', 'Partial', 'Completed'], default: 'Pending' },
     projectStatus: {
       type: String,
-      enum: ['Planning','Design','Production','Testing','Dispatch','Installation','Completed','Delivered','won'],
+      enum: ['Planning', 'Design', 'Production', 'Testing', 'Dispatch', 'Installation', 'Completed', 'Delivered', 'won'],
       default: 'Planning',
     },
     completionPercentage: { type: Number, min: 0, max: 100, default: 0 },
@@ -311,7 +311,7 @@ const projectSchema = new mongoose.Schema(
     // Legacy project-level assignment field. New project screens do not write it;
     // task assignment now lives only inside planningTasks[].assignedTo.
     assignedTo: { type: mongoose.Schema.Types.ObjectId, ref: 'User' },
-    createdBy:  { type: mongoose.Schema.Types.ObjectId, ref: 'User', required: true },
+    createdBy: { type: mongoose.Schema.Types.ObjectId, ref: 'User', required: true },
     customerRef: { type: mongoose.Schema.Types.ObjectId, ref: 'Customer' },
 
     // ── Planning Grid ────────────────────────────────────────────────────────
@@ -335,17 +335,9 @@ projectSchema.pre('save', async function (next) {
       this.projectId = await getNextNaplId();
     }
 
-    // Projects created directly from the New Project page do not have an
-    // Inquiry document. Allocate a number from the same counter used by
-    // Inquiry.js so INQ numbers remain unique across both modules.
-    if (!String(this.inquiryNumber || '').trim()) {
-      const counter = await Counter.findOneAndUpdate(
-        { id: 'inquiryId' },
-        { $inc: { seq: 1 } },
-        { new: true, upsert: true }
-      );
-      this.inquiryNumber = `INQ-${counter.seq + 1349}`;
-    }
+    // Inquiry numbers belong exclusively to Inquiry records. Direct Projects
+    // intentionally keep inquiryNumber blank; Projects converted from an
+    // Inquiry receive the existing Inquiry number from the conversion flow.
 
     normalizeDelayFields(this);
     next();

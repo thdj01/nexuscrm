@@ -8,7 +8,6 @@ import { useNavigate } from 'react-router-dom';
 import {
   Bell,
   CheckCheck,
-  Clock,
   AlertTriangle,
   CheckCircle,
   Info,
@@ -28,12 +27,6 @@ import Spinner from '../components/common/Spinner';
 
 // UPDATED TYPES
 const typeConfig = {
-  follow_up: {
-    icon: Clock,
-    color: 'text-orange-500',
-    bg: 'bg-orange-50',
-  },
-
   overdue: {
     icon: AlertTriangle,
     color: 'text-red-500',
@@ -204,9 +197,9 @@ const NotificationsPage = () => {
           prev.map((n) =>
             n._id === id
               ? {
-                  ...n,
-                  isRead: true,
-                }
+                ...n,
+                isRead: true,
+              }
               : n
           )
       );
@@ -296,20 +289,20 @@ const NotificationsPage = () => {
           {/* Mark All Read */}
           {unreadCount >
             0 && (
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={
-                markAllRead
-              }
-            >
-              <CheckCheck
-                size={14}
-              />
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={
+                  markAllRead
+                }
+              >
+                <CheckCheck
+                  size={14}
+                />
 
-              Mark all read
-            </Button>
-          )}
+                Mark all read
+              </Button>
+            )}
         </div>
       </div>
 
@@ -329,12 +322,11 @@ const NotificationsPage = () => {
                   val
                 )
               }
-              className={`rounded-full px-4 py-1.5 text-sm font-medium transition-colors ${
-                filterRead ===
-                val
+              className={`rounded-full px-4 py-1.5 text-sm font-medium transition-colors ${filterRead ===
+                  val
                   ? 'bg-blue-600 text-white'
                   : 'border border-gray-200 bg-white text-gray-600 hover:bg-gray-50'
-              }`}
+                }`}
             >
               {label}
             </button>
@@ -358,7 +350,7 @@ const NotificationsPage = () => {
             />
 
             <p className="text-sm">
-              No follow-ups or notifications
+              No notifications
             </p>
           </div>
         ) : (
@@ -368,7 +360,7 @@ const NotificationsPage = () => {
               (notif) => {
                 const cfg =
                   typeConfig[
-                    notif.type
+                  notif.type
                   ] ||
                   typeConfig.info;
 
@@ -401,11 +393,10 @@ const NotificationsPage = () => {
                       }
                     } : undefined}
                     title={destination ? 'Open related record' : undefined}
-                    className={`flex items-start gap-4 rounded-lg border px-5 py-4 transition-colors ${moduleCardClass} ${
-                      destination
+                    className={`flex items-start gap-4 rounded-lg border px-5 py-4 transition-colors ${moduleCardClass} ${destination
                         ? 'cursor-pointer hover:shadow-md focus:outline-none focus:ring-2 focus:ring-blue-400 focus:ring-offset-2'
                         : ''
-                    }`}
+                      }`}
                   >
 
                     {/* Icon */}
@@ -426,11 +417,10 @@ const NotificationsPage = () => {
                       <div className="flex items-start justify-between gap-2">
 
                         <p
-                          className={`text-sm font-medium ${
-                            !notif.isRead
+                          className={`text-sm font-medium ${!notif.isRead
                               ? 'text-gray-900'
                               : 'text-gray-700'
-                          }`}
+                            }`}
                         >
                           {
                             notif.title
@@ -549,9 +539,9 @@ const NotificationsPage = () => {
         {/* Load More */}
         {!loading &&
           pagination.pages >
-            1 &&
+          1 &&
           page <
-            pagination.pages && (
+          pagination.pages && (
             <div className="border-t border-gray-100 px-6 py-4 text-center">
 
               <button

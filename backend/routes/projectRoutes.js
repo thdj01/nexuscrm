@@ -1,7 +1,7 @@
 'use strict';
 
 const express = require('express');
-const router  = express.Router();
+const router = express.Router();
 const {
   getProjects,
   getProject,
@@ -33,6 +33,7 @@ const {
   requireProjectLeadershipRole,
 } = require('../middleware/permissionMiddleware');
 const { PROJECT_PERMISSIONS } = require('../constants/permissions');
+const { requireUnlockedProject } = require('../services/projectLockService');
 
 const PROJECT_UPDATE_PERMISSIONS = [
   PROJECT_PERMISSIONS.EDIT,
@@ -98,12 +99,14 @@ router.post(
   '/:id/copy',
   requireProjectLeadershipRole,
   requirePermission(PROJECT_PERMISSIONS.CREATE),
+  requireUnlockedProject,
   copyProject
 );
 
 router.post(
   '/:id/documents',
   requirePermission(PROJECT_PERMISSIONS.EDIT),
+  requireUnlockedProject,
   projectDocumentUpload.array('documents', 10),
   uploadProjectDocuments
 );
@@ -119,6 +122,7 @@ router.post(
   '/:id/planning-grids',
   requireProjectLeadershipRole,
   requirePermission(PROJECT_PERMISSIONS.ADD_DUPLICATE_PLANNING_GRID),
+  requireUnlockedProject,
   createSeparatePlanningGrid
 );
 
@@ -126,6 +130,7 @@ router.post(
   '/:id/planning-grids/:gridId/tasks',
   requireProjectLeadershipRole,
   requirePermission(PROJECT_PERMISSIONS.PLANNING_GRID),
+  requireUnlockedProject,
   addPlanningTask
 );
 
@@ -134,12 +139,14 @@ router.patch(
   requireProjectLeadershipRole,
   requirePermission(PROJECT_PERMISSIONS.PLANNING_GRID),
   requirePlanningReorderRole,
+  requireUnlockedProject,
   reorderPlanningTasks
 );
 
 router.patch(
   '/:id/planning-grids/:gridId/tasks/:taskId/status',
   requireAnyPermission(PROJECT_PERMISSIONS.EDIT, PROJECT_PERMISSIONS.PLANNING_GRID),
+  requireUnlockedProject,
   updatePlanningTaskStatus
 );
 
@@ -147,6 +154,7 @@ router.patch(
   '/:id/planning-grids/:gridId/tasks/:taskId',
   requireProjectLeadershipRole,
   requireAnyPermission(PROJECT_PERMISSIONS.PLANNING_GRID, PROJECT_PERMISSIONS.UPDATE_COMPLETION),
+  requireUnlockedProject,
   updatePlanningTask
 );
 
@@ -154,12 +162,13 @@ router.delete(
   '/:id/planning-grids/:gridId/tasks/:taskId',
   requireProjectLeadershipRole,
   requirePermission(PROJECT_PERMISSIONS.PLANNING_GRID),
+  requireUnlockedProject,
   removePlanningTask
 );
 
 router.route('/:id')
   .get(requirePermission(PROJECT_PERMISSIONS.VIEW), getProject)
-  .put(requireAnyPermission(...PROJECT_UPDATE_PERMISSIONS), updateProject);
+  .put(requireAnyPermission(...PROJECT_UPDATE_PERMISSIONS), requireUnlockedProject, updateProject);
 
 router.get(
   '/:id/activity',

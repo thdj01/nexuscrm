@@ -4,7 +4,6 @@ const INQUIRY_PERMISSIONS = Object.freeze({
   CREATE: 'Inquiries - Create Inquiry',
   VIEW: 'Inquiries - View Inquiry',
   EDIT: 'Inquiries - Edit Inquiry',
-  FOLLOW_UP: 'Inquiries - Follow-up / Reminder',
   COMMERCIAL_SUBMIT: 'Inquiries - Commercial Submit',
 });
 

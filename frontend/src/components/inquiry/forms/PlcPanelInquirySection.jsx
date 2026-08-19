@@ -259,9 +259,9 @@ const updateIoRequirement = (setForm, definition, field, value) => {
       },
       ioDetails: field === 'quantity'
         ? {
-            ...(currentDetails.ioDetails || {}),
-            [definition.legacyQuantityKey]: value,
-          }
+          ...(currentDetails.ioDetails || {}),
+          [definition.legacyQuantityKey]: value,
+        }
         : currentDetails.ioDetails,
     };
   });
@@ -276,9 +276,9 @@ const updateRedundancy = (setForm, field, value) => {
     },
     ioDetails: field === 'plcRedundancy'
       ? {
-          ...(currentDetails.ioDetails || {}),
-          plcCpuRedundancyRequired: value ? 'Yes' : 'No',
-        }
+        ...(currentDetails.ioDetails || {}),
+        plcCpuRedundancyRequired: value ? 'Yes' : 'No',
+      }
       : currentDetails.ioDetails,
   }));
 };
@@ -340,11 +340,10 @@ const CheckboxControl = ({ checked, onChange, label = 'Required', disabled = fal
 
   return (
     <div
-      className={`flex min-h-[42px] items-center gap-3 rounded-lg border px-3 py-2 text-sm transition ${
-        isChecked
+      className={`flex min-h-[42px] items-center gap-3 rounded-lg border px-3 py-2 text-sm transition ${isChecked
           ? 'border-blue-300 bg-blue-50 text-blue-700'
           : 'border-slate-200 bg-white text-slate-700 hover:bg-slate-50'
-      } ${disabled ? 'cursor-not-allowed opacity-60' : ''}`}
+        } ${disabled ? 'cursor-not-allowed opacity-60' : ''}`}
     >
       <input
         id={checkboxId}
@@ -747,6 +746,7 @@ const PlcPanelInquirySection = ({
 
               <FormField
                 label="Programming / Development"
+                required
                 error={getError(errors, 'plcDetails.programmingDevelopmentScope')}
               >
                 <SearchableSelect
@@ -938,11 +938,10 @@ const PlcPanelInquirySection = ({
                   {PLC_REDUNDANCY_OPTIONS.map((option) => (
                     <label
                       key={option}
-                      className={`flex cursor-pointer items-center justify-center gap-2 rounded-md px-3 py-2 text-sm font-medium transition ${
-                        redundancy.plcRedundancy === option
+                      className={`flex cursor-pointer items-center justify-center gap-2 rounded-md px-3 py-2 text-sm font-medium transition ${redundancy.plcRedundancy === option
                           ? 'bg-indigo-600 text-white shadow-sm'
                           : 'bg-white text-slate-700 hover:bg-indigo-50'
-                      } ${disabled ? 'cursor-not-allowed opacity-60' : ''}`}
+                        } ${disabled ? 'cursor-not-allowed opacity-60' : ''}`}
                     >
                       <input
                         type="radio"
@@ -1120,11 +1119,10 @@ const PlcPanelInquirySection = ({
                       {['Yes', 'No', 'NA - Not Applicable'].map((option) => (
                         <label
                           key={option}
-                          className={`flex cursor-pointer items-center justify-center gap-2 rounded-md px-3 py-2 text-sm font-medium transition ${
-                            servoDetails.brake === option
+                          className={`flex cursor-pointer items-center justify-center gap-2 rounded-md px-3 py-2 text-sm font-medium transition ${servoDetails.brake === option
                               ? 'bg-orange-600 text-white shadow-sm'
                               : 'bg-white text-slate-700 hover:bg-orange-50'
-                          } ${disabled ? 'cursor-not-allowed opacity-60' : ''}`}
+                            } ${disabled ? 'cursor-not-allowed opacity-60' : ''}`}
                         >
                           <input
                             type="radio"

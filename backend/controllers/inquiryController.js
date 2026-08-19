@@ -17,23 +17,24 @@
 //
 // All other logic preserved exactly:
 //   uploadMiddleware, parseJsonField, buildAttachmentDocs, backFillAttachments,
-//   normaliseContacts, validateContacts, getInquiries, getInquiry, getFollowUps,
+//   normaliseContacts, validateContacts, getInquiries, getInquiry,
 //   notification calls and Customer auto-create.
 // ─────────────────────────────────────────────────────────────────────────────
 
-const mongoose           = require('mongoose');
-const Inquiry            = require('../models/Inquiry');
-const Customer           = require('../models/Customer');
-const User               = require('../models/User');
+const mongoose = require('mongoose');
+const Inquiry = require('../models/Inquiry');
+const Project = require('../models/Project');
+const Customer = require('../models/Customer');
+const User = require('../models/User');
 const {
   applyCustomerToPayload,
   findCustomerIdsForSearch,
   getLiveCustomerSnapshot,
   resolveUniversalCustomer,
 } = require('../utils/customerUniversal');
-const path               = require('path');
-const fs                 = require('fs');
-const multer             = require('multer');
+const path = require('path');
+const fs = require('fs');
+const multer = require('multer');
 const { sendWhatsAppNotification, sendWhatsAppGroupWithAttachments } = require('../services/whatsappService');
 const {
   buildInquiryEmailHtml,
@@ -70,6 +71,19 @@ const FINAL_INQUIRY_STATUSES = [
   'Order Lost',
   'Inquiry Hold',
 ];
+
+function getInquiryCustomerSnapshot(record = {}) {
+  const raw = record && typeof record.toObject === 'function'
+    ? record.toObject()
+    : { ...record };
+  const storedCustomerName = String(raw?.customerName || raw?.companyName || '').trim();
+  const data = getLiveCustomerSnapshot(raw);
+
+  // Inquiry customer name is a snapshot of the name selected/saved on the
+  // inquiry. Customer Master edits must not silently rename existing inquiries.
+  if (storedCustomerName) data.customerName = storedCustomerName;
+  return data;
+}
 
 const LEGACY_STATUS_MAP = {
   'In Progress': 'Technical Evaluation',
@@ -134,8 +148,8 @@ const ALLOWED_MIME = [
 
 const storage = multer.diskStorage({
   destination: (_req, _file, cb) => cb(null, UPLOAD_DIR),
-  filename:    (_req, file, cb) => {
-    const ext  = path.extname(file.originalname).toLowerCase();
+  filename: (_req, file, cb) => {
+    const ext = path.extname(file.originalname).toLowerCase();
     const safe = `${Date.now()}-${Math.random().toString(36).slice(2, 8)}${ext}`;
     cb(null, safe);
   },
@@ -174,11 +188,11 @@ const parseJsonField = (req) => {
 const buildAttachmentDocs = (files = []) =>
   files.map(f => ({
     name: f.originalname,
-    storedName:   f.filename,
-    storagePath:  path.join('inquiry', f.filename).replace(/\\/g, '/'),  // always forward slashes
-    mimeType:     f.mimetype,
-    sizeBytes:    f.size,
-    uploadedAt:   new Date(),
+    storedName: f.filename,
+    storagePath: path.join('inquiry', f.filename).replace(/\\/g, '/'),  // always forward slashes
+    mimeType: f.mimetype,
+    sizeBytes: f.size,
+    uploadedAt: new Date(),
   }));
 
 
@@ -225,11 +239,11 @@ const backFillAttachments = (docObj) => {
     if (docObj.attachment) {
       docObj.attachments = [{
         originalName: path.basename(docObj.attachment),
-        storedName:   path.basename(docObj.attachment),
-        storagePath:  docObj.attachment,
-        mimeType:     '',
-        sizeBytes:    0,
-        uploadedAt:   docObj.createdAt || new Date(),
+        storedName: path.basename(docObj.attachment),
+        storagePath: docObj.attachment,
+        mimeType: '',
+        sizeBytes: 0,
+        uploadedAt: docObj.createdAt || new Date(),
       }];
     } else {
       docObj.attachments = [];
@@ -251,10 +265,10 @@ const normaliseContacts = (body) => {
 
   if (body.contactPerson || body.mobileNumber) {
     return [{
-      name:        (body.contactPerson || '').trim(),
-      phone:       (body.mobileNumber  || '').trim(),
-      email:       (body.email         || '').trim(),
-      designation: (body.designation   || '').trim(),
+      name: (body.contactPerson || '').trim(),
+      phone: (body.mobileNumber || '').trim(),
+      email: (body.email || '').trim(),
+      designation: (body.designation || '').trim(),
     }];
   }
 
@@ -1125,13 +1139,13 @@ const getInquiries = async (req, res, next) => {
     if (search) {
       const matchedCustomerIds = await findCustomerIdsForSearch(search);
       query.$or = [
-        { inquiryId:        { $regex: search, $options: 'i' } },
-        { customerName:     { $regex: search, $options: 'i' } },
-        { companyName:      { $regex: search, $options: 'i' } },
-        { projectName:      { $regex: search, $options: 'i' } },
-        { contactPerson:    { $regex: search, $options: 'i' } },
-        { mobileNumber:     { $regex: search, $options: 'i' } },
-        { 'contacts.name':  { $regex: search, $options: 'i' } },
+        { inquiryId: { $regex: search, $options: 'i' } },
+        { customerName: { $regex: search, $options: 'i' } },
+        { companyName: { $regex: search, $options: 'i' } },
+        { projectName: { $regex: search, $options: 'i' } },
+        { contactPerson: { $regex: search, $options: 'i' } },
+        { mobileNumber: { $regex: search, $options: 'i' } },
+        { 'contacts.name': { $regex: search, $options: 'i' } },
         { 'contacts.phone': { $regex: search, $options: 'i' } },
         { 'contacts.email': { $regex: search, $options: 'i' } },
         ...(matchedCustomerIds.length ? [{ customerRef: { $in: matchedCustomerIds } }] : []),
@@ -1156,9 +1170,9 @@ const getInquiries = async (req, res, next) => {
 
     const creators = creatorIds.length
       ? await User.find({ _id: { $in: creatorIds } })
-          .select('name email role department isActive')
-          .sort({ name: 1, email: 1 })
-          .lean()
+        .select('name email role department isActive')
+        .sort({ name: 1, email: 1 })
+        .lean()
       : [];
 
     const inquiryEditContext = await resolveInquiryEditContext(req.user);
@@ -1167,13 +1181,13 @@ const getInquiries = async (req, res, next) => {
       success: true,
       data: inquiries.map((item) => {
         const rawInquiry = item.toObject ? item.toObject() : item;
-        const data = getLiveCustomerSnapshot(rawInquiry);
+        const data = getInquiryCustomerSnapshot(rawInquiry);
         data.canEdit = canUserEditInquiry(req.user, rawInquiry, inquiryEditContext);
         return data;
       }),
       pagination: {
         total,
-        page:  Number(page),
+        page: Number(page),
         pages: Math.ceil(total / Number(limit)),
         limit: Number(limit),
       },
@@ -1210,16 +1224,16 @@ const getInquiry = async (req, res, next) => {
       return res.status(404).json({ success: false, message: 'Inquiry not found' });
     }
 
-    const data = getLiveCustomerSnapshot(inquiry.toObject());
+    const data = getInquiryCustomerSnapshot(inquiry.toObject());
 
     // Back-fill contacts for old records that have none yet
     if (!data.contacts || data.contacts.length === 0) {
       if (data.contactPerson || data.mobileNumber) {
         data.contacts = [{
-          name:        data.contactPerson || '',
-          phone:       data.mobileNumber  || '',
-          email:       data.email         || '',
-          designation: data.designation   || '',
+          name: data.contactPerson || '',
+          phone: data.mobileNumber || '',
+          email: data.email || '',
+          designation: data.designation || '',
         }];
       } else {
         data.contacts = [];
@@ -1266,7 +1280,7 @@ const createInquiry = async (req, res, next) => {
     //    Do NOT spread req.body wholesale — it may contain _id, __v, inquiryId,
     //    createdBy from a cached response, or other fields that should not be
     //    written directly.  Pick each field explicitly.
-    const b       = req.body;
+    const b = req.body;
     const primary = contacts[0];
     const inquiryType = normalizeInquiryType(b.inquiryType, b.productType, b.panelTypes);
     const productType = normalizeProductType(deriveProductType(b, inquiryType)) || 'MCC';
@@ -1287,23 +1301,16 @@ const createInquiry = async (req, res, next) => {
       return denyMissingPermission(res, INQUIRY_PERMISSIONS.COMMERCIAL_SUBMIT);
     }
 
-    if (
-      b.nextFollowUpDate &&
-      !userHasPermission(req.user, INQUIRY_PERMISSIONS.FOLLOW_UP)
-    ) {
-      return denyMissingPermission(res, INQUIRY_PERMISSIONS.FOLLOW_UP);
-    }
-
     const bomRevisionNumber = hasBomUpload ? 0 : undefined;
     const bomVersionLabel = hasBomUpload ? getBomVersionLabel(bomRevisionNumber) : undefined;
     const bomRemarks = b.bomSubmissionRemarks || '';
     const bomAttachmentDocs = hasBomUpload
       ? buildBomAttachmentDocs({
-          files: uploadedBomFiles,
-          revisionNumber: bomRevisionNumber,
-          remarks: bomRemarks,
-          userId: req.user._id,
-        })
+        files: uploadedBomFiles,
+        revisionNumber: bomRevisionNumber,
+        remarks: bomRemarks,
+        userId: req.user._id,
+      })
       : [];
 
     const sanitizedPlcDetails = b.plcDetails ? sanitizePlcDetails(b.plcDetails) : undefined;
@@ -1311,80 +1318,81 @@ const createInquiry = async (req, res, next) => {
 
     const payload = {
       // ── Section 1
-      inquiryDate:    b.inquiryDate    || undefined,
-      rfqNumber:      b.rfqNumber      || undefined,
-      customerName:   b.customerName   || b.companyName || '',
-      companyType:    b.companyType    || undefined,
+      inquiryDate: b.inquiryDate || undefined,
+      rfqNumber: b.rfqNumber || undefined,
+      customerName: b.customerName || b.companyName || '',
+      companyType: b.companyType || undefined,
       contacts,
       // Legacy flat contact fields — kept in sync by pre-save hook too,
       // but set explicitly here so Customer auto-create has them immediately.
-      contactPerson:  primary.name,
-      mobileNumber:   primary.phone,
-      email:          primary.email,
-      designation:    primary.designation,
-      siteAddress:    b.siteAddress    || undefined,
-      city:           b.city           || undefined,
-      location:       b.location       || b.city || b.siteAddress || undefined,
+      contactPerson: primary.name,
+      mobileNumber: primary.phone,
+      email: primary.email,
+      designation: primary.designation,
+      siteAddress: b.siteAddress || undefined,
+      city: b.city || undefined,
+      location: b.location || b.city || b.siteAddress || undefined,
 
       // ── Section 2
-      projectName:      b.projectName      || undefined,
-      industryType:     b.industryType     || undefined,
-      offerType:        b.offerType        || undefined,
+      projectName: b.projectName || undefined,
+      industryType: b.industryType || undefined,
+      offerType: b.offerType || undefined,
       previousOrderRef: b.previousOrderRef || undefined,
 
       // ── Inquiry type + product fields
       inquiryType,
       panelTypes,
-      customPanelType:        b.customPanelType        || undefined,
+      customPanelType: b.customPanelType || undefined,
       applicationDescription: b.applicationDescription || undefined,
-      applicationProcess:     b.applicationProcess     || undefined,
+      applicationProcess: b.applicationProcess || undefined,
       productType,
 
       // ── Section 4
-      supplyVoltage:        b.supplyVoltage        || undefined,
-      controlVoltage:       b.controlVoltage       || undefined,
-      controlFeeder:        normalizeControlFeeder(b.controlFeeder, b.supplyVoltage),
-      frequency:            b.frequency            || undefined,
+      supplyVoltage: b.supplyVoltage || undefined,
+      controlVoltage: b.controlVoltage || undefined,
+      controlFeeder: normalizeControlFeeder(b.controlFeeder, b.supplyVoltage),
+      frequency: b.frequency || undefined,
       panelAreaClassification: firstPresent(b.panelAreaClassification, b.panelAreaClass),
-      panelAreaClass:          firstPresent(b.panelAreaClass, b.panelAreaClassification),
-      ipRating:                firstPresent(b.ipRating, b.protectionClass),
-      installationType:        b.installationType     || undefined,
-      hazardousArea:           b.hazardousArea        || undefined,
-      outdoorInstallation:     b.outdoorInstallation  || undefined,
-      shortCircuitCapacity:    b.shortCircuitCapacity || undefined,
-      busbarMaterial:          b.busbarMaterial       || undefined,
-      enclosureType:           b.enclosureType || undefined,
-      enclosureMake:           b.enclosureMake        || undefined,
-      panelStructure:          b.panelStructure       || undefined,
-      switchgearMake:          b.switchgearMake       || undefined,
-      customSwitchgearMake:    b.customSwitchgearMake || undefined,
+      panelAreaClass: firstPresent(b.panelAreaClass, b.panelAreaClassification),
+      ipRating: firstPresent(b.ipRating, b.protectionClass),
+      installationType: b.installationType || undefined,
+      hazardousArea: b.hazardousArea || undefined,
+      outdoorInstallation: b.outdoorInstallation || undefined,
+      shortCircuitCapacity: b.shortCircuitCapacity || undefined,
+      busbarMaterial: b.busbarMaterial || undefined,
+      enclosureType: b.enclosureType || undefined,
+      enclosureMake: b.enclosureMake || undefined,
+      panelStructure: b.panelStructure || undefined,
+      switchgearMake: b.switchgearMake || undefined,
+      customSwitchgearMake: b.customSwitchgearMake || undefined,
       panelColourRal: shouldPersistPanelColour(b.enclosureType)
         ? (b.panelColourRal || undefined)
         : undefined,
-      cableEntry:              b.cableEntry           || undefined,
-      cableGlandMaterial:      b.cableGlandMaterial   || undefined,
-      barrierVariant:          b.barrierVariant        || undefined,
+      cableEntry: b.cableEntry || undefined,
+      cableGlandMaterial: b.cableGlandMaterial || undefined,
+      barrierVariant: b.barrierVariant || undefined,
 
       // ── Section 6
       loadDetails: Array.isArray(b.loadDetails) ? b.loadDetails : [],
 
       // ── Section 6
-      controlType:   b.controlType   || undefined,
+      controlType: b.controlType || undefined,
       controlMatrix: b.controlMatrix || {},
 
       // ── Section 7
-      panelMounting:         b.panelMounting                  || undefined,
+      panelMounting: b.panelMounting || undefined,
       certificationRequired: firstPresent(b.certificationRequired, b.certificationSelections, false),
-      certificationDetails:  b.certificationDetails           || undefined,
-      drawingsAttached:      boolFromPayload(b.drawingsAttached),
-      drawingsSldAttached:   b.drawingsSldAttached            || undefined,
-      equipmentListAttached: b.equipmentListAttached          || undefined,
-      referenceBomAttached:  b.referenceBomAttached           || undefined,
-      deliveryDate:          b.deliveryDate                   || undefined,
-      deliveryTerms:         b.deliveryTerms                  || undefined,
-      programmingScope:      b.programmingScope               || undefined,
-      onsiteSupport:         boolFromPayload(b.onsiteSupport),
-      paymentTerms:          b.paymentTerms                   || undefined,
+      certificationDetails: b.certificationDetails || undefined,
+      drawingsAttached: boolFromPayload(b.drawingsAttached),
+      drawingsSldAttached: b.drawingsSldAttached || undefined,
+      equipmentListAttached: b.equipmentListAttached || undefined,
+      referenceBomAttached: b.referenceBomAttached || undefined,
+      deliveryDate: b.deliveryDate || undefined,
+      orderEndDate: b.orderEndDate || undefined,
+      deliveryTerms: b.deliveryTerms || undefined,
+      programmingScope: b.programmingScope || undefined,
+      onsiteSupport: boolFromPayload(b.onsiteSupport),
+      paymentTerms: b.paymentTerms || undefined,
 
       // ── Sprint 1 type-specific details
       plcDetails: sanitizedPlcDetails,
@@ -1400,25 +1408,24 @@ const createInquiry = async (req, res, next) => {
       // ── Section 8
       additionalNotes: b.additionalNotes || undefined,
       internalRemarks: b.internalRemarks || undefined,
-      preparedBy:      b.preparedBy      || undefined,
+      preparedBy: b.preparedBy || undefined,
 
       // ── Meta
-      status:           requestedStatus,
-      statusDetails:    hasBomUpload
+      status: requestedStatus,
+      statusDetails: hasBomUpload
         ? {
-            ...(b.statusDetails || {}),
-            bomSubmission: {
-              revisionNumber: bomRevisionNumber,
-              versionLabel: bomVersionLabel,
-              remarks: bomRemarks,
-              updatedAt: new Date(),
-              updatedBy: req.user._id,
-            },
-          }
+          ...(b.statusDetails || {}),
+          bomSubmission: {
+            revisionNumber: bomRevisionNumber,
+            versionLabel: bomVersionLabel,
+            remarks: bomRemarks,
+            updatedAt: new Date(),
+            updatedBy: req.user._id,
+          },
+        }
         : (b.statusDetails || undefined),
-      nextFollowUpDate: b.nextFollowUpDate  || undefined,
-      remarks:          b.remarks           || undefined,
-      reviewStatus:     b.reviewStatus      || undefined,
+      remarks: b.remarks || undefined,
+      reviewStatus: b.reviewStatus || undefined,
 
       // ── Attachments (new uploads only — no kept attachments on create)
       attachments: newFileDocs,
@@ -1444,7 +1451,7 @@ const createInquiry = async (req, res, next) => {
       .populate('customerRef', 'customerId customerName companyType contacts contactPerson email mobileNumber city address gstNumber notes')
       .populate('bomAttachments.uploadedBy', 'name email');
 
-    const data = getLiveCustomerSnapshot(populatedInquiry.toObject());
+    const data = getInquiryCustomerSnapshot(populatedInquiry.toObject());
 
     if (!data.contacts || data.contacts.length === 0) {
       data.contacts = contacts;
@@ -1536,9 +1543,9 @@ const createInquiry = async (req, res, next) => {
       data,
     });
 
-} catch (error) {
-  next(error);
-}
+  } catch (error) {
+    next(error);
+  }
 };
 // ─────────────────────────────────────────────────────────────────────────────
 // @desc  Update inquiry
@@ -1568,17 +1575,6 @@ const updateInquiry = async (req, res, next) => {
       !userHasPermission(req.user, INQUIRY_PERMISSIONS.COMMERCIAL_SUBMIT)
     ) {
       return denyMissingPermission(res, INQUIRY_PERMISSIONS.COMMERCIAL_SUBMIT);
-    }
-
-    if (Object.prototype.hasOwnProperty.call(b, 'nextFollowUpDate')) {
-      const incomingFollowUp = normalizeDateOnly(b.nextFollowUpDate);
-      const existingFollowUp = normalizeDateOnly(inquiry.nextFollowUpDate);
-      if (
-        incomingFollowUp !== existingFollowUp &&
-        !userHasPermission(req.user, INQUIRY_PERMISSIONS.FOLLOW_UP)
-      ) {
-        return denyMissingPermission(res, INQUIRY_PERMISSIONS.FOLLOW_UP);
-      }
     }
 
     // 2. Build update payload — only include fields that were actually sent.
@@ -1616,18 +1612,18 @@ const updateInquiry = async (req, res, next) => {
     }
 
     // ── Section 1
-    setIfPresent('inquiryDate',  b.inquiryDate);
-    setIfPresent('rfqNumber',    b.rfqNumber);
+    setIfPresent('inquiryDate', b.inquiryDate);
+    setIfPresent('rfqNumber', b.rfqNumber);
     setIfPresent('customerName', b.customerName || b.companyName);
-    setIfPresent('companyType',  b.companyType);
-    setIfPresent('siteAddress',  b.siteAddress);
-    setIfPresent('city',         b.city);
-    setIfPresent('location',     b.location || b.city || b.siteAddress);
+    setIfPresent('companyType', b.companyType);
+    setIfPresent('siteAddress', b.siteAddress);
+    setIfPresent('city', b.city);
+    setIfPresent('location', b.location || b.city || b.siteAddress);
 
     // ── Section 2
-    setIfPresent('projectName',      b.projectName);
-    setIfPresent('industryType',     b.industryType);
-    setIfPresent('offerType',        b.offerType);
+    setIfPresent('projectName', b.projectName);
+    setIfPresent('industryType', b.industryType);
+    setIfPresent('offerType', b.offerType);
     setIfPresent('previousOrderRef', b.previousOrderRef);
 
     // // ── Section 3
@@ -1643,32 +1639,32 @@ const updateInquiry = async (req, res, next) => {
       updatePayload.productType = normalizeProductType(deriveProductType(b, nextInquiryType)) || 'MCC';
       updatePayload.panelTypes = derivePanelTypes(b, nextInquiryType);
     }
-    
-    setIfPresent('customPanelType',        b.customPanelType);
+
+    setIfPresent('customPanelType', b.customPanelType);
     setIfPresent('applicationDescription', b.applicationDescription);
-    setIfPresent('applicationProcess',     b.applicationProcess);
+    setIfPresent('applicationProcess', b.applicationProcess);
 
     // ── Section 4
-    setIfPresent('supplyVoltage',        b.supplyVoltage);
-    setIfPresent('controlVoltage',       b.controlVoltage);
+    setIfPresent('supplyVoltage', b.supplyVoltage);
+    setIfPresent('controlVoltage', b.controlVoltage);
     if (b.controlFeeder !== undefined || b.supplyVoltage !== undefined) {
       const effectiveSupplyVoltage = b.supplyVoltage !== undefined ? b.supplyVoltage : inquiry.supplyVoltage;
       updatePayload.controlFeeder = normalizeControlFeeder(b.controlFeeder, effectiveSupplyVoltage);
     }
-    setIfPresent('frequency',            b.frequency);
+    setIfPresent('frequency', b.frequency);
     setIfPresent('panelAreaClassification', firstPresent(b.panelAreaClassification, b.panelAreaClass));
-    setIfPresent('panelAreaClass',          firstPresent(b.panelAreaClass, b.panelAreaClassification));
-    setIfPresent('ipRating',                firstPresent(b.ipRating, b.protectionClass));
-    setIfPresent('installationType',        b.installationType);
-    setIfPresent('hazardousArea',           b.hazardousArea);
-    setIfPresent('outdoorInstallation',     b.outdoorInstallation);
-    setIfPresent('shortCircuitCapacity',    b.shortCircuitCapacity);
-    setIfPresent('busbarMaterial',          b.busbarMaterial);
-    setIfPresent('enclosureType',           b.enclosureType);
-    setIfPresent('enclosureMake',           b.enclosureMake);
-    setIfPresent('panelStructure',          b.panelStructure);
-    setIfPresent('switchgearMake',          b.switchgearMake);
-    setIfPresent('customSwitchgearMake',    b.customSwitchgearMake);
+    setIfPresent('panelAreaClass', firstPresent(b.panelAreaClass, b.panelAreaClassification));
+    setIfPresent('ipRating', firstPresent(b.ipRating, b.protectionClass));
+    setIfPresent('installationType', b.installationType);
+    setIfPresent('hazardousArea', b.hazardousArea);
+    setIfPresent('outdoorInstallation', b.outdoorInstallation);
+    setIfPresent('shortCircuitCapacity', b.shortCircuitCapacity);
+    setIfPresent('busbarMaterial', b.busbarMaterial);
+    setIfPresent('enclosureType', b.enclosureType);
+    setIfPresent('enclosureMake', b.enclosureMake);
+    setIfPresent('panelStructure', b.panelStructure);
+    setIfPresent('switchgearMake', b.switchgearMake);
+    setIfPresent('customSwitchgearMake', b.customSwitchgearMake);
 
     if (b.panelColourRal !== undefined || b.enclosureType !== undefined) {
       const effectiveEnclosureType = b.enclosureType !== undefined
@@ -1680,31 +1676,32 @@ const updateInquiry = async (req, res, next) => {
         : '';
     }
 
-    setIfPresent('cableEntry',              b.cableEntry);
-    setIfPresent('cableGlandMaterial',      b.cableGlandMaterial);
-    setIfPresent('barrierVariant',          b.barrierVariant);
+    setIfPresent('cableEntry', b.cableEntry);
+    setIfPresent('cableGlandMaterial', b.cableGlandMaterial);
+    setIfPresent('barrierVariant', b.barrierVariant);
 
     // ── Section 6
     if (b.loadDetails !== undefined)
       updatePayload.loadDetails = Array.isArray(b.loadDetails) ? b.loadDetails : [];
 
     // ── Section 6
-    setIfPresent('controlType',   b.controlType);
+    setIfPresent('controlType', b.controlType);
     if (b.controlMatrix !== undefined)
       updatePayload.controlMatrix = b.controlMatrix || {};
 
     // ── Section 7
-    setIfPresent('panelMounting',        b.panelMounting);
+    setIfPresent('panelMounting', b.panelMounting);
     if (b.certificationRequired !== undefined || b.certificationSelections !== undefined)
       updatePayload.certificationRequired = firstPresent(b.certificationRequired, b.certificationSelections, false);
     setIfPresent('certificationDetails', b.certificationDetails);
     if (b.drawingsAttached !== undefined)
       updatePayload.drawingsAttached = boolFromPayload(b.drawingsAttached);
-    setIfPresent('drawingsSldAttached',   b.drawingsSldAttached);
+    setIfPresent('drawingsSldAttached', b.drawingsSldAttached);
     setIfPresent('equipmentListAttached', b.equipmentListAttached);
-    setIfPresent('referenceBomAttached',  b.referenceBomAttached);
-    setIfPresent('deliveryDate',     b.deliveryDate);
-    setIfPresent('deliveryTerms',    b.deliveryTerms);
+    setIfPresent('referenceBomAttached', b.referenceBomAttached);
+    setIfPresent('deliveryDate', b.deliveryDate);
+    setIfPresent('orderEndDate', b.orderEndDate);
+    setIfPresent('deliveryTerms', b.deliveryTerms);
     setIfPresent('programmingScope', b.programmingScope);
     if (b.onsiteSupport !== undefined)
       updatePayload.onsiteSupport = boolFromPayload(b.onsiteSupport);
@@ -1724,13 +1721,12 @@ const updateInquiry = async (req, res, next) => {
     // ── Section 8
     setIfPresent('additionalNotes', b.additionalNotes);
     setIfPresent('internalRemarks', b.internalRemarks);
-    setIfPresent('preparedBy',      b.preparedBy);
-    setIfPresent('reviewStatus',    b.reviewStatus);
+    setIfPresent('preparedBy', b.preparedBy);
+    setIfPresent('reviewStatus', b.reviewStatus);
 
     // ── Meta
-    setIfPresent('status',           requestedStatus);
-    setIfPresent('nextFollowUpDate', b.nextFollowUpDate);
-    setIfPresent('remarks',          b.remarks);
+    setIfPresent('status', requestedStatus);
+    setIfPresent('remarks', b.remarks);
 
     const statusDetails = mergeStatusDetails({
       inquiry,
@@ -1752,11 +1748,11 @@ const updateInquiry = async (req, res, next) => {
           return res.status(400).json({ success: false, message: contactErrors[0], errors: contactErrors });
         }
         const primary = contacts[0];
-        updatePayload.contacts      = contacts;
+        updatePayload.contacts = contacts;
         updatePayload.contactPerson = primary.name;
-        updatePayload.mobileNumber  = primary.phone;
-        updatePayload.email         = primary.email;
-        updatePayload.designation   = primary.designation;
+        updatePayload.mobileNumber = primary.phone;
+        updatePayload.email = primary.email;
+        updatePayload.designation = primary.designation;
       }
     }
 
@@ -1826,12 +1822,21 @@ const updateInquiry = async (req, res, next) => {
     );
 
     if (shouldResolveCustomer) {
+      const requestedCustomerName = String(
+        b.customerName ?? updatePayload.customerName ?? inquiry.customerName ?? ''
+      ).trim();
       const linkedCustomer = await resolveUniversalCustomer(
         { ...inquiry.toObject(), ...b, ...updatePayload },
         req.user._id,
-        { createIfMissing: true, updateExisting: true }
+        // Editing an Inquiry must not silently rename/update Customer Master.
+        // Customer Master has its own explicit edit action/endpoint.
+        { createIfMissing: true, updateExisting: false }
       );
       applyCustomerToPayload(updatePayload, linkedCustomer);
+      // Keep the customer name saved with the Inquiry as its own snapshot.
+      // Selecting a different customer still updates this because the frontend
+      // sends that customer's name together with the changed customerRef.
+      if (requestedCustomerName) updatePayload.customerName = requestedCustomerName;
     }
 
     const finalStatusChanged = updatePayload.status && updatePayload.status !== normalizeInquiryStatus(inquiry.status);
@@ -1848,10 +1853,22 @@ const updateInquiry = async (req, res, next) => {
       return res.status(404).json({ success: false, message: 'Inquiry not found after update' });
     }
 
+    // Inquiry is the source of truth for Order End Date. Keep an already
+    // converted Project aligned while the Project field remains read-only.
+    if (Object.prototype.hasOwnProperty.call(b, 'orderEndDate')) {
+      const projectUpdate = { $set: { orderEndDate: updatedInquiry.orderEndDate || null } };
+      if (updatedInquiry.projectReference) {
+        await Project.findByIdAndUpdate(updatedInquiry.projectReference, projectUpdate);
+      } else {
+        // Backward compatibility for older converted inquiries where the
+        // Project has inquiryReference but Inquiry.projectReference was not saved.
+        await Project.findOneAndUpdate({ inquiryReference: updatedInquiry._id }, projectUpdate);
+      }
+    }
 
     // Notify the original inquiry creator and Estimation HOD/TL. The message
     // contains the logged-in user who made the change and a concise summary of
-    // status, document, follow-up and general-detail updates.
+    // status, document and general-detail updates.
     await notifyInquiryStakeholdersOfChange({
       beforeInquiry: beforeInquirySnapshot,
       afterInquiry: updatedInquiry.toObject({ depopulate: true, virtuals: false }),
@@ -1859,14 +1876,14 @@ const updateInquiry = async (req, res, next) => {
     });
 
     // 5. Back-fill contacts on response for old records
-    const data = getLiveCustomerSnapshot(updatedInquiry.toObject());
+    const data = getInquiryCustomerSnapshot(updatedInquiry.toObject());
     if (!data.contacts || data.contacts.length === 0) {
       if (data.contactPerson) {
         data.contacts = [{
-          name:        data.contactPerson || '',
-          phone:       data.mobileNumber  || '',
-          email:       data.email         || '',
-          designation: data.designation   || '',
+          name: data.contactPerson || '',
+          phone: data.mobileNumber || '',
+          email: data.email || '',
+          designation: data.designation || '',
         }];
       }
     }
@@ -1990,14 +2007,14 @@ const updateInquiryStatus = async (req, res, next) => {
       });
     }
 
-    const data = getLiveCustomerSnapshot(updatedInquiry.toObject());
+    const data = getInquiryCustomerSnapshot(updatedInquiry.toObject());
     if (!data.contacts || data.contacts.length === 0) {
       if (data.contactPerson) {
         data.contacts = [{
-          name:        data.contactPerson || '',
-          phone:       data.mobileNumber  || '',
-          email:       data.email         || '',
-          designation: data.designation   || '',
+          name: data.contactPerson || '',
+          phone: data.mobileNumber || '',
+          email: data.email || '',
+          designation: data.designation || '',
         }];
       }
     }
@@ -2031,7 +2048,7 @@ const downloadInquiryPdf = async (req, res, next) => {
       return res.status(404).json({ success: false, message: 'Inquiry not found' });
     }
 
-    const data = getLiveCustomerSnapshot(inquiry);
+    const data = getInquiryCustomerSnapshot(inquiry);
     delete data.notes;
     delete data.enclosureMaterial;
     delete data.enclosureStandard;
@@ -2044,11 +2061,11 @@ const downloadInquiryPdf = async (req, res, next) => {
     if (!Array.isArray(data.contacts) || data.contacts.length === 0) {
       data.contacts = (data.contactPerson || data.mobileNumber || data.email)
         ? [{
-            name: data.contactPerson || '',
-            phone: data.mobileNumber || '',
-            email: data.email || '',
-            designation: data.designation || '',
-          }]
+          name: data.contactPerson || '',
+          phone: data.mobileNumber || '',
+          email: data.email || '',
+          designation: data.designation || '',
+        }]
         : [];
     }
 
@@ -2070,92 +2087,6 @@ const downloadInquiryPdf = async (req, res, next) => {
     res.setHeader('X-Content-Type-Options', 'nosniff');
     res.setHeader('Access-Control-Expose-Headers', 'Content-Disposition');
     return res.end(pdfBuffer);
-  } catch (error) {
-    next(error);
-  }
-};
-
-// ─────────────────────────────────────────────────────────────────────────────
-// @desc  Set or clear an inquiry follow-up reminder
-// @route PATCH /api/inquiries/:id/follow-up
-// @access Private — Inquiries - Follow-up / Reminder
-// ─────────────────────────────────────────────────────────────────────────────
-const updateInquiryFollowUp = async (req, res, next) => {
-  try {
-    const inquiry = await Inquiry.findById(req.params.id);
-    if (!inquiry) {
-      return res.status(404).json({ success: false, message: 'Inquiry not found' });
-    }
-
-    await assertUserCanEditInquiry(req.user, inquiry);
-    const beforeInquirySnapshot = inquiry.toObject({ depopulate: true, virtuals: false });
-
-    const rawDate = req.body?.nextFollowUpDate;
-    let nextFollowUpDate = null;
-
-    if (rawDate) {
-      nextFollowUpDate = new Date(rawDate);
-      if (Number.isNaN(nextFollowUpDate.getTime())) {
-        return res.status(400).json({ success: false, message: 'Please provide a valid follow-up date' });
-      }
-      nextFollowUpDate.setHours(0, 0, 0, 0);
-    }
-
-    const updatePayload = { nextFollowUpDate };
-    if (Object.prototype.hasOwnProperty.call(req.body || {}, 'remarks')) {
-      updatePayload.remarks = String(req.body.remarks || '').trim();
-    }
-
-    const updatedInquiry = await Inquiry.findByIdAndUpdate(
-      req.params.id,
-      updatePayload,
-      { new: true, runValidators: true }
-    )
-      .populate('createdBy', 'name')
-      .populate('customerRef', 'customerId customerName companyType contacts contactPerson email mobileNumber city address gstNumber notes')
-      .populate('projectReference', 'projectId projectName')
-      .populate('kickoffMeeting.attendees', 'name email role')
-      .populate('bomAttachments.uploadedBy', 'name email');
-
-    await notifyInquiryStakeholdersOfChange({
-      beforeInquiry: beforeInquirySnapshot,
-      afterInquiry: updatedInquiry.toObject({ depopulate: true, virtuals: false }),
-      actor: req.user,
-      actionLabel: nextFollowUpDate ? 'follow-up reminder updated' : 'follow-up reminder cleared',
-    });
-
-    const data = getLiveCustomerSnapshot(updatedInquiry.toObject());
-    backFillAttachments(data);
-
-    res.json({
-      success: true,
-      message: nextFollowUpDate ? 'Follow-up reminder updated' : 'Follow-up reminder cleared',
-      data,
-    });
-  } catch (error) {
-    next(error);
-  }
-};
-
-// ─────────────────────────────────────────────────────────────────────────────
-// @desc  Get follow-ups
-// @route GET /api/inquiries/follow-ups
-// @access Private
-// ─────────────────────────────────────────────────────────────────────────────
-const getFollowUps = async (req, res, next) => {
-  try {
-    const today = new Date();
-    today.setHours(23, 59, 59, 999);
-
-    const followUps = await Inquiry.find({
-      nextFollowUpDate: { $lte: today },
-      status:           { $nin: [...buildStatusQuery('Order Won').$in, ...buildStatusQuery('Order Lost').$in] },
-    })
-      .populate('customerRef', 'customerId customerName companyType contacts contactPerson email mobileNumber city address gstNumber notes')
-      .sort({ nextFollowUpDate: 1 })
-      .limit(20);
-
-    res.json({ success: true, data: followUps.map((item) => getLiveCustomerSnapshot(item.toObject ? item.toObject() : item)) });
   } catch (error) {
     next(error);
   }
@@ -2221,8 +2152,6 @@ module.exports = {
   createInquiry,
   updateInquiry,
   updateInquiryStatus,
-  updateInquiryFollowUp,
-  getFollowUps,
   downloadInquiryPdf,
   downloadInquiryAttachment,
   uploadMiddleware,

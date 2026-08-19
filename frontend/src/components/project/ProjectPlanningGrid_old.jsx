@@ -70,7 +70,16 @@ const toDateInput = (value) => {
   return date.toISOString().slice(0, 10);
 };
 
+const todayDateInput = () => toDateInput(new Date());
+
 const isSunday = (value) => toDate(value)?.getDay() === 0;
+
+const isPastDate = (value) => {
+  const date = toDate(value);
+  const today = toDate(new Date());
+  return Boolean(date && today && date < today);
+};
+
 
 const addWorkingDays = (value, count) => {
   const date = toDate(value);
@@ -359,6 +368,15 @@ const ProjectPlanningGrid = ({
 
   const setTaskStartDate = (gridIndex, taskIndex, value) => {
     const key = `${gridIndex}-${taskIndex}-start`;
+    const currentValue = toDateInput(
+      planningGrids[gridIndex]?.planningTasks?.[taskIndex]?.plannedStartDate
+      || planningGrids[gridIndex]?.planningTasks?.[taskIndex]?.startDate
+    );
+
+    if (value && isPastDate(value) && value !== currentValue) {
+      setErrors((prev) => ({ ...prev, [key]: 'Previous dates are blocked. Select today or a future working day.' }));
+      return;
+    }
     if (value && isSunday(value)) {
       setErrors((prev) => ({ ...prev, [key]: 'Sunday is blocked. Select Monday to Saturday.' }));
       return;
@@ -626,10 +644,11 @@ const ProjectPlanningGrid = ({
                                     <Input
                                       type="date"
                                       value={toDateInput(task.plannedStartDate || task.startDate)}
+                                      min={todayDateInput()}
                                       disabled={!canEditGridTaskDates}
                                       onChange={(event) => setTaskStartDate(gridIndex, taskIndex, event.target.value)}
                                       className={canEditGridTaskDates ? COMPACT_INPUT : `${COMPACT_INPUT} !bg-slate-100 !text-slate-400`}
-                                      title={canEditGridTaskDates ? 'Admin, HOD, and Team Lead can set this task start date within their department. Sundays are blocked.' : 'Only Admin or the HOD/Team Lead of this department can set task start dates.'}
+                                      title={canEditGridTaskDates ? 'Admin, HOD, and Team Lead can set this task start date within their department. Previous dates and Sundays are blocked.' : 'Only Admin or the HOD/Team Lead of this department can set task start dates.'}
                                     />
                                     {startDateError && <p className="mt-0.5 text-[9px] font-medium leading-3 text-red-600" title={startDateError}>Invalid</p>}
                                   </td>
@@ -750,7 +769,7 @@ const ProjectPlanningGrid = ({
                                 </label>
                                 <label>
                                   <FieldLabel>Start Date</FieldLabel>
-                                  <Input type="date" value={toDateInput(task.plannedStartDate || task.startDate)} disabled={!canEditGridTaskDates} onChange={(event) => setTaskStartDate(gridIndex, taskIndex, event.target.value)} className={canEditGridTaskDates ? COMPACT_INPUT : `${COMPACT_INPUT} !bg-slate-100 !text-slate-400`} title={canEditGridTaskDates ? 'Admin, HOD, and Team Lead can set this task start date within their department. Sundays are blocked.' : 'Only Admin or the HOD/Team Lead of this department can set task start dates.'} />
+                                  <Input type="date" value={toDateInput(task.plannedStartDate || task.startDate)} min={todayDateInput()} disabled={!canEditGridTaskDates} onChange={(event) => setTaskStartDate(gridIndex, taskIndex, event.target.value)} className={canEditGridTaskDates ? COMPACT_INPUT : `${COMPACT_INPUT} !bg-slate-100 !text-slate-400`} title={canEditGridTaskDates ? 'Admin, HOD, and Team Lead can set this task start date within their department. Previous dates and Sundays are blocked.' : 'Only Admin or the HOD/Team Lead of this department can set task start dates.'} />
                                   {startDateError && <p className="mt-1 text-[10px] font-medium text-red-600">{startDateError}</p>}
                                 </label>
                                 <label>

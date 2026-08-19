@@ -26,6 +26,7 @@ try {
 }
 
 const Project = require('../models/Project');
+const { resolveProjectLockState } = require('./projectLockService');
 const ProjectActivityLog = require('../models/ProjectActivityLog');
 const User = require('../models/User');
 const {
@@ -694,6 +695,14 @@ async function updateProjectPlanningTaskFromWhatsApp(command, user) {
     };
   }
 
+  const lockState = await resolveProjectLockState(project._id);
+  if (lockState.locked) {
+    return {
+      ok: false,
+      reply: `🔒 ${lockState.reason}`,
+    };
+  }
+
   const match = findTaskInProject(project, command.taskName);
   if (!match) {
     const taskNames = (project.planningTasks || [])
@@ -823,11 +832,11 @@ async function reloadWhatsAppSettings() {
 function getWhatsAppStatus() {
   const account = client?.info
     ? {
-        wid: client.info.wid?._serialized || '',
-        number: client.info.wid?.user || '',
-        pushname: client.info.pushname || '',
-        platform: client.info.platform || '',
-      }
+      wid: client.info.wid?._serialized || '',
+      number: client.info.wid?.user || '',
+      pushname: client.info.pushname || '',
+      platform: client.info.platform || '',
+    }
     : null;
 
   return {
@@ -1303,11 +1312,11 @@ async function sendWhatsAppGroupWithAttachments(text, attachments = []) {
     try {
       const media = hasBuffer
         ? new MessageMedia(
-            file?.mimeType || file?.contentType || 'application/octet-stream',
-            file.buffer.toString('base64'),
-            fileName,
-            file.buffer.length
-          )
+          file?.mimeType || file?.contentType || 'application/octet-stream',
+          file.buffer.toString('base64'),
+          fileName,
+          file.buffer.length
+        )
         : MessageMedia.fromFilePath(fullPath);
       media.filename = fileName;
 

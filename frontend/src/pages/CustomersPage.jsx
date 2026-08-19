@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback, useMemo } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Plus, Search, Edit2, RefreshCw, X, Phone, Mail, MapPin } from 'lucide-react';
 import API from '../api/axios';
@@ -23,13 +23,15 @@ const getCreatedByName = (customer = {}) => {
   const createdBy = customer.createdBy;
   if (!createdBy) return '—';
   if (typeof createdBy === 'string') return '—';
-  return createdBy.name || '—';
+  return createdBy.name || createdBy.email || '—';
 };
+
+const getEntityId = (value) => String(value?._id || value?.id || value || '');
 
 const CustomersPage = () => {
   const toast = useToast();
   const navigate = useNavigate();
-  const { hasPermission } = useAuth();
+  const { hasPermission, user } = useAuth();
   const canCreateCustomer = hasPermission(CUSTOMER_PERMISSIONS.CREATE);
   const canEditCustomer = hasPermission(CUSTOMER_PERMISSIONS.EDIT);
   const [customers, setCustomers] = useState([]);
@@ -37,23 +39,11 @@ const CustomersPage = () => {
   const [loading, setLoading] = useState(true);
   const [searchInput, setSearchInput] = useState('');
   const [appliedSearch, setAppliedSearch] = useState('');
+  const [filterCreatedBy, setFilterCreatedBy] = useState('');
+  const [creatorOptions, setCreatorOptions] = useState([]);
   const [page, setPage] = useState(1);
   const [limit, setLimit] = useState(50);
 
-  const pageSizeOptions = useMemo(() => {
-    const options = [50, 100, 150, 200, 250];
-    const total = Number(pagination.total) || 0;
-
-    if (total > 250) {
-      const roundedTotal = Math.ceil(total / 50) * 50;
-      for (let size = 300; size <= roundedTotal; size += 50) {
-        options.push(size);
-      }
-    }
-
-    if (!options.includes(limit)) options.push(limit);
-    return [...new Set(options)].sort((a, b) => a - b);
-  }, [pagination.total, limit]);
 
   const fetchCustomers = useCallback(async () => {
     setLoading(true);
@@ -61,17 +51,21 @@ const CustomersPage = () => {
       const params = { page, limit };
       const keyword = appliedSearch.trim();
       if (keyword) params.search = keyword;
+      if (filterCreatedBy) params.createdBy = filterCreatedBy;
       const { data } = await API.get('/customers', { params });
       setCustomers(data.data);
       setPagination(data.pagination);
+      setCreatorOptions(Array.isArray(data.filters?.creators) ? data.filters.creators : []);
     } catch {
       toast.error('Failed to load customers');
     } finally {
       setLoading(false);
     }
-  }, [page, limit, appliedSearch]);
+  }, [page, limit, appliedSearch, filterCreatedBy]);
 
   useEffect(() => { fetchCustomers(); }, [fetchCustomers]);
+
+  useEffect(() => { setPage(1); }, [filterCreatedBy]);
 
   useEffect(() => {
     const timer = setTimeout(() => {
@@ -97,8 +91,8 @@ const CustomersPage = () => {
     setPage(1);
   };
 
-  const handleLimitChange = (e) => {
-    setLimit(Number(e.target.value));
+  const handleLimitChange = (value) => {
+    setLimit(Number(value));
     setPage(1);
   };
 
@@ -122,9 +116,22 @@ const CustomersPage = () => {
     },
     {
       key: 'createdBy',
-      label: 'Created',
-      width: '140px',
-      render: (_v, row) => <span className="text-sm text-gray-600">{getCreatedByName(row)}</span>,
+      label: 'Created By',
+      width: '150px',
+      render: (_v, row) => {
+        const creatorId = getEntityId(row.createdBy);
+        const currentUserId = getEntityId(user?._id || user?.id);
+        const isCurrentUser = Boolean(creatorId && currentUserId && creatorId === currentUserId);
+
+        return (
+          <span className="text-sm text-gray-600">
+            {getCreatedByName(row)}
+            {isCurrentUser && (
+              <span className="ml-1 text-[11px] font-normal text-gray-400">(you)</span>
+            )}
+          </span>
+        );
+      },
     },
     {
       key: 'mobileNumber',
@@ -169,7 +176,7 @@ const CustomersPage = () => {
   ];
 
   return (
-    <div className="space-y-4 fade-in">
+    <div className="fade-in w-full min-w-0 max-w-full space-y-4 overflow-x-hidden">
       <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
         <div>
           <h2 className="text-lg font-semibold text-gray-900">Customers</h2>
@@ -204,6 +211,20 @@ const CustomersPage = () => {
               )}
             </div>
 
+            <select
+              value={filterCreatedBy}
+              onChange={(e) => setFilterCreatedBy(e.target.value)}
+              className="h-10 w-full rounded-lg border border-gray-300 bg-white px-3 text-base text-gray-700 focus:outline-none focus:ring-2 focus:ring-blue-500 sm:w-[170px] sm:text-sm"
+              aria-label="Filter customers by creator"
+            >
+              <option value="">All Created By</option>
+              {creatorOptions.map((creator) => (
+                <option key={creator._id} value={creator._id}>
+                  {creator.name || creator.email || 'Unknown User'}
+                </option>
+              ))}
+            </select>
+
             <button
               type="button"
               onClick={fetchCustomers}
@@ -214,24 +235,21 @@ const CustomersPage = () => {
             </button>
           </div>
 
-          <div className="flex items-center justify-end">
-            <select
-              aria-label="Records per page"
-              value={limit}
-              onChange={handleLimitChange}
-              className="min-w-[72px] rounded-lg border border-gray-300 bg-white px-3 py-2 text-center text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
-              title="Records per page"
-            >
-              {pageSizeOptions.map((option) => (
-                <option key={option} value={option}>{option}</option>
-              ))}
-            </select>
-          </div>
         </form>
       </Card>
 
-      <Card>
-        <Table columns={columns} data={customers} loading={loading} pagination={pagination} onPageChange={setPage} onRowClick={(row) => navigate(`/customers/${row._id}`)} emptyMessage="No customers found." />
+      <Card className="min-w-0 max-w-full overflow-hidden">
+        <Table
+          columns={columns}
+          data={customers}
+          loading={loading}
+          pagination={pagination}
+          onPageChange={setPage}
+          onPageSizeChange={handleLimitChange}
+          paginationTotalLabel="records"
+          onRowClick={(row) => navigate(`/customers/${row._id}`)}
+          emptyMessage="No customers found."
+        />
       </Card>
 
 

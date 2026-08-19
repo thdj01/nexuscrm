@@ -6,6 +6,17 @@ import { useAuth } from '../../context/AuthContext';
 import { fetchAssignableUsers } from '../../api/timesheetService';
 import API from '../../api/axios';
 import {
+  addDecimalHoursToTime,
+  calcHoursValue,
+  decimalHoursToDurationInput,
+  formatHours,
+  formatTime12Hour,
+  minutesToTime,
+  normalizeDurationTyping,
+  parseDurationInput,
+  timeToMinutes,
+} from '../../utils/timesheetTime';
+import {
   canEditProjectControlledFields,
   canEditProjectWorkFields,
   isArchivedTask,
@@ -45,20 +56,6 @@ const ROLE_LABELS = {
 
 const todayISO = () => new Date().toISOString().split('T')[0];
 
-const timeToMinutes = (time) => {
-  if (!time) return null;
-  const [hours, minutes] = String(time).split(':').map(Number);
-  if ([hours, minutes].some(Number.isNaN)) return null;
-  return hours * 60 + minutes;
-};
-
-const minutesToTime = (minutes) => {
-  const safeMinutes = Math.max(0, Math.min(23 * 60 + 59, minutes));
-  const hours = Math.floor(safeMinutes / 60);
-  const mins = safeMinutes % 60;
-  return `${String(hours).padStart(2, '0')}:${String(mins).padStart(2, '0')}`;
-};
-
 const getDefaultStartTime = () => {
   const now = new Date();
   const minutes = now.getHours() * 60 + now.getMinutes();
@@ -71,42 +68,16 @@ const getDefaultEndTime = (startTime) => {
   return minutesToTime(startMinutes + 30);
 };
 
-const calcHoursValue = (start, end) => {
-  const startMinutes = timeToMinutes(start);
-  const endMinutes = timeToMinutes(end);
-  if (startMinutes === null || endMinutes === null) return null;
-  const diff = endMinutes - startMinutes;
-  return diff > 0 ? Math.round((diff / 60) * 100) / 100 : null;
-};
-
-const normalizeHoursInput = (value) => {
-  if (value === '' || value === null || value === undefined) return '';
-  const raw = String(value).replace(',', '.');
-  if (!/^\d*\.?\d*$/.test(raw)) return null;
-  return raw;
-};
-
-const addHoursToTime = (startTime, hoursValue) => {
-  const startMinutes = timeToMinutes(startTime);
-  const hours = Number(hoursValue);
-  if (startMinutes === null || Number.isNaN(hours) || hours <= 0) return '';
-  return minutesToTime(startMinutes + Math.round(hours * 60));
-};
-
-const formatDecimalHours = (value) => {
-  if (value === '' || value === null || value === undefined || Number.isNaN(Number(value))) return '';
-  return String(Math.round(Number(value) * 100) / 100);
-};
-
-const formatHours = (value) => {
-  if (value === '' || value === null || value === undefined || Number.isNaN(Number(value))) return '';
-  const totalMinutes = Math.round(Number(value) * 60);
-  const hours = Math.floor(totalMinutes / 60);
-  const mins = totalMinutes % 60;
-  if (hours > 0 && mins > 0) return `${hours}h ${mins}m`;
-  if (hours > 0) return `${hours}h`;
-  return `${mins}m`;
-};
+const TimeInput12Hour = ({ value, onChange, disabled = false, ariaLabel = 'Time' }) => (
+  <Input
+    type="time"
+    value={value || ''}
+    onChange={(event) => onChange(event.target.value)}
+    disabled={disabled}
+    aria-label={ariaLabel}
+    className="bg-white text-gray-900"
+  />
+);
 
 const getId = (value) =>
   value?._id?.toString?.() ??
@@ -169,12 +140,13 @@ const validate = (form, mode = {}) => {
     errors.endTime = 'End time must be after start time';
   }
 
-  if (form.hours !== '' && isNaN(Number(form.hours))) {
-    errors.hours = 'Hours must be a number';
-  }
-
-  if (form.hours !== '' && Number(form.hours) <= 0) {
-    errors.hours = 'Hours must be greater than 0';
+  if (form.hours !== '') {
+    const parsedDuration = parseDurationInput(form.hours);
+    if (!parsedDuration.valid) {
+      errors.hours = 'Use H.MM or H:MM with minutes 00–59 (for example 1.15 or 1:30)';
+    } else if (parsedDuration.totalMinutes <= 0) {
+      errors.hours = 'Hours must be greater than 0';
+    }
   }
 
   return errors;
@@ -292,7 +264,7 @@ const TimesheetForm = ({ initialData, onSubmit, onCancel, loading = false }) => 
         : todayISO(),
       startTime:       initialData?.startTime ?? '',
       endTime:         initialData?.endTime ?? '',
-      hours:           initialData?.hours != null ? String(initialData.hours) : '',
+      hours:           initialData?.hours != null ? decimalHoursToDurationInput(initialData.hours) : '',
       status:          initialData?.status ?? 'Backlog',
       kanbanOrder:     initialData?.kanbanOrder ?? 0,
       assignee:        canAssign ? existingEmployee : '',
@@ -318,28 +290,29 @@ const TimesheetForm = ({ initialData, onSubmit, onCancel, loading = false }) => 
   const [errors, setErrors] = useState({});
   const calculatedHours = calcHoursValue(form.startTime, form.endTime);
   const defaultHours = calcHoursValue(defaultTimeRange.startTime, defaultTimeRange.endTime);
-  const hoursSummary = form.hours !== '' && !Number.isNaN(Number(form.hours))
-    ? formatHours(Number(form.hours))
-    : '';
+  const parsedHours = parseDurationInput(form.hours);
+  const hoursSummary = parsedHours.valid ? formatHours(parsedHours.decimalHours) : '';
 
   const getSubmitForm = () => {
     if (!isEdit && !form.startTime && !form.endTime) {
       const startTime = defaultTimeRange.startTime;
-      const hours = form.hours !== '' && !Number.isNaN(Number(form.hours))
-        ? Number(form.hours)
+      const manualDuration = parseDurationInput(form.hours);
+      const hours = manualDuration.valid
+        ? manualDuration.decimalHours
         : calcHoursValue(defaultTimeRange.startTime, defaultTimeRange.endTime);
       return {
         ...form,
         startTime,
-        endTime: hours ? addHoursToTime(startTime, hours) : defaultTimeRange.endTime,
-        hours: hours !== null ? String(hours) : form.hours,
+        endTime: hours ? addDecimalHoursToTime(startTime, hours) : defaultTimeRange.endTime,
+        hours: manualDuration.valid ? form.hours : decimalHoursToDurationInput(hours),
       };
     }
 
-    if (form.startTime && !form.endTime && form.hours !== '' && !Number.isNaN(Number(form.hours))) {
+    const manualDuration = parseDurationInput(form.hours);
+    if (form.startTime && !form.endTime && manualDuration.valid) {
       return {
         ...form,
-        endTime: addHoursToTime(form.startTime, form.hours),
+        endTime: addDecimalHoursToTime(form.startTime, manualDuration.decimalHours),
       };
     }
 
@@ -353,41 +326,50 @@ const TimesheetForm = ({ initialData, onSubmit, onCancel, loading = false }) => 
 
   const set = (field) => (e) => {
     const value = e.target.value;
+    setForm((prev) => ({ ...prev, [field]: value }));
+
+    if (errors[field]) {
+      setErrors((prev) => {
+        const next = { ...prev };
+        delete next[field];
+        return next;
+      });
+    }
+  };
+
+  const handleTimeChange = (field, value) => {
     setForm((prev) => {
       const next = { ...prev, [field]: value };
       const nextHours = calcHoursValue(next.startTime, next.endTime);
-      if ((field === 'startTime' || field === 'endTime') && nextHours !== null) {
-        next.hours = formatDecimalHours(nextHours);
+      if (nextHours !== null) {
+        next.hours = decimalHoursToDurationInput(nextHours);
       }
       return next;
     });
 
-    if (errors[field] || (field === 'startTime' && errors.endTime) || (field === 'endTime' && errors.hours)) {
+    if (errors[field] || errors.startTime || errors.endTime || errors.hours) {
       setErrors((prev) => {
         const next = { ...prev };
-        delete next[field];
-        if (field === 'startTime' || field === 'endTime') {
-          delete next.startTime;
-          delete next.endTime;
-          delete next.hours;
-        }
+        delete next.startTime;
+        delete next.endTime;
+        delete next.hours;
         return next;
       });
     }
   };
 
   const handleHoursChange = (e) => {
-    const normalized = normalizeHoursInput(e.target.value);
+    const normalized = normalizeDurationTyping(e.target.value);
     if (normalized === null) return;
 
     setForm((prev) => {
       const next = { ...prev, hours: normalized };
-      const numericHours = Number(normalized);
+      const parsedDuration = parseDurationInput(normalized);
 
-      if (normalized !== '' && !Number.isNaN(numericHours) && numericHours > 0) {
+      if (parsedDuration.valid && parsedDuration.totalMinutes > 0) {
         const startTime = prev.startTime || defaultTimeRange.startTime;
         next.startTime = startTime;
-        next.endTime = addHoursToTime(startTime, numericHours);
+        next.endTime = addDecimalHoursToTime(startTime, parsedDuration.decimalHours);
       }
 
       return next;
@@ -425,7 +407,8 @@ const TimesheetForm = ({ initialData, onSubmit, onCancel, loading = false }) => 
       if (submitCalculatedHours !== null) {
         payload.hours = submitCalculatedHours;
       } else if (submitForm.hours !== '') {
-        payload.hours = Number(submitForm.hours);
+        const manualDuration = parseDurationInput(submitForm.hours);
+        if (manualDuration.valid) payload.hours = manualDuration.decimalHours;
       }
       onSubmit(payload);
       return;
@@ -448,7 +431,8 @@ const TimesheetForm = ({ initialData, onSubmit, onCancel, loading = false }) => 
     if (submitCalculatedHours !== null) {
       payload.hours = submitCalculatedHours;
     } else if (submitForm.hours !== '') {
-      payload.hours = Number(submitForm.hours);
+      const manualDuration = parseDurationInput(submitForm.hours);
+      if (manualDuration.valid) payload.hours = manualDuration.decimalHours;
     }
 
     if (canAssign && submitForm.assignee) {
@@ -605,43 +589,40 @@ const TimesheetForm = ({ initialData, onSubmit, onCancel, loading = false }) => 
 
         <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
           <FormField label="Start Time" error={errors.startTime}>
-            <Input
-              type="time"
+            <TimeInput12Hour
               value={form.startTime}
-              onChange={set('startTime')}
+              onChange={(value) => handleTimeChange('startTime', value)}
               disabled={!canEditWork || archived}
-              className={!form.startTime ? 'text-gray-400' : ''}
+              ariaLabel="Start time"
             />
           </FormField>
 
           <FormField label="End Time" error={errors.endTime}>
-            <Input
-              type="time"
+            <TimeInput12Hour
               value={form.endTime}
-              onChange={set('endTime')}
+              onChange={(value) => handleTimeChange('endTime', value)}
               disabled={!canEditWork || archived}
-              className={!form.endTime ? 'text-gray-400' : ''}
+              ariaLabel="End time"
             />
           </FormField>
 
           <FormField label="Hours" error={errors.hours}>
             <Input
-              type="number"
-              min="0.01"
-              step="0.25"
+              type="text"
+              inputMode="decimal"
               value={form.hours}
               onChange={handleHoursChange}
               disabled={!canEditWork || archived}
               className="bg-white text-gray-900"
-              placeholder={`Default ${formatHours(defaultHours)} if blank`}
+              placeholder="e.g. 1.15 or 1:30"
             />
           </FormField>
         </div>
 
         <p className="mt-2 text-xs text-gray-500">
           {hoursSummary
-            ? `Selected duration: ${hoursSummary}. You can enter hours directly or select start/end time.`
-            : `Leave times and hours blank to use the current default slot ${defaultTimeRange.startTime}–${defaultTimeRange.endTime}.`}
+            ? `Selected duration: ${hoursSummary}. Hours use H.MM or H:MM (1.15 = 1h 15m, 1:30 = 1h 30m).`
+            : `Hours use H.MM or H:MM. Leave all three blank to use the current default slot ${formatTime12Hour(defaultTimeRange.startTime)}–${formatTime12Hour(defaultTimeRange.endTime)}.`}
         </p>
 
         {form.startTime && form.endTime && calculatedHours === null && !archived && (

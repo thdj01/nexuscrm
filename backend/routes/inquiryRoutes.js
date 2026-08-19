@@ -9,8 +9,6 @@ const {
   createInquiry,
   updateInquiry,
   updateInquiryStatus,
-  updateInquiryFollowUp,
-  getFollowUps,
   downloadInquiryPdf,
   downloadInquiryAttachment,
   uploadMiddleware,
@@ -24,12 +22,6 @@ const { INQUIRY_PERMISSIONS } = require('../constants/permissions');
 const { requireInquiryEditAccess } = require('../middleware/inquiryAccessMiddleware');
 
 router.use(protect);
-
-router.get(
-  '/follow-ups',
-  requirePermission(INQUIRY_PERMISSIONS.FOLLOW_UP),
-  getFollowUps
-);
 
 router.route('/')
   .get(requirePermission(INQUIRY_PERMISSIONS.VIEW), getInquiries)
@@ -63,13 +55,6 @@ router.patch(
   requireInquiryEditAccess('id'),
   uploadMiddleware,
   updateInquiryStatus
-);
-
-router.patch(
-  '/:id/follow-up',
-  requirePermission(INQUIRY_PERMISSIONS.FOLLOW_UP),
-  requireInquiryEditAccess('id'),
-  updateInquiryFollowUp
 );
 
 router.route('/:id')
